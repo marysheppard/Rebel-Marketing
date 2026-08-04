@@ -1,0 +1,53 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: dark --default, corporate, business, synthwave, cyberpunk, night, dim;
+}
+
+/* Rebel studio accent: warm ember, not purple */
+[data-theme="dark"],
+:root {
+  --color-primary: oklch(0.72 0.17 45);
+  --color-primary-content: oklch(0.18 0.02 45);
+}
+
+@theme inline {
+  --font-sans: var(--font-display);
+  --font-display: var(--font-display);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+}
+
+.rebel-hero {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 20%, oklch(0.55 0.2 35 / 0.35), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 85% 10%, oklch(0.45 0.12 220 / 0.3), transparent 50%),
+    linear-gradient(160deg, oklch(0.16 0.02 260), oklch(0.12 0.03 30));
+}
+
+.rebel-grid {
+  background-image:
+    linear-gradient(oklch(1 0 0 / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(1 0 0 / 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.stat-label {
+  opacity: 0.7;
+}
+
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-grid label > span {
+  min-height: 1.25rem;
+}

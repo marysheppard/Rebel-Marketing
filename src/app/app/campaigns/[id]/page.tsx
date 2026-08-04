@@ -1,0 +1,257 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { PageHeader, StatCard, StatusBadge } from "@/components/ui";
+import { money, num, pct } from "@/lib/format";
+import { budgetHealth, budgetVariance, profitMargin, remainingBalance, sumCosts } from "@/lib/finance";
+import { getProfile } from "@/lib/page-auth";
+
+export default async function CampaignDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const { supabase } = await getProfile();
+
+  const { data: campaign } = await supabase
+    .from("campaigns")
+    .select("*, clients(client_name), contracts(contract_name, contract_number)")
+    .eq("id", id)
+    .single();
+  if (!campaign) notFound();
+
+  const [{ data: work }, { data: costs }, { data: approvals }, { data: invoices }] =
+    await Promise.all([
+      supabase
+        .from("work_entries")
+        .select("*, profiles(full_name)")
+        .eq("campaign_id", id)
+        .order("work_date", { ascending: false }),
+      supabase.from("costs").select("*").eq("campaign_id", id).order("cost_date", { ascending: false }),
+      supabase.from("approvals").select("*").eq("campaign_id", id).order("requested_date", { ascending: false }),
+      supabase
+        .from("invoices")
+        .select("*, payments(amount)")
+        .eq("campaign_id", id)
+        .order("invoice_date", { ascending: false }),
+    ]);
+
+  const spent = sumCosts(costs ?? []);
+  const budget = num(campaign.campaign_budget);
+  const variance = budgetVariance(budget, spent);
+  const health = budgetHealth(budget, spent);
+  const revenue = (invoices ?? [])
+    .filter((i) => !["Draft", "Canceled"].includes(i.status))
+    .reduce((s, i) => s + num(i.total_amount), 0);
+  const profit = revenue - spent;
+  const margin = profitMargin(revenue, spent);
+  const outstanding = (invoices ?? []).reduce((s, i) => s + remainingBalance(i), 0);
+  const totalHours = (work ?? []).reduce((s, w) => s + num(w.hours), 0);
+
+  const healthTone = health === "over" ? "bad" : health === "near" ? "warn" : "good";
+  const clientName = (campaign as { clients?: { client_name: string } }).clients?.client_name;
+  const contract = (campaign as { contracts?: { contract_name: string; contract_number: string } }).contracts;
+
+  return (
+    <div>
+      <PageHeader
+        title={campaign.campaign_name}
+        subtitle={[clientName, campaign.campaign_type].filter(Boolean).join(" · ")}
+        actions={
+          <>
+            <Link href={`/app/contracts/${campaign.contract_id}`} className="btn btn-ghost btn-sm">
+              Contract
+            </Link>
+            <Link href="/app/campaigns" className="btn btn-ghost btn-sm">
+              ← All campaigns
+            </Link>
+          </>
+        }
+      />
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <StatusBadge status={campaign.campaign_status} />
+        <span className="badge badge-outline badge-sm">
+          {health === "over" ? "Over budget" : health === "near" ? "Near budget" : health === "under" ? "Under budget" : "Budget N/A"}
+        </span>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Budget" value={money(budget)} />
+        <StatCard label="Spent" value={money(spent)} tone={healthTone} />
+        <StatCard label="Remaining" value={money(variance)} tone={variance < 0 ? "bad" : "good"} />
+        <StatCard label="Profit margin" value={pct(margin)} tone={profit >= 0 ? "good" : "bad"} />
+        <StatCard label="Revenue" value={money(revenue)} tone="good" />
+        <StatCard label="Gross profit" value={money(profit)} tone={profit >= 0 ? "good" : "bad"} />
+        <StatCard label="Outstanding AR" value={money(outstanding)} tone="warn" />
+        <StatCard label="Hours logged" value={totalHours.toFixed(1)} />
+      </div>
+
+      {campaign.description ? (
+        <p className="mt-4 text-sm opacity-80">{campaign.description}</p>
+      ) : null}
+
+      {contract ? (
+        <p className="mt-2 text-sm opacity-60">
+          Contract:{" "}
+          <Link href={`/app/contracts/${campaign.contract_id}`} className="link link-hover">
+            {contract.contract_name} ({contract.contract_number})
+          </Link>
+        </p>
+      ) : null}
+
+      <section className="mt-8">
+        <h2 className="mb-3 text-xl font-bold">Work entries</h2>
+        <div className="overflow-x-auto rounded-box border border-base-300">
+          <table className="table table-sm">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>By</th>
+                <th className="text-right">Hours</th>
+                <th>Billable</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(work ?? []).map((w) => (
+                <tr key={w.id}>
+                  <td>{w.work_date}</td>
+                  <td>{w.work_type}</td>
+                  <td>{(w as { profiles?: { full_name: string } }).profiles?.full_name ?? "—"}</td>
+                  <td className="text-right">{w.hours}</td>
+                  <td>{w.billable ? "Yes" : "No"}</td>
+                  <td>
+                    <StatusBadge status={w.approval_status} />
+                    {w.billed ? <span className="badge badge-ghost badge-xs ml-1">Billed</span> : null}
+                  </td>
+                </tr>
+              ))}
+              {!work?.length ? (
+                <tr>
+                  <td colSpan={6} className="text-center opacity-60">
+                    No work logged yet.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-3 text-xl font-bold">Costs</h2>
+        <div className="overflow-x-auto rounded-box border border-base-300">
+          <table className="table table-sm">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Vendor</th>
+                <th className="text-right">Amount</th>
+                <th>Approved</th>
+                <th>Pass-through</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(costs ?? []).map((c) => (
+                <tr key={c.id}>
+                  <td>{c.cost_date}</td>
+                  <td>{c.cost_type}</td>
+                  <td>{c.vendor_name || "—"}</td>
+                  <td className="text-right">{money(c.amount)}</td>
+                  <td>{c.approved ? "Yes" : "No"}</td>
+                  <td>{c.pass_through ? "Yes" : "No"}</td>
+                </tr>
+              ))}
+              {!costs?.length ? (
+                <tr>
+                  <td colSpan={6} className="text-center opacity-60">
+                    No costs recorded.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-3 text-xl font-bold">Approvals</h2>
+        <div className="overflow-x-auto rounded-box border border-base-300">
+          <table className="table table-sm">
+            <thead>
+              <tr>
+                <th>Requested</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(approvals ?? []).map((a) => (
+                <tr key={a.id}>
+                  <td>{a.requested_date}</td>
+                  <td>{a.approval_type}</td>
+                  <td>{a.description}</td>
+                  <td>
+                    <StatusBadge status={a.approval_status} />
+                  </td>
+                </tr>
+              ))}
+              {!approvals?.length ? (
+                <tr>
+                  <td colSpan={4} className="text-center opacity-60">
+                    No approval requests.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-3 text-xl font-bold">Invoices</h2>
+        <div className="overflow-x-auto rounded-box border border-base-300">
+          <table className="table table-sm">
+            <thead>
+              <tr>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th className="text-right">Total</th>
+                <th className="text-right">Remaining</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(invoices ?? []).map((i) => (
+                <tr key={i.id}>
+                  <td>
+                    <Link href="/app/billing" className="link link-hover">
+                      {i.invoice_number}
+                    </Link>
+                  </td>
+                  <td>{i.invoice_date}</td>
+                  <td className="text-right">{money(i.total_amount)}</td>
+                  <td className="text-right">{money(remainingBalance(i))}</td>
+                  <td>
+                    <StatusBadge status={i.status} />
+                  </td>
+                </tr>
+              ))}
+              {!invoices?.length ? (
+                <tr>
+                  <td colSpan={5} className="text-center opacity-60">
+                    No invoices yet.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
