@@ -82,7 +82,38 @@ async function EmployeeDashboard({
   ]);
 
   const clients = (managedClients ?? []) as Client[];
-  const myAssignments = (assignments ?? []) as AssignmentRow[];
+  const myAssignments: AssignmentRow[] = (assignments ?? []).map((row) => {
+    const campRaw = row.campaigns as unknown;
+    const campObj = Array.isArray(campRaw)
+      ? (campRaw[0] as Record<string, unknown> | undefined)
+      : (campRaw as Record<string, unknown> | null | undefined);
+    if (!campObj) {
+      return {
+        id: String(row.id),
+        campaign_id: String(row.campaign_id),
+        campaigns: null,
+      };
+    }
+    const clientsRaw = campObj.clients as unknown;
+    const clientObj = Array.isArray(clientsRaw)
+      ? (clientsRaw[0] as { client_name?: string } | undefined)
+      : (clientsRaw as { client_name?: string } | null | undefined);
+    return {
+      id: String(row.id),
+      campaign_id: String(row.campaign_id),
+      campaigns: {
+        id: String(campObj.id),
+        campaign_name: String(campObj.campaign_name ?? ""),
+        campaign_status: String(campObj.campaign_status ?? ""),
+        start_date: String(campObj.start_date ?? ""),
+        end_date: String(campObj.end_date ?? ""),
+        client_id: String(campObj.client_id ?? ""),
+        clients: clientObj?.client_name
+          ? { client_name: clientObj.client_name }
+          : null,
+      },
+    };
+  });
   const pto = (ptoRows ?? []) as PtoRequest[];
   const pendingPto = pto.filter((r) => r.status === "Pending").length;
 
