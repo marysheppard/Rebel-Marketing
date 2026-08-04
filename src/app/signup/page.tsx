@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ThemeSelector } from "@/components/ThemeSelector";
+import { RebelLogo } from "@/components/RebelLogo";
 import { createClient } from "@/lib/supabase/client";
 
 export default function SignupPage() {
@@ -39,10 +39,9 @@ export default function SignupPage() {
     <main className="rebel-hero min-h-screen px-4 py-8">
       <div className="mx-auto flex max-w-md flex-col gap-4">
         <div className="flex items-center justify-between">
-          <Link href="/login" className="text-xl font-black">
-            Rebel Marketing
+          <Link href="/login">
+            <RebelLogo className="h-10 w-auto" />
           </Link>
-          <ThemeSelector />
         </div>
         <div className="card bg-base-100 shadow-xl">
           <div className="card-body">

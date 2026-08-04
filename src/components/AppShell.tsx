@@ -17,6 +17,7 @@ import {
   Menu,
 } from "lucide-react";
 import { ThemeSelector } from "@/components/ThemeSelector";
+import { RebelLogo } from "@/components/RebelLogo";
 import { createClient } from "@/lib/supabase/client";
 import { ROLE_LABELS, type Profile, type UserRole } from "@/lib/types";
 
@@ -117,7 +118,9 @@ export function AppShell({
             </label>
             <div>
               <div className="text-sm font-black tracking-tight sm:text-base">
-                Marketing Agency Contract-to-Cash
+                {profile.role === "client"
+                  ? "Customer Dashboard"
+                  : "Employee Dashboard"}
               </div>
               <div className="text-xs opacity-60">Rebel Marketing</div>
             </div>
@@ -145,10 +148,8 @@ export function AppShell({
         <label htmlFor="app-drawer" className="drawer-overlay" />
         <aside className="flex min-h-full w-72 flex-col bg-base-200 p-4">
           <div className="mb-6 px-2">
-            <div className="text-2xl font-black">
-              Rebel <span className="text-primary">Marketing</span>
-            </div>
-            <p className="mt-1 text-xs opacity-60">Connected contract-to-cash</p>
+            <RebelLogo className="h-10 w-auto" />
+            <p className="mt-2 text-xs opacity-60">Connected contract-to-cash</p>
           </div>
           <ul className="menu gap-1">
             {items.map((item) => {
@@ -168,8 +169,10 @@ export function AppShell({
             })}
           </ul>
           <div className="mt-auto rounded-box bg-base-100 p-3 text-xs opacity-70">
-            Viewing as <strong>{ROLE_LABELS[profile.role]}</strong>. Use demo
-            accounts on the login page to switch perspectives quickly.
+            Viewing as <strong>{ROLE_LABELS[profile.role]}</strong>.
+            {profile.role === "client"
+              ? " Use Customer sign-in for this portal."
+              : " Use Employee sign-in for this portal."}
           </div>
         </aside>
       </div>

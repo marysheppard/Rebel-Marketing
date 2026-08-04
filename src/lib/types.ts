@@ -146,6 +146,17 @@ export type Payment = {
   created_at: string;
 };
 
+export type PtoRequest = {
+  id: string;
+  user_id: string;
+  start_date: string;
+  end_date: string;
+  hours: number;
+  reason: string;
+  status: string;
+  created_at: string;
+};
+
 export const ROLE_LABELS: Record<UserRole, string> = {
   agency_manager: "Agency Manager",
   account_manager: "Account Manager",
@@ -186,3 +197,73 @@ export const DEMO_ACCOUNTS = [
     role: "client" as UserRole,
   },
 ] as const;
+
+/** Demo employee IDs → auth credentials (password is DemoPass123!) */
+export const EMPLOYEE_LOGIN_IDS: Record<
+  string,
+  { email: string; password: string; label: string }
+> = {
+  "EMP-1001": {
+    email: "manager@rebel.demo",
+    password: "DemoPass123!",
+    label: "Agency Manager",
+  },
+  "EMP-1002": {
+    email: "am.jordan@rebel.demo",
+    password: "DemoPass123!",
+    label: "Account Manager",
+  },
+  "EMP-1003": {
+    email: "creative.mia@rebel.demo",
+    password: "DemoPass123!",
+    label: "Marketing",
+  },
+  "EMP-1004": {
+    email: "billing@rebel.demo",
+    password: "DemoPass123!",
+    label: "Billing",
+  },
+};
+
+/** Demo customer IDs → auth credentials (access code is DemoPass123!) */
+export const CUSTOMER_LOGIN_IDS: Record<
+  string,
+  { email: string; accessCode: string; label: string }
+> = {
+  "CUST-BLUERIDGE": {
+    email: "client.blueridge@rebel.demo",
+    accessCode: "DemoPass123!",
+    label: "Blue Ridge",
+  },
+  "CUST-SUMMIT": {
+    email: "client.summit@rebel.demo",
+    accessCode: "DemoPass123!",
+    label: "Summit",
+  },
+};
+
+export function resolveEmployeeLogin(employeeId: string, password: string) {
+  const key = employeeId.trim().toUpperCase();
+  const mapped = EMPLOYEE_LOGIN_IDS[key];
+  if (mapped) {
+    return { email: mapped.email, password };
+  }
+  const asEmail = employeeId.trim();
+  if (asEmail.includes("@")) {
+    return { email: asEmail, password };
+  }
+  return null;
+}
+
+export function resolveCustomerLogin(customerId: string, accessCode: string) {
+  const key = customerId.trim().toUpperCase();
+  const mapped = CUSTOMER_LOGIN_IDS[key];
+  if (mapped) {
+    return { email: mapped.email, password: accessCode };
+  }
+  const asEmail = customerId.trim();
+  if (asEmail.includes("@")) {
+    return { email: asEmail, password: accessCode };
+  }
+  return null;
+}

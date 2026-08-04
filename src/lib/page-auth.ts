@@ -64,3 +64,7 @@ export function canRecordPayments(role: UserRole) {
 export function isClientRole(role: UserRole) {
   return role === "client";
 }
+
+export function isEmployeeRole(role: UserRole) {
+  return !isClientRole(role);
+}

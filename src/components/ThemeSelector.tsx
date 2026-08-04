@@ -3,22 +3,14 @@
 import { useEffect, useState } from "react";
 import { Palette } from "lucide-react";
 
-const THEMES = [
-  "dark",
-  "corporate",
-  "business",
-  "synthwave",
-  "cyberpunk",
-  "night",
-  "dim",
-] as const;
+const THEMES = ["corporate", "business", "dark", "night", "dim"] as const;
 
 export function ThemeSelector({ className = "" }: { className?: string }) {
-  const [theme, setTheme] = useState<string>("dark");
+  const [theme, setTheme] = useState<string>("corporate");
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("rebel-theme") || "dark";
+    const saved = localStorage.getItem("rebel-theme") || "corporate";
     setTheme(saved);
     document.documentElement.setAttribute("data-theme", saved);
     setReady(true);

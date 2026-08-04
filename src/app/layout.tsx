@@ -23,7 +23,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      data-theme="dark"
+      data-theme="corporate"
       className={`${display.variable} ${body.variable} h-full`}
       suppressHydrationWarning
     >
