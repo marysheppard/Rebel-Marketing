@@ -14,7 +14,7 @@ import {
 } from "@/lib/page-auth";
 import { redirect } from "next/navigation";
 
-type Search = { searchParams: Promise<{ client?: string }> };
+type Search = { searchParams: Promise<{ client?: string; period?: string }> };
 
 function pctChange(current: number, prior: number): number | null {
   if (prior === 0) return current === 0 ? 0 : null;
@@ -32,9 +32,24 @@ function monthLabel(key: string) {
 }
 
 export default async function AnalyticsPage({ searchParams }: Search) {
-  const { client: clientParam } = await searchParams;
+  const params = await searchParams;
+  const clientParam = params.client;
   const { supabase, profile, userId } = await getProfile();
   if (!profile || !userId) return null;
+
+  if (
+    profile.role === "agency_manager" ||
+    profile.role === "account_manager"
+  ) {
+    const { AgencyPortfolioAnalytics } = await import(
+      "@/components/dashboards/AgencyPortfolioAnalytics"
+    );
+    return (
+      <AgencyPortfolioAnalytics
+        searchParams={Promise.resolve({ period: params.period })}
+      />
+    );
+  }
 
   if (isClientRole(profile.role) || !isEmployeeWorkRole(profile.role)) {
     redirect("/app");

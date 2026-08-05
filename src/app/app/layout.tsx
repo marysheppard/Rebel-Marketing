@@ -5,10 +5,15 @@ import {
   isClientPortalHome,
   isClientRole,
 } from "@/lib/access";
+import { getNotificationCount } from "@/lib/notifications";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -31,5 +36,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/app?denied=1");
   }
 
-  return <AppShell profile={typed}>{children}</AppShell>;
+  const notificationCount = await getNotificationCount(
+    supabase,
+    typed,
+    user.id,
+  );
+
+  return (
+    <AppShell profile={typed} notificationCount={notificationCount}>
+      {children}
+    </AppShell>
+  );
 }

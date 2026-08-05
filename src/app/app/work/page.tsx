@@ -208,8 +208,8 @@ export default async function WorkPage() {
       monthStart={monthStart}
       weekHours={weekHours}
       monthHours={monthHours}
-      weekTarget={weekTarget}
-      monthTarget={monthTarget}
+      weekTarget={weekTarget ?? null}
+      monthTarget={monthTarget ?? null}
       pendingApprovalHours={pendingApprovalHours}
       pendingPto={pendingPto}
     />

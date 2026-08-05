@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageHeader, StatCard, StatusBadge } from "@/components/ui";
+import { BudgetHealthBadge, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { money, num, pct } from "@/lib/format";
 import { budgetHealth, budgetVariance, profitMargin, remainingBalance, sumCosts } from "@/lib/finance";
 import { getProfile } from "@/lib/page-auth";
@@ -84,9 +84,7 @@ export default async function CampaignDetailPage({
 
       <div className="mb-4 flex flex-wrap gap-2">
         <StatusBadge status={campaign.campaign_status} />
-        <span className="badge badge-outline badge-sm">
-          {health === "over" ? "Over budget" : health === "near" ? "Near budget" : health === "under" ? "Under budget" : "Budget N/A"}
-        </span>
+        <BudgetHealthBadge budget={budget} spent={spent} />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

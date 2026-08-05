@@ -14,26 +14,70 @@ import {
   PieChart,
   Pie,
   Cell,
+  ReferenceLine,
 } from "recharts";
+import { money } from "@/lib/format";
+
+function formatAxisMoney(value: number) {
+  const n = Number(value);
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `$${(n / 1_000).toFixed(0)}k`;
+  return `$${n.toFixed(0)}`;
+}
+
+function ProfitTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: {
+    payload: {
+      name: string;
+      profit: number;
+      revenue?: number;
+      costs?: number;
+      subtitle?: string;
+    };
+  }[];
+}) {
+  if (!active || !payload?.[0]) return null;
+  const row = payload[0].payload;
+  return (
+    <div className="rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm shadow-lg">
+      <div className="font-semibold">{row.name}</div>
+      {row.subtitle ? (
+        <div className="text-xs opacity-60">{row.subtitle}</div>
+      ) : null}
+      <div>Profit: {money(row.profit)}</div>
+      {row.revenue != null ? <div>Revenue: {money(row.revenue)}</div> : null}
+      {row.costs != null ? <div>Costs: {money(row.costs)}</div> : null}
+    </div>
+  );
+}
 
 export function ChartCard({
   title,
   children,
   empty,
+  compact,
 }: {
   title: string;
   children: React.ReactNode;
   empty?: boolean;
+  compact?: boolean;
 }) {
   return (
     <div className="rounded-box border border-base-300 bg-base-100 p-4 shadow-sm">
       <h3 className="mb-3 font-semibold">{title}</h3>
       {empty ? (
-        <div className="flex h-56 items-center justify-center text-sm opacity-60">
+        <div
+          className={`flex items-center justify-center text-sm opacity-60 ${compact ? "h-40" : "h-56"}`}
+        >
           Not enough data yet for this chart.
         </div>
       ) : (
-        <div className="h-64 w-full">{children}</div>
+        <div className={`w-full ${compact ? "h-48" : "h-64"}`}>{children}</div>
       )}
     </div>
   );
@@ -63,21 +107,34 @@ export function RevenueCostChart({
 
 export function ClientProfitChart({
   data,
+  title = "Profitability by Client",
+  compact = false,
 }: {
-  data: { name: string; revenue: number; costs: number; profit: number }[];
+  data: {
+    name: string;
+    revenue: number;
+    costs: number;
+    profit: number;
+    subtitle?: string;
+  }[];
+  title?: string;
+  compact?: boolean;
 }) {
   return (
-    <ChartCard title="Profitability by Client" empty={!data.length}>
+    <ChartCard title={title} empty={!data.length} compact={compact}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data}>
+        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 8 }}>
           <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-          <XAxis dataKey="name" hide />
-          <YAxis />
-          <Tooltip />
-          <Legend />
-          <Bar dataKey="revenue" fill="#38bdf8" />
-          <Bar dataKey="costs" fill="#fb923c" />
-          <Bar dataKey="profit" fill="#4ade80" />
+          <XAxis type="number" tickFormatter={formatAxisMoney} tick={{ fontSize: 11 }} />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={compact ? 72 : 100}
+            tick={{ fontSize: 11 }}
+          />
+          <Tooltip content={<ProfitTooltip />} />
+          <ReferenceLine x={0} stroke="currentColor" strokeOpacity={0.25} />
+          <Bar dataKey="profit" fill="#4ade80" name="Profit" />
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>
@@ -474,7 +531,7 @@ export function CostByCampaignChart({
 }) {
   function formatK(value: number) {
     const n = Number(value);
-    if (!Number.isFinite(n)) return "—";
+    if (!Number.isFinite(n)) return "?";
     if (Math.abs(n) >= 1000) {
       const k = n / 1000;
       const rounded = Math.abs(k) >= 10 ? k.toFixed(0) : k.toFixed(1);
@@ -488,7 +545,7 @@ export function CostByCampaignChart({
       .trim()
       .split(/[\s\-_/]+/)
       .filter(Boolean);
-    if (parts.length === 0) return "—";
+    if (parts.length === 0) return "?";
     if (parts.length === 1) {
       const word = parts[0]!;
       return word.slice(0, 3).toUpperCase();
@@ -738,6 +795,174 @@ export function StrategyConversionsBarChart({
               />
             ))}
           </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartCard>
+  );
+}
+
+export function MonthlySeriesChart({
+  title,
+  data,
+  dataKey,
+  color,
+}: {
+  title: string;
+  data: { month: string; [key: string]: string | number }[];
+  dataKey: string;
+  color: string;
+}) {
+  return (
+    <ChartCard title={title} empty={!data.length} compact>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+          <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} width={48} />
+          <Tooltip />
+          <Line
+            type="monotone"
+            dataKey={dataKey}
+            stroke={color}
+            strokeWidth={2}
+            dot={{ r: 3 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </ChartCard>
+  );
+}
+
+export function EmployeeTrackChart({
+  data,
+}: {
+  data: { name: string; value: number; fill: string }[];
+}) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const onTrack = data.find((d) => d.name === "On track")?.value ?? 0;
+  const healthy = total > 0 ? Math.round((onTrack / total) * 100) : 0;
+
+  return (
+    <ChartCard title="Projects on track" empty={!total} compact>
+      <div className="relative h-full w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius={48}
+              outerRadius={72}
+              paddingAngle={2}
+              strokeWidth={0}
+            >
+              {data.map((entry) => (
+                <Cell key={entry.name} fill={entry.fill} />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(value, name) => [
+                `${Number(value)} tasks`,
+                String(name),
+              ]}
+            />
+            <Legend
+              verticalAlign="bottom"
+              height={28}
+              formatter={(value) => (
+                <span className="text-xs opacity-80">{value}</span>
+              )}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pb-6">
+          <div className="text-2xl font-bold tabular-nums">{healthy}%</div>
+          <div className="text-[10px] uppercase tracking-wide opacity-60">
+            on track
+          </div>
+        </div>
+      </div>
+    </ChartCard>
+  );
+}
+
+export function EmployeeBudgetChart({
+  data,
+}: {
+  data: { name: string; value: number; fill: string }[];
+}) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const under = data.find((d) => d.name === "Under budget")?.value ?? 0;
+  const near = data.find((d) => d.name === "Near limit")?.value ?? 0;
+  const healthy = total > 0 ? Math.round(((under + near) / total) * 100) : 0;
+
+  return (
+    <ChartCard title="Campaigns on budget" empty={!total} compact>
+      <div className="relative h-full w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius={48}
+              outerRadius={72}
+              paddingAngle={2}
+              strokeWidth={0}
+            >
+              {data.map((entry) => (
+                <Cell key={entry.name} fill={entry.fill} />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(value, name) => [
+                `${Number(value)} campaigns`,
+                String(name),
+              ]}
+            />
+            <Legend
+              verticalAlign="bottom"
+              height={28}
+              formatter={(value) => (
+                <span className="text-xs opacity-80">{value}</span>
+              )}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pb-6">
+          <div className="text-2xl font-bold tabular-nums">{healthy}%</div>
+          <div className="text-[10px] uppercase tracking-wide opacity-60">
+            healthy
+          </div>
+        </div>
+      </div>
+    </ChartCard>
+  );
+}
+
+export function EmployeePerformanceChart({
+  data,
+}: {
+  data: { name: string; hours: number }[];
+}) {
+  return (
+    <ChartCard title="Employee hours (30 days)" empty={!data.length} compact>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+          <XAxis type="number" tick={{ fontSize: 11 }} />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={88}
+            tick={{ fontSize: 11 }}
+          />
+          <Tooltip />
+          <Bar dataKey="hours" fill="#0ea5e9" name="Hours" />
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>

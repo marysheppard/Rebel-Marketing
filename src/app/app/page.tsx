@@ -2,6 +2,10 @@
 import { ClicksByCampaignChart } from "@/components/Charts";
 import { ClientMapDynamic } from "@/components/ClientMapDynamic";
 import { DashboardCalendar } from "@/components/DashboardCalendar";
+import {
+  AccountManagerDashboard,
+  AgencyExecutiveDashboard,
+} from "@/components/dashboards/RoleDashboards";
 import { UpdateApprovalStatusForm } from "@/components/forms";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { WelcomeMessage } from "@/components/WelcomeMessage";
@@ -44,6 +48,26 @@ export default async function DashboardPage() {
     return <CustomerDashboard />;
   }
 
+  if (profile.role === "account_manager") {
+    return (
+      <AccountManagerDashboard
+        userId={userId}
+        profile={profile}
+        supabase={supabase}
+      />
+    );
+  }
+
+  if (profile.role === "agency_manager") {
+    return (
+      <AgencyExecutiveDashboard
+        userId={userId}
+        profile={profile}
+        supabase={supabase}
+      />
+    );
+  }
+
   if (!isMarketingRole(profile.role)) {
     return (
       <div>
@@ -53,7 +77,7 @@ export default async function DashboardPage() {
         />
         <EmptyState
           title="Staff dashboard coming soon"
-          description="This branch delivers the Marketing employee experience (EMP-1003). Manager, billing, and account-manager dashboards are owned by other workstreams."
+          description="This branch delivers the Marketing employee experience (EMP-1003). Billing and other role dashboards are owned by other workstreams."
         />
       </div>
     );
