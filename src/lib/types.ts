@@ -146,8 +146,25 @@ export type WorkEntry = {
   tasks?: { title: string } | null;
 };
 
+export const COST_CATEGORIES = [
+  "Ad spend",
+  "Vendor/freelancer costs",
+  "Employee labor cost",
+  "Reimbursable/pass-through expenses",
+  "Software/tool subscription costs",
+  "Stock media licensing",
+  "Production costs",
+  "Travel expenses",
+  "Rush/overtime fees",
+  "Platform/processing fees",
+  "Other",
+] as const;
+
+export const COST_APPROVAL_STATUSES = ["Pending", "Approved", "Unapproved"] as const;
+
 export type Cost = {
   id: string;
+  client_id: string | null;
   campaign_id: string | null;
   contract_id: string | null;
   cost_type: string;
@@ -156,14 +173,20 @@ export type Cost = {
   cost_date: string;
   vendor_name: string;
   approved: boolean;
+  approval_status: string;
   pass_through: boolean;
+  entered_by: string | null;
   created_at: string;
   campaigns?: {
     campaign_name: string;
     campaign_budget: number;
     client_id?: string | null;
+    contract_id?: string;
     clients?: { client_name: string } | { client_name: string }[] | null;
   } | null;
+  clients?: { client_name: string } | null;
+  contracts?: { contract_name: string; contract_number?: string } | null;
+  profiles?: { full_name: string } | null;
 };
 
 export type Approval = {

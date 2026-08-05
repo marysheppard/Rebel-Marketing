@@ -150,7 +150,7 @@ export default async function CampaignDetailPage({
                 <th>Type</th>
                 <th>Vendor</th>
                 <th className="text-right">Amount</th>
-                <th>Approved</th>
+                <th>Approval</th>
                 <th>Pass-through</th>
               </tr>
             </thead>
@@ -161,7 +161,10 @@ export default async function CampaignDetailPage({
                   <td>{c.cost_type}</td>
                   <td>{c.vendor_name || "—"}</td>
                   <td className="text-right">{money(c.amount)}</td>
-                  <td>{c.approved ? "Yes" : "No"}</td>
+                  <td>
+                    {(c as { approval_status?: string }).approval_status ??
+                      (c.approved ? "Approved" : "Pending")}
+                  </td>
                   <td>{c.pass_through ? "Yes" : "No"}</td>
                 </tr>
               ))}

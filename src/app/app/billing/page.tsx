@@ -1,4 +1,4 @@
-import { CreateInvoiceForm } from "@/components/forms";
+import { CreateInvoiceModal } from "@/components/CreateInvoiceModal";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { joinField, money, num } from "@/lib/format";
 import { remainingBalance } from "@/lib/finance";
@@ -42,13 +42,34 @@ export default async function BillingPage() {
   }
 
   const list = invoices ?? [];
-  const showForm = canManageBilling(profile.role);
+  const showCreate = canManageBilling(profile.role);
+  const clientOptions = (clients ?? []).map((c) => ({ id: c.id, label: c.client_name }));
+  const contractOptions = (contracts ?? []).map((c) => ({
+    id: c.id,
+    label: `${c.contract_name} (${c.contract_number})`,
+    client_id: c.client_id,
+  }));
+  const campaignOptions = (campaigns ?? []).map((c) => ({
+    id: c.id,
+    label: c.campaign_name,
+    client_id: c.client_id,
+  }));
 
   return (
     <div>
       <PageHeader
         title="Billing"
         subtitle="Invoices, unbilled work, and revenue recognition"
+        actions={
+          showCreate ? (
+            <CreateInvoiceModal
+              clients={clientOptions}
+              contracts={contractOptions}
+              campaigns={campaignOptions}
+              unbilledWorkByCampaign={unbilledWorkByCampaign}
+            />
+          ) : null
+        }
       />
 
       {(unbilledWork ?? []).length > 0 ? (
@@ -130,26 +151,6 @@ export default async function BillingPage() {
           </table>
         </div>
       )}
-
-      {showForm ? (
-        <section className="mt-8 rounded-box border border-base-300 bg-base-100 p-6">
-          <h2 className="mb-4 text-xl font-bold">Create invoice</h2>
-          <CreateInvoiceForm
-            clients={(clients ?? []).map((c) => ({ id: c.id, label: c.client_name }))}
-            contracts={(contracts ?? []).map((c) => ({
-              id: c.id,
-              label: `${c.contract_name} (${c.contract_number})`,
-              client_id: c.client_id,
-            }))}
-            campaigns={(campaigns ?? []).map((c) => ({
-              id: c.id,
-              label: c.campaign_name,
-              client_id: c.client_id,
-            }))}
-            unbilledWorkByCampaign={unbilledWorkByCampaign}
-          />
-        </section>
-      ) : null}
     </div>
   );
 }
