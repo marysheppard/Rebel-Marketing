@@ -5,7 +5,7 @@ import { DashboardCalendar } from "@/components/DashboardCalendar";
 import { UpdateApprovalStatusForm } from "@/components/forms";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { WelcomeMessage } from "@/components/WelcomeMessage";
-import { remainingBalance } from "@/lib/finance";
+import { paidAmount, remainingBalance } from "@/lib/finance";
 import { money, num } from "@/lib/format";
 import { getProfile, isClientRole, isMarketingRole } from "@/lib/page-auth";
 import type { Campaign, Client, Invoice, Profile } from "@/lib/types";
@@ -601,7 +601,28 @@ async function CustomerDashboard() {
     );
   }
 
-  const balance = invoices.reduce((s, i) => s + remainingBalance(i), 0);
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const dueSoonCutoff = new Date(today);
+  dueSoonCutoff.setDate(dueSoonCutoff.getDate() + 7);
+  const dueSoonStr = dueSoonCutoff.toISOString().slice(0, 10);
+
+  const isOpenInvoice = (i: Invoice) =>
+    remainingBalance(i) > 0 && !["Draft", "Canceled", "Paid"].includes(i.status);
+
+  const openInvoices = invoices
+    .filter(isOpenInvoice)
+    .slice()
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
+
+  const balance = openInvoices.reduce((s, i) => s + remainingBalance(i), 0);
+  const totalInvoiced = invoices
+    .filter((i) => !["Draft", "Canceled"].includes(i.status))
+    .reduce((s, i) => s + num(i.total_amount), 0);
+  const overdueTotal = openInvoices
+    .filter((i) => i.due_date < todayStr)
+    .reduce((s, i) => s + remainingBalance(i), 0);
+  const nextDue = openInvoices[0] ?? null;
   const pending = approvals.filter((a) => a.approval_status === "Pending");
   const awaitingSignature = pendingSignatures?.length ?? 0;
 
@@ -617,7 +638,11 @@ async function CustomerDashboard() {
           campaigns.filter((c) => c.campaign_status === "Active").length,
         )} />
         <StatCard
-          label="Account balance"
+          label="Total invoiced"
+          value={money(totalInvoiced)}
+        />
+        <StatCard
+          label="Amount you owe"
           value={money(balance)}
           tone={balance > 0 ? "warn" : "good"}
         />
@@ -676,12 +701,7 @@ async function CustomerDashboard() {
                   return (
                     <tr key={c.id}>
                       <td>
-                        <Link
-                          href={`/app/campaigns/${c.id}`}
-                          className="link link-hover font-medium"
-                        >
-                          {c.campaign_name}
-                        </Link>
+                        <div className="font-medium">{c.campaign_name}</div>
                         <div className="text-xs opacity-60">{c.campaign_type}</div>
                       </td>
                       <td>
@@ -719,50 +739,95 @@ async function CustomerDashboard() {
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
         <div className="rounded-box border border-base-300 bg-base-100 p-5">
           <h2 className="mb-1 text-xl font-bold text-[#0b1f3a]">
-            Account balance
+            Amount you owe
           </h2>
           <p className="mb-4 text-sm opacity-70">
-            Outstanding amount across open invoices.
+            Total remaining on open invoices after payments.
           </p>
-          <div className="mb-4 text-3xl font-bold text-[#0b1f3a]">
+          <div className="mb-2 text-3xl font-bold text-[#0b1f3a]">
             {money(balance)}
           </div>
-          <div className="overflow-x-auto">
-            <table className="table table-sm">
-              <thead>
-                <tr>
-                  <th>Invoice</th>
-                  <th>Due</th>
-                  <th>Status</th>
-                  <th className="text-right">Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices
-                  .filter((i) => remainingBalance(i) > 0 || i.status !== "Paid")
-                  .slice(0, 8)
-                  .map((i) => (
-                    <tr key={i.id}>
-                      <td>{i.invoice_number}</td>
-                      <td>{i.due_date}</td>
-                      <td>
-                        <StatusBadge status={i.status} />
-                      </td>
-                      <td className="text-right font-medium">
-                        {money(remainingBalance(i))}
-                      </td>
-                    </tr>
-                  ))}
-                {!invoices.length ? (
+          <p className="mb-4 text-sm opacity-70">
+            Total invoiced:{" "}
+            <span className="font-medium text-[#0b1f3a]">
+              {money(totalInvoiced)}
+            </span>
+          </p>
+          {balance > 0 ? (
+            <div className="mb-4 space-y-1 text-sm">
+              {nextDue ? (
+                <p>
+                  <span className="opacity-70">Next due: </span>
+                  <span className="font-medium">
+                    {nextDue.invoice_number} · {nextDue.due_date} ·{" "}
+                    {money(remainingBalance(nextDue))}
+                  </span>
+                </p>
+              ) : null}
+              <p className={overdueTotal > 0 ? "text-error" : "opacity-70"}>
+                Overdue:{" "}
+                <span className="font-medium">{money(overdueTotal)}</span>
+              </p>
+            </div>
+          ) : (
+            <p className="mb-4 text-sm text-success">
+              You&apos;re all caught up — nothing outstanding right now.
+            </p>
+          )}
+          {balance > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="table table-sm">
+                <thead>
                   <tr>
-                    <td colSpan={4} className="opacity-60">
-                      No invoices on file.
-                    </td>
+                    <th>Invoice</th>
+                    <th>Due</th>
+                    <th>Status</th>
+                    <th className="text-right">Total</th>
+                    <th className="text-right">Paid</th>
+                    <th className="text-right">Remaining</th>
                   </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {openInvoices.slice(0, 8).map((i) => {
+                    const remaining = remainingBalance(i);
+                    const paid = paidAmount(i);
+                    const overdue = i.due_date < todayStr;
+                    const dueSoon =
+                      !overdue &&
+                      i.due_date <= dueSoonStr &&
+                      i.due_date >= todayStr;
+                    return (
+                      <tr key={i.id}>
+                        <td className="font-medium">{i.invoice_number}</td>
+                        <td className="whitespace-nowrap">
+                          <div>{i.due_date}</div>
+                          {overdue ? (
+                            <span className="badge badge-error badge-sm mt-1">
+                              Overdue
+                            </span>
+                          ) : dueSoon ? (
+                            <span className="badge badge-warning badge-sm mt-1">
+                              Due soon
+                            </span>
+                          ) : null}
+                        </td>
+                        <td>
+                          <StatusBadge status={i.status} />
+                        </td>
+                        <td className="text-right">{money(num(i.total_amount))}</td>
+                        <td className="text-right">{money(paid)}</td>
+                        <td className="text-right font-medium">
+                          {money(remaining)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : invoices.length === 0 ? (
+            <p className="text-sm opacity-60">No invoices on file.</p>
+          ) : null}
         </div>
 
         <div className="rounded-box border border-base-300 bg-base-100 p-5">
@@ -787,7 +852,7 @@ async function CustomerDashboard() {
                     {a.campaigns?.campaign_name ?? "Campaign"}
                   </div>
                   <div className="mb-1 text-xs uppercase tracking-wide opacity-60">
-                    {a.approval_type} Â· requested {a.requested_date}
+                    {a.approval_type} · requested {a.requested_date}
                   </div>
                   <p className="mb-3 text-sm">{a.description}</p>
                   <UpdateApprovalStatusForm
@@ -798,11 +863,6 @@ async function CustomerDashboard() {
               ))}
             </ul>
           )}
-          <p className="mt-4 text-sm">
-            <Link href="/app/approvals" className="link link-primary">
-              Open full approval center
-            </Link>
-          </p>
         </div>
       </section>
     </div>

@@ -44,7 +44,7 @@ const NAV: {
     href: "/app/ar",
     label: "Accounts Receivable",
     icon: Wallet,
-    roles: ["agency_manager", "billing", "account_manager", "client"],
+    roles: ["agency_manager", "billing", "account_manager"],
   },
   {
     href: "/app/analytics",
@@ -56,7 +56,7 @@ const NAV: {
     href: "/app/approvals",
     label: "Approvals",
     icon: CheckSquare,
-    roles: ["marketing", "client"],
+    roles: ["marketing"],
   },
   {
     href: "/app/billing",
@@ -74,7 +74,7 @@ const NAV: {
     href: "/app/campaigns",
     label: "Campaigns",
     icon: Megaphone,
-    roles: ["marketing", "client"],
+    roles: ["marketing"],
   },
   {
     href: "/app/clients",
@@ -86,7 +86,7 @@ const NAV: {
     href: "/app/contracts",
     label: "Contracts",
     icon: FileText,
-    roles: ["agency_manager", "account_manager", "billing", "client"],
+    roles: ["agency_manager", "account_manager", "billing"],
   },
   {
     href: "/app/contracts/documents",
@@ -116,7 +116,7 @@ const NAV: {
     href: "/app/work",
     label: "Time & PTO",
     icon: Clock,
-    roles: ["marketing", "client"],
+    roles: ["marketing"],
   },
 ];
 
