@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 120" fill="none" role="img" aria-label="Rebel Marketing">
+  <rect x="0" y="8" width="104" height="104" rx="18" fill="#FFFFFF"/>
+  <path d="M28 30h42c14.5 0 24 8.8 24 21.2 0 9.4-5.2 16.4-13.8 19.4L92 90H72.5L62 72.2H44V90H28V30Zm16 28.8h22.2c6.6 0 10.6-3.4 10.6-8.4S72.8 42 66.2 42H44v16.8Z" fill="#0B1F3A"/>
+  <text x="128" y="58" fill="#FFFFFF" font-family="Arial Black, Helvetica Neue, Arial, sans-serif" font-size="42" font-weight="900" letter-spacing="-1.5">REBEL</text>
+  <text x="128" y="96" fill="rgba(255,255,255,0.75)" font-family="Helvetica Neue, Arial, sans-serif" font-size="22" font-weight="600" letter-spacing="6">MARKETING</text>
+</svg>
