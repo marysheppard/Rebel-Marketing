@@ -73,6 +73,7 @@ export default async function ClientsPage({
             industry: c.industry,
             status: c.status,
             created_at: c.created_at,
+            customer_id: c.customer_id,
           })),
           campaigns: scopedCampaigns,
           invoices: scopedInvoices,
