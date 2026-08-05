@@ -155,7 +155,8 @@ export function CampaignsExplorer({
       list = list.filter(
         (r) =>
           r.name.toLowerCase().includes(q) ||
-          r.clientName.toLowerCase().includes(q),
+          r.clientName.toLowerCase().includes(q) ||
+          r.type.toLowerCase().includes(q),
       );
     }
     if (statusFilter !== "all") {
@@ -297,10 +298,10 @@ export function CampaignsExplorer({
           </select>
         </label>
         <label className="form-control min-w-0">
-          <span className="label-text text-xs opacity-70">Search by name</span>
+          <span className="label-text text-xs opacity-70">Search</span>
           <input
             className="input input-bordered input-sm w-full max-w-full"
-            placeholder="Campaign or client…"
+            placeholder="Campaign, client, or type…"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);

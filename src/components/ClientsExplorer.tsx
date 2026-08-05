@@ -19,6 +19,7 @@ export type ClientsExplorerSource = {
     industry: string | null;
     status: string;
     created_at: string;
+    customer_id?: string | null;
   }[];
   campaigns: { id: string; client_id: string }[];
   invoices: {
@@ -48,6 +49,7 @@ type SortKey =
 type ClientRow = {
   id: string;
   name: string;
+  customerId: string;
   industry: string;
   status: string;
   created_at: string;
@@ -126,6 +128,7 @@ export function ClientsExplorer({
       return {
         id: cl.id,
         name: cl.client_name,
+        customerId: cl.customer_id || "",
         industry: cl.industry || "—",
         status: cl.status,
         created_at: cl.created_at,
@@ -147,7 +150,8 @@ export function ClientsExplorer({
       list = list.filter(
         (r) =>
           r.name.toLowerCase().includes(q) ||
-          r.industry.toLowerCase().includes(q),
+          r.industry.toLowerCase().includes(q) ||
+          r.customerId.toLowerCase().includes(q),
       );
     }
     if (statusFilter !== "all") {
@@ -258,10 +262,10 @@ export function ClientsExplorer({
           </select>
         </label>
         <label className="form-control min-w-0">
-          <span className="label-text text-xs opacity-70">Search by name</span>
+          <span className="label-text text-xs opacity-70">Search</span>
           <input
             className="input input-bordered input-sm w-full max-w-full"
-            placeholder="Type a client name…"
+            placeholder="Name, industry, customer ID…"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -307,6 +311,7 @@ export function ClientsExplorer({
           <thead className="sticky top-0 z-10 bg-base-100">
             <tr>
               <th>Client</th>
+              <th>Customer ID</th>
               <th>Industry</th>
               <th>Status</th>
               <th className="text-right">Revenue</th>
@@ -326,6 +331,7 @@ export function ClientsExplorer({
                     {cl.name}
                   </Link>
                 </td>
+                <td className="font-mono text-xs">{cl.customerId || "—"}</td>
                 <td>{cl.industry}</td>
                 <td>
                   <StatusBadge status={cl.status} />
@@ -342,7 +348,7 @@ export function ClientsExplorer({
             ))}
             {!filtered.length ? (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-sm opacity-60">
+                <td colSpan={8} className="py-8 text-center text-sm opacity-60">
                   No clients match these filters for this period.
                 </td>
               </tr>
