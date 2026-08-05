@@ -186,6 +186,7 @@ export function toContractInsertPayload(values: ContractBuilderValues) {
     deliverables: values.deliverables.trim(),
     billing_frequency: values.billing_frequency,
     included_agency_hours: values.included_agency_hours,
+    included_hours_monthly: values.included_agency_hours,
     overage_hourly_rate: values.overage_hourly_rate,
     advertising_spend_treatment: values.advertising_spend_treatment,
     reimbursable_vendor_costs: values.reimbursable_vendor_costs,
