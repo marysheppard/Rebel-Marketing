@@ -158,7 +158,12 @@ export type Cost = {
   approved: boolean;
   pass_through: boolean;
   created_at: string;
-  campaigns?: { campaign_name: string; campaign_budget: number } | null;
+  campaigns?: {
+    campaign_name: string;
+    campaign_budget: number;
+    client_id?: string | null;
+    clients?: { client_name: string } | { client_name: string }[] | null;
+  } | null;
 };
 
 export type Approval = {

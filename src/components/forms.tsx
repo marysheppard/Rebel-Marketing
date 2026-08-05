@@ -730,6 +730,7 @@ export function CreateCostForm({ campaigns }: { campaigns: Option[] }) {
     }
 
     const supabase = createClient();
+    const approved = fd.get("approved") === "on";
     const { error: insertError } = await supabase.from("costs").insert({
       campaign_id: String(fd.get("campaign_id")),
       contract_id: null,
@@ -738,7 +739,8 @@ export function CreateCostForm({ campaigns }: { campaigns: Option[] }) {
       amount,
       cost_date: String(fd.get("cost_date")),
       vendor_name: String(fd.get("vendor_name") ?? "").trim(),
-      approved: fd.get("approved") === "on",
+      approved,
+      approval_status: approved ? "Approved" : "Pending",
       pass_through: fd.get("pass_through") === "on",
     });
     setLoading(false);
@@ -767,15 +769,16 @@ export function CreateCostForm({ campaigns }: { campaigns: Option[] }) {
       <label>
         <span className="text-sm font-medium">Cost type *</span>
         <select name="cost_type" className="select select-bordered w-full" required>
-          <option>Employee Labor</option>
-          <option>Contractor</option>
-          <option>Advertising Spend</option>
-          <option>Software</option>
-          <option>Production</option>
-          <option>Travel</option>
-          <option>Materials</option>
-          <option>Vendor</option>
-          <option>Pass-Through</option>
+          <option>Ad spend</option>
+          <option>Vendor/freelancer costs</option>
+          <option>Employee labor cost</option>
+          <option>Reimbursable/pass-through expenses</option>
+          <option>Software/tool subscription costs</option>
+          <option>Stock media licensing</option>
+          <option>Production costs</option>
+          <option>Travel expenses</option>
+          <option>Rush/overtime fees</option>
+          <option>Platform/processing fees</option>
           <option>Other</option>
         </select>
       </label>

@@ -1,7 +1,9 @@
-import { CostsBoard } from "@/components/CostsBoard";
-import { num } from "@/lib/format";
-import { canManageCosts, getProfile, isClientRole } from "@/lib/page-auth";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
+import { CreateCostForm } from "@/components/forms";
+import { CostDashboard } from "@/components/costs/CostDashboard";
+import { canManageCosts, getProfile, isClientRole } from "@/lib/page-auth";
+import type { CostRow, InvoicePassThroughRow } from "@/lib/costs/calculations";
 
 export default async function CostsPage() {
   const { supabase, profile } = await getProfile();
@@ -11,111 +13,78 @@ export default async function CostsPage() {
     redirect("/app");
   }
 
-  const [{ data: costs }, { data: campaigns }] = await Promise.all([
+  const [
+    { data: costs },
+    { data: campaigns },
+    { data: clients },
+    { data: invoices },
+  ] = await Promise.all([
     supabase
       .from("costs")
-      .select("*, campaigns(campaign_name, campaign_budget)")
+      .select(
+        "*, campaigns(campaign_name, campaign_budget, client_id, clients(client_name))",
+      )
       .order("cost_date", { ascending: false }),
     supabase
       .from("campaigns")
       .select("id, campaign_name")
       .in("campaign_status", ["Active", "Late", "On Hold", "Completed"])
       .order("campaign_name"),
+    supabase.from("clients").select("id, client_name").order("client_name"),
+    supabase
+      .from("invoices")
+      .select("id, campaign_id, status, pass_through_amount"),
   ]);
 
-  const list = costs ?? [];
+  const showForm = canManageCosts(profile.role) && !isClientRole(profile.role);
 
-  const spentByCampaign = new Map<string, number>();
-  const budgetByCampaign = new Map<string, number>();
-  const spendByType = new Map<string, number>();
-  const spendByCampaignName = new Map<string, { name: string; amount: number }>();
-
-  for (const c of list) {
-    const amount = num(c.amount);
-    const camp = c.campaigns as
-      | { campaign_name?: string; campaign_budget?: number }
-      | { campaign_name?: string; campaign_budget?: number }[]
-      | null;
-    const campObj = Array.isArray(camp) ? camp[0] : camp;
-
-    if (c.campaign_id) {
-      spentByCampaign.set(
-        c.campaign_id,
-        (spentByCampaign.get(c.campaign_id) ?? 0) + amount,
-      );
-      if (campObj?.campaign_budget != null) {
-        budgetByCampaign.set(c.campaign_id, num(campObj.campaign_budget));
-      }
-      const name = campObj?.campaign_name ?? "—";
-      const prev = spendByCampaignName.get(c.campaign_id);
-      spendByCampaignName.set(c.campaign_id, {
-        name,
-        amount: (prev?.amount ?? 0) + amount,
-      });
-    }
-
-    const type = String(c.cost_type || "Other");
-    spendByType.set(type, (spendByType.get(type) ?? 0) + amount);
-  }
-
-  const items = list.map((c) => {
-    const camp = c.campaigns as
-      | { campaign_name?: string }
-      | { campaign_name?: string }[]
-      | null;
-    const campObj = Array.isArray(camp) ? camp[0] : camp;
-    return {
-      id: String(c.id),
-      cost_date: String(c.cost_date),
-      campaign_id: c.campaign_id ? String(c.campaign_id) : null,
-      campaign_name: campObj?.campaign_name ?? "—",
-      cost_type: String(c.cost_type ?? ""),
-      description: String(c.description || c.vendor_name || ""),
-      amount: num(c.amount),
-      approved: Boolean(c.approved),
-      pass_through: Boolean(c.pass_through),
-    };
-  });
-
-  const totalSpend = items.reduce((s, c) => s + c.amount, 0);
-  const unapprovedTotal = items
-    .filter((c) => !c.approved)
-    .reduce((s, c) => s + c.amount, 0);
-  const passThroughTotal = items
-    .filter((c) => c.pass_through)
-    .reduce((s, c) => s + c.amount, 0);
-
-  let overBudgetCampaigns = 0;
-  for (const [id, spent] of spentByCampaign) {
-    const budget = budgetByCampaign.get(id) ?? 0;
-    if (budget > 0 && spent > budget) overBudgetCampaigns += 1;
-  }
-
-  const typePie = [...spendByType.entries()]
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
-
-  const byCampaign = [...spendByCampaignName.values()]
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 8);
-
-  const showCreate =
-    canManageCosts(profile.role) && !isClientRole(profile.role);
+  const costRows = (costs ?? []) as CostRow[];
+  const invoiceRows = (invoices ?? []) as InvoicePassThroughRow[];
 
   return (
-    <CostsBoard
-      items={items}
-      showCreate={showCreate}
-      campaigns={(campaigns ?? []).map((c) => ({
-        id: c.id,
-        label: c.campaign_name,
-      }))}
-      typePie={typePie}
-      byCampaign={byCampaign}
-      totalSpend={totalSpend}
-      unapprovedTotal={unapprovedTotal}
-      passThroughTotal={passThroughTotal}
-      overBudgetCampaigns={overBudgetCampaigns}
-    />
+    <div>
+      <Suspense
+        fallback={
+          <div className="space-y-4">
+            <div className="skeleton h-16 w-full" />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="skeleton h-28 w-full" />
+              ))}
+            </div>
+            <div className="skeleton h-64 w-full" />
+          </div>
+        }
+      >
+        <CostDashboard
+          costs={costRows}
+          invoices={invoiceRows}
+          clients={(clients ?? []).map((c) => ({
+            id: c.id,
+            label: c.client_name,
+          }))}
+          campaigns={(campaigns ?? []).map((c) => ({
+            id: c.id,
+            label: c.campaign_name,
+          }))}
+          showRecordCost={showForm}
+        />
+      </Suspense>
+
+      {showForm ? (
+        <section
+          id="record-cost"
+          className="mt-8 scroll-mt-24 rounded-box border border-base-300 bg-base-100 p-6"
+        >
+          <h2 className="mb-4 text-xl font-bold">Record cost</h2>
+          <CreateCostForm
+            campaigns={(campaigns ?? []).map((c) => ({
+              id: c.id,
+              label: c.campaign_name,
+            }))}
+          />
+        </section>
+      ) : null}
+    </div>
   );
 }
