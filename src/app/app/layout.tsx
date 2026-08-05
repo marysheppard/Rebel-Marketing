@@ -1,5 +1,10 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import {
+  isClientPortalHome,
+  isClientRole,
+} from "@/lib/access";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 
@@ -18,5 +23,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (!profile) redirect("/login");
 
-  return <AppShell profile={profile as Profile}>{children}</AppShell>;
+  const typed = profile as Profile;
+  const headerList = await headers();
+  const pathname = headerList.get("x-pathname") ?? "/app";
+
+  if (isClientRole(typed.role) && !isClientPortalHome(pathname)) {
+    redirect("/app?denied=1");
+  }
+
+  return <AppShell profile={typed}>{children}</AppShell>;
 }

@@ -61,10 +61,9 @@ export function canRecordPayments(role: UserRole) {
   return canManageBilling(role);
 }
 
-export function isClientRole(role: UserRole) {
-  return role === "client";
-}
-
-export function isEmployeeRole(role: UserRole) {
-  return !isClientRole(role);
-}
+export {
+  isAdminOnlyAppPath,
+  isClientPortalHome,
+  isClientRole,
+  isEmployeeRole,
+} from "@/lib/access";

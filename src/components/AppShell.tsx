@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -43,19 +44,19 @@ const NAV: {
     href: "/app/contracts",
     label: "Contracts",
     icon: FileText,
-    roles: ["agency_manager", "account_manager", "billing", "client"],
+    roles: ["agency_manager", "account_manager", "billing"],
   },
   {
     href: "/app/campaigns",
     label: "Campaigns",
     icon: Megaphone,
-    roles: ["agency_manager", "account_manager", "marketing", "billing", "client"],
+    roles: ["agency_manager", "account_manager", "marketing", "billing"],
   },
   {
     href: "/app/work",
     label: "Work",
     icon: Briefcase,
-    roles: ["agency_manager", "account_manager", "marketing", "billing", "client"],
+    roles: ["agency_manager", "account_manager", "marketing", "billing"],
   },
   {
     href: "/app/costs",
@@ -67,7 +68,7 @@ const NAV: {
     href: "/app/approvals",
     label: "Approvals",
     icon: CheckSquare,
-    roles: ["agency_manager", "account_manager", "marketing", "client"],
+    roles: ["agency_manager", "account_manager", "marketing"],
   },
   {
     href: "/app/billing",
@@ -79,7 +80,7 @@ const NAV: {
     href: "/app/ar",
     label: "Accounts Receivable",
     icon: Wallet,
-    roles: ["agency_manager", "billing", "account_manager", "client"],
+    roles: ["agency_manager", "billing", "account_manager"],
   },
   {
     href: "/app/reports",
@@ -88,6 +89,28 @@ const NAV: {
     roles: ["agency_manager", "account_manager", "billing"],
   },
 ];
+
+function AccessDeniedBanner({ isClient }: { isClient: boolean }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const denied = isClient && searchParams.get("denied") === "1";
+
+  useEffect(() => {
+    if (!denied) return;
+    const t = window.setTimeout(() => {
+      router.replace("/app");
+    }, 4000);
+    return () => window.clearTimeout(t);
+  }, [denied, router]);
+
+  if (!denied) return null;
+
+  return (
+    <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+      Access denied. The Client Portal only includes your Customer Dashboard.
+    </div>
+  );
+}
 
 export function AppShell({
   profile,
@@ -103,7 +126,7 @@ export function AppShell({
   async function logout() {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/login");
+    router.push("/");
     router.refresh();
   }
 
@@ -142,7 +165,12 @@ export function AppShell({
             </button>
           </div>
         </header>
-        <main className="flex-1 p-4 sm:p-6">{children}</main>
+        <main className="flex-1 p-4 sm:p-6">
+          <Suspense fallback={null}>
+            <AccessDeniedBanner isClient={profile.role === "client"} />
+          </Suspense>
+          {children}
+        </main>
       </div>
       <div className="drawer-side z-30">
         <label htmlFor="app-drawer" className="drawer-overlay" />
@@ -171,8 +199,8 @@ export function AppShell({
           <div className="mt-auto rounded-box bg-base-100 p-3 text-xs opacity-70">
             Viewing as <strong>{ROLE_LABELS[profile.role]}</strong>.
             {profile.role === "client"
-              ? " Use Customer sign-in for this portal."
-              : " Use Employee sign-in for this portal."}
+              ? " Client portal — dashboard access only."
+              : " Admin workspace for agency staff."}
           </div>
         </aside>
       </div>

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { ArrowLeft, Briefcase, Building2 } from "lucide-react";
 import { RebelLogo } from "@/components/RebelLogo";
 import { createClient } from "@/lib/supabase/client";
@@ -16,16 +16,38 @@ import {
 type Portal = "employee" | "customer";
 type Step = "choose" | "credentials";
 
-export default function LoginPage() {
+function portalFromQuery(raw: string | null): Portal | null {
+  if (!raw) return null;
+  const v = raw.toLowerCase();
+  if (v === "admin" || v === "employee") return "employee";
+  if (v === "client" || v === "customer") return "customer";
+  return null;
+}
+
+function LoginForm() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("choose");
-  const [portal, setPortal] = useState<Portal | null>(null);
+  const searchParams = useSearchParams();
+  const initialPortal = portalFromQuery(searchParams.get("portal"));
+
+  const [step, setStep] = useState<Step>(
+    initialPortal ? "credentials" : "choose",
+  );
+  const [portal, setPortal] = useState<Portal | null>(initialPortal);
   const [employeeId, setEmployeeId] = useState("");
   const [password, setPassword] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [accessCode, setAccessCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const next = portalFromQuery(searchParams.get("portal"));
+    if (next) {
+      setPortal(next);
+      setStep("credentials");
+      setError(null);
+    }
+  }, [searchParams]);
 
   function choosePortal(next: Portal) {
     setPortal(next);
@@ -35,9 +57,11 @@ export default function LoginPage() {
 
   function goBack() {
     setStep("choose");
+    setPortal(null);
     setError(null);
     setPassword("");
     setAccessCode("");
+    router.replace("/login");
   }
 
   async function authenticate(
@@ -72,13 +96,15 @@ export default function LoginPage() {
     if (expectedPortal === "employee" && isClient) {
       await supabase.auth.signOut();
       setLoading(false);
-      setError("This account is a customer login. Use the Customer portal.");
+      setError(
+        "This account is a client login. Use Client Portal Login instead.",
+      );
       return;
     }
     if (expectedPortal === "customer" && !isClient) {
       await supabase.auth.signOut();
       setLoading(false);
-      setError("This account is an employee login. Use the Employee portal.");
+      setError("This account is an admin login. Use Admin Login instead.");
       return;
     }
 
@@ -101,7 +127,9 @@ export default function LoginPage() {
     e.preventDefault();
     const resolved = resolveCustomerLogin(customerId, accessCode);
     if (!resolved) {
-      setError("Enter a valid customer ID (e.g. CUST-BLUERIDGE) or client email.");
+      setError(
+        "Enter a valid customer ID (e.g. CUST-BLUERIDGE) or client email.",
+      );
       return;
     }
     await authenticate(resolved.email, resolved.password, "customer");
@@ -128,10 +156,15 @@ export default function LoginPage() {
       <div className="rebel-grid absolute inset-0" />
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-8 sm:px-6">
         <header className="login-fade-in flex items-center justify-between">
-          <RebelLogo priority className="h-14 w-auto sm:h-20" />
-          <p className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-[#1e3a5f] sm:block">
-            Secure portal
-          </p>
+          <Link href="/" aria-label="Back to homepage">
+            <RebelLogo priority className="h-14 w-auto sm:h-20" />
+          </Link>
+          <Link
+            href="/"
+            className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1e3a5f] hover:text-[#0b1f3a]"
+          >
+            Back to site
+          </Link>
         </header>
 
         <div className="mt-10 grid flex-1 items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
@@ -146,27 +179,27 @@ export default function LoginPage() {
             />
             <div className="relative space-y-5">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/70">
-                Growth you can manage
+                Secure access
               </p>
               <h1 className="max-w-lg text-3xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-[2.65rem]">
-                A clearer way to run clients, campaigns, and cash flow.
+                Sign in to the right workspace.
               </h1>
               <p className="max-w-md text-base leading-relaxed text-white/80">
-                Built for marketing teams and client partners who need
-                outcomes—not vanity metrics—in one connected workspace.
+                Admin tools stay with the agency. Clients open a dedicated
+                portal for their customer dashboard—nothing more.
               </p>
               <ul className="space-y-2.5 pt-2 text-sm text-white/75">
                 <li className="flex gap-2">
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-white" />
-                  Unified client, contract, and campaign operations
+                  Admin Login for agency staff
                 </li>
                 <li className="flex gap-2">
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-white" />
-                  Approvals, billing, and profitability in one place
+                  Client Portal for customer partners
                 </li>
                 <li className="flex gap-2">
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-white" />
-                  Separate employee and customer access for cleaner security
+                  Role enforcement keeps dashboards separate
                 </li>
               </ul>
             </div>
@@ -180,8 +213,8 @@ export default function LoginPage() {
                     How are you signing in?
                   </h2>
                   <p className="mt-2 text-sm leading-relaxed text-[#1e3a5f]/a0">
-                    Choose your portal to continue. Employees and customers use
-                    different credentials.
+                    Choose your portal to continue. Admin and client accounts
+                    use different credentials.
                   </p>
                 </div>
 
@@ -196,10 +229,10 @@ export default function LoginPage() {
                     </span>
                     <span>
                       <span className="block text-base font-bold text-[#0b1f3a]">
-                        Employee
+                        Admin Login
                       </span>
                       <span className="mt-1 block text-sm text-[#1e3a5f]/b8">
-                        Agency staff — use your employee ID and password
+                        Agency staff — employee ID and password
                       </span>
                     </span>
                   </button>
@@ -214,10 +247,10 @@ export default function LoginPage() {
                     </span>
                     <span>
                       <span className="block text-base font-bold text-[#0b1f3a]">
-                        Customer
+                        Client Portal Login
                       </span>
                       <span className="mt-1 block text-sm text-[#1e3a5f]/b8">
-                        Client partners — use your customer ID and access code
+                        Client partners — customer ID and access code
                       </span>
                     </span>
                   </button>
@@ -235,10 +268,11 @@ export default function LoginPage() {
                 </button>
                 <div>
                   <h2 className="text-2xl font-bold tracking-tight text-[#0b1f3a]">
-                    Employee sign in
+                    Admin Login
                   </h2>
                   <p className="mt-1.5 text-sm text-[#1e3a5f]/a0">
-                    Enter your employee ID and password to open the workspace.
+                    Enter your employee ID and password to open the admin
+                    workspace.
                   </p>
                 </div>
                 <form className="form-grid space-y-3.5" onSubmit={signInEmployee}>
@@ -297,7 +331,10 @@ export default function LoginPage() {
                 </div>
                 <p className="text-center text-sm text-[#1e3a5f]/80">
                   Need an account?{" "}
-                  <Link href="/signup" className="font-semibold text-[#0b1f3a] underline-offset-2 hover:underline">
+                  <Link
+                    href="/signup"
+                    className="font-semibold text-[#0b1f3a] underline-offset-2 hover:underline"
+                  >
                     Sign up
                   </Link>
                 </p>
@@ -314,10 +351,11 @@ export default function LoginPage() {
                 </button>
                 <div>
                   <h2 className="text-2xl font-bold tracking-tight text-[#0b1f3a]">
-                    Customer sign in
+                    Client Portal Login
                   </h2>
                   <p className="mt-1.5 text-sm text-[#1e3a5f]/a0">
-                    Enter your personalized customer ID and access code.
+                    Enter your customer ID and access code for the Customer
+                    Dashboard.
                   </p>
                 </div>
                 <form className="form-grid space-y-3.5" onSubmit={signInCustomer}>
@@ -380,5 +418,19 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="rebel-hero flex min-h-screen items-center justify-center">
+          <p className="text-sm text-[#1e3a5f]">Loading…</p>
+        </main>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

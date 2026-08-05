@@ -14,9 +14,9 @@ const body = IBM_Plex_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Rebel Marketing | Contract-to-Cash",
+  title: "Rebel Marketing | Strategy, Campaigns & Growth",
   description:
-    "Manage clients, campaigns, costs, billing, approvals, and profitability in one connected system.",
+    "Rebel Marketing is a growth-focused agency for brand campaigns, client partnerships, and measurable results.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

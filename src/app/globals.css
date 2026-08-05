@@ -103,3 +103,19 @@ body {
     transform: translateY(0);
   }
 }
+
+.public-hero-brand {
+  animation: loginFadeIn 500ms ease-out both;
+}
+
+.public-hero-title {
+  animation: loginSlideUp 560ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
+}
+
+.public-hero-copy {
+  animation: loginSlideUp 560ms cubic-bezier(0.22, 1, 0.36, 1) 140ms both;
+}
+
+.public-hero-cta {
+  animation: loginSlideUp 560ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both;
+}
