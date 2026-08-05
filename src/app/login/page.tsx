@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Briefcase, Building2 } from "lucide-react";
 import { RebelLogo } from "@/components/RebelLogo";
 import { createClient } from "@/lib/supabase/client";
@@ -26,6 +26,12 @@ export default function LoginPage() {
   const [accessCode, setAccessCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Keep the login screen on the light corporate look even if a dark theme
+  // was saved from the in-app theme selector.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", "corporate");
+  }, []);
 
   function choosePortal(next: Portal) {
     setPortal(next);
@@ -124,7 +130,10 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="rebel-hero relative min-h-screen overflow-hidden">
+    <main
+      className="rebel-hero relative min-h-screen overflow-hidden text-[#0b1f3a]"
+      data-theme="corporate"
+    >
       <div className="rebel-grid absolute inset-0" />
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-8 sm:px-6">
         <header className="login-fade-in flex items-center justify-between">
@@ -172,14 +181,14 @@ export default function LoginPage() {
             </div>
           </section>
 
-          <section className="login-slide-up rounded-2xl border border-[#0b1f3a14] bg-white p-7 shadow-[0_20px_60px_#0b1f3a12] sm:p-8">
+          <section className="login-slide-up rounded-2xl border border-[#0b1f3a]/15 bg-white p-7 text-[#0b1f3a] shadow-[0_20px_60px_rgba(11,31,58,0.08)] sm:p-8">
             {step === "choose" ? (
               <div className="login-fade-in space-y-6">
                 <div>
                   <h2 className="text-2xl font-bold tracking-tight text-[#0b1f3a]">
                     How are you signing in?
                   </h2>
-                  <p className="mt-2 text-sm leading-relaxed text-[#1e3a5f]/a0">
+                  <p className="mt-2 text-sm leading-relaxed text-[#1e3a5f]/80">
                     Choose your portal to continue. Employees and customers use
                     different credentials.
                   </p>
@@ -188,7 +197,7 @@ export default function LoginPage() {
                 <div className="grid gap-3">
                   <button
                     type="button"
-                    className="login-choice flex w-full items-start gap-4 rounded-xl border border-[#0b1f3a18] bg-[#f7f9fc] px-5 py-5 text-left hover:border-[#0b1f3a]"
+                    className="login-choice flex w-full items-start gap-4 rounded-xl border border-[#0b1f3a]/20 bg-[#f7f9fc] px-5 py-5 text-left text-[#0b1f3a] hover:border-[#0b1f3a]"
                     onClick={() => choosePortal("employee")}
                   >
                     <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#0b1f3a] text-white">
@@ -198,7 +207,7 @@ export default function LoginPage() {
                       <span className="block text-base font-bold text-[#0b1f3a]">
                         Employee
                       </span>
-                      <span className="mt-1 block text-sm text-[#1e3a5f]/b8">
+                      <span className="mt-1 block text-sm text-[#1e3a5f]/80">
                         Agency staff — use your employee ID and password
                       </span>
                     </span>
@@ -206,7 +215,7 @@ export default function LoginPage() {
 
                   <button
                     type="button"
-                    className="login-choice flex w-full items-start gap-4 rounded-xl border border-[#0b1f3a18] bg-[#f7f9fc] px-5 py-5 text-left hover:border-[#0b1f3a]"
+                    className="login-choice flex w-full items-start gap-4 rounded-xl border border-[#0b1f3a]/20 bg-[#f7f9fc] px-5 py-5 text-left text-[#0b1f3a] hover:border-[#0b1f3a]"
                     onClick={() => choosePortal("customer")}
                   >
                     <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#0b1f3a] text-white">
@@ -216,7 +225,7 @@ export default function LoginPage() {
                       <span className="block text-base font-bold text-[#0b1f3a]">
                         Customer
                       </span>
-                      <span className="mt-1 block text-sm text-[#1e3a5f]/b8">
+                      <span className="mt-1 block text-sm text-[#1e3a5f]/80">
                         Client partners — use your customer ID and access code
                       </span>
                     </span>
@@ -237,7 +246,7 @@ export default function LoginPage() {
                   <h2 className="text-2xl font-bold tracking-tight text-[#0b1f3a]">
                     Employee sign in
                   </h2>
-                  <p className="mt-1.5 text-sm text-[#1e3a5f]/a0">
+                  <p className="mt-1.5 text-sm text-[#1e3a5f]/80">
                     Enter your employee ID and password to open the workspace.
                   </p>
                 </div>
@@ -285,7 +294,7 @@ export default function LoginPage() {
                       <button
                         key={id}
                         type="button"
-                        className="rounded-lg border border-[#0b1f3a18] px-3 py-2 text-left text-xs font-medium text-[#0b1f3a] hover:border-[#0b1f3a] hover:bg-[#f7f9fc]"
+                        className="rounded-lg border border-[#0b1f3a]/20 px-3 py-2 text-left text-xs font-medium text-[#0b1f3a] hover:border-[#0b1f3a] hover:bg-[#f7f9fc]"
                         disabled={loading}
                         onClick={() => fillEmployeeDemo(id)}
                       >
@@ -316,7 +325,7 @@ export default function LoginPage() {
                   <h2 className="text-2xl font-bold tracking-tight text-[#0b1f3a]">
                     Customer sign in
                   </h2>
-                  <p className="mt-1.5 text-sm text-[#1e3a5f]/a0">
+                  <p className="mt-1.5 text-sm text-[#1e3a5f]/80">
                     Enter your personalized customer ID and access code.
                   </p>
                 </div>
@@ -364,7 +373,7 @@ export default function LoginPage() {
                       <button
                         key={id}
                         type="button"
-                        className="rounded-lg border border-[#0b1f3a18] px-3 py-2 text-left text-xs font-medium text-[#0b1f3a] hover:border-[#0b1f3a] hover:bg-[#f7f9fc]"
+                        className="rounded-lg border border-[#0b1f3a]/20 px-3 py-2 text-left text-xs font-medium text-[#0b1f3a] hover:border-[#0b1f3a] hover:bg-[#f7f9fc]"
                         disabled={loading}
                         onClick={() => fillCustomerDemo(id)}
                       >

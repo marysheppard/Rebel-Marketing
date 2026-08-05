@@ -10,8 +10,32 @@ export type Profile = {
   full_name: string;
   email: string;
   role: UserRole;
+  department?: string;
+  profile_image?: string | null;
+  internal_cost_rate?: number;
   created_at: string;
 };
+
+export type ControlExceptionStatus = "Open" | "Under Review" | "Resolved";
+
+export type ControlException = {
+  id: string;
+  fingerprint: string;
+  exception_type: string;
+  client_id: string | null;
+  severity: "info" | "warning" | "error";
+  description: string;
+  detected_at: string;
+  status: ControlExceptionStatus;
+  assigned_reviewer_id: string | null;
+  href?: string | null;
+  updated_at: string;
+  clients?: { client_name: string } | null;
+  profiles?: { full_name: string } | null;
+};
+
+export type TaskStatus = "Not Started" | "In Progress" | "Completed";
+export type TaskPriority = "Low" | "Medium" | "High" | "Urgent";
 
 export type Client = {
   id: string;
@@ -66,6 +90,17 @@ export type Campaign = {
   contracts?: { contract_name: string; contract_number: string } | null;
 };
 
+export type CampaignMetric = {
+  id: string;
+  campaign_id: string;
+  metric_date: string;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  spend: number;
+  created_at: string;
+};
+
 export type WorkEntry = {
   id: string;
   campaign_id: string;
@@ -77,9 +112,59 @@ export type WorkEntry = {
   billable: boolean;
   approval_status: string;
   billed: boolean;
+  task_id?: string | null;
   created_at: string;
   campaigns?: { campaign_name: string; client_id: string } | null;
   profiles?: { full_name: string } | null;
+};
+
+export type Task = {
+  id: string;
+  campaign_id: string;
+  assignee_id: string;
+  created_by: string | null;
+  title: string;
+  description: string;
+  due_date: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  estimated_hours: number;
+  actual_hours: number;
+  assigned_date: string;
+  notes: string;
+  completed_at: string | null;
+  created_at: string;
+  campaigns?: {
+    campaign_name: string;
+    client_id: string;
+    clients?: { client_name: string } | null;
+  } | null;
+  profiles?: { full_name: string } | null;
+};
+
+export type TimeEntry = {
+  id: string;
+  employee_id: string;
+  task_id: string;
+  work_entry_id: string | null;
+  work_date: string;
+  start_time: string;
+  end_time: string;
+  break_minutes: number;
+  total_hours: number;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  tasks?: {
+    id: string;
+    title: string;
+    campaign_id: string;
+    status: TaskStatus;
+    campaigns?: {
+      campaign_name: string;
+      clients?: { client_name: string } | null;
+    } | null;
+  } | null;
 };
 
 export type Cost = {

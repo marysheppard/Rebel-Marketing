@@ -13,13 +13,72 @@ import {
   Receipt,
   Wallet,
   BarChart3,
+  ClipboardList,
+  Clock,
   LogOut,
   Menu,
+  LineChart,
+  Shield,
+  UserCog,
+  Calculator,
+  Bell,
+  Activity,
 } from "lucide-react";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { RebelLogo } from "@/components/RebelLogo";
 import { createClient } from "@/lib/supabase/client";
 import { ROLE_LABELS, type Profile, type UserRole } from "@/lib/types";
+
+const AGENCY_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
+  {
+    label: "Portfolio",
+    hrefs: [
+      "/app/analytics",
+      "/app/campaigns",
+      "/app/clients",
+      "/app/contracts",
+      "/app/profitability",
+    ],
+  },
+  {
+    label: "Finance",
+    hrefs: ["/app/accounting", "/app/ar", "/app/billing"],
+  },
+  {
+    label: "People",
+    hrefs: ["/app/employees"],
+  },
+  {
+    label: "Risk",
+    hrefs: ["/app/controls"],
+  },
+];
+
+const AM_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
+  {
+    label: "Portfolio",
+    hrefs: [
+      "/app/analytics",
+      "/app/campaigns",
+      "/app/profitability",
+      "/app/contracts",
+      "/app/metrics",
+      "/app/clients",
+    ],
+  },
+  {
+    label: "Delivery",
+    hrefs: ["/app/approvals", "/app/costs", "/app/tasks", "/app/time"],
+  },
+];
+
+function notificationHref(role: UserRole) {
+  if (role === "agency_manager" || role === "account_manager") {
+    return "/app/alerts";
+  }
+  if (role === "client") return "/app/ar";
+  return "/app/tasks";
+}
 
 const NAV: {
   href: string;
@@ -27,17 +86,66 @@ const NAV: {
   icon: React.ComponentType<{ className?: string }>;
   roles: UserRole[];
 }[] = [
+  // Account Manager
   {
     href: "/app",
     label: "Dashboard",
     icon: LayoutDashboard,
-    roles: ["agency_manager", "account_manager", "marketing", "billing", "client"],
+    roles: ["account_manager", "marketing", "billing", "client"],
+  },
+  {
+    href: "/app",
+    label: "Executive Dashboard",
+    icon: LayoutDashboard,
+    roles: ["agency_manager"],
+  },
+  {
+    href: "/app/clients",
+    label: "My Clients",
+    icon: Users,
+    roles: ["account_manager"],
   },
   {
     href: "/app/clients",
     label: "Clients",
     icon: Users,
-    roles: ["agency_manager", "account_manager", "billing"],
+    roles: ["agency_manager", "billing"],
+  },
+  {
+    href: "/app/campaigns",
+    label: "Campaigns",
+    icon: Megaphone,
+    roles: ["account_manager", "agency_manager", "marketing", "client"],
+  },
+  {
+    href: "/app/profitability",
+    label: "Client Profitability",
+    icon: LineChart,
+    roles: ["account_manager"],
+  },
+  {
+    href: "/app/profitability",
+    label: "Profitability",
+    icon: LineChart,
+    roles: ["agency_manager"],
+  },
+  {
+    href: "/app/metrics",
+    label: "Marketing Metrics",
+    icon: BarChart3,
+    roles: ["account_manager"],
+  },
+  {
+    href: "/app/employees",
+    label: "Employees",
+    icon: UserCog,
+    roles: ["agency_manager"],
+  },
+  {
+    href: "/app/analytics",
+    label: "Analytics",
+    icon: Activity,
+    roles: ["agency_manager", "account_manager"],
   },
   {
     href: "/app/contracts",
@@ -46,59 +154,122 @@ const NAV: {
     roles: ["agency_manager", "account_manager", "billing", "client"],
   },
   {
-    href: "/app/campaigns",
-    label: "Campaigns",
-    icon: Megaphone,
-    roles: ["agency_manager", "account_manager", "marketing", "billing", "client"],
-  },
-  {
-    href: "/app/work",
-    label: "Work",
-    icon: Briefcase,
-    roles: ["agency_manager", "account_manager", "marketing", "billing", "client"],
-  },
-  {
-    href: "/app/costs",
-    label: "Costs",
-    icon: DollarSign,
-    roles: ["agency_manager", "account_manager", "marketing", "billing"],
-  },
-  {
-    href: "/app/approvals",
-    label: "Approvals",
-    icon: CheckSquare,
-    roles: ["agency_manager", "account_manager", "marketing", "client"],
+    href: "/app/accounting",
+    label: "Accounting",
+    icon: Calculator,
+    roles: ["agency_manager"],
   },
   {
     href: "/app/billing",
     label: "Billing",
     icon: Receipt,
-    roles: ["agency_manager", "billing", "account_manager"],
+    roles: ["agency_manager", "billing"],
   },
   {
     href: "/app/ar",
-    label: "Accounts Receivable",
+    label: "AR",
     icon: Wallet,
-    roles: ["agency_manager", "billing", "account_manager", "client"],
+    roles: ["agency_manager", "billing", "client"],
+  },
+  {
+    href: "/app/controls",
+    label: "Controls",
+    icon: Shield,
+    roles: ["agency_manager"],
   },
   {
     href: "/app/reports",
     label: "Reports",
     icon: BarChart3,
-    roles: ["agency_manager", "account_manager", "billing"],
+    roles: ["billing"],
+  },
+  // Marketing / ops (not management)
+  {
+    href: "/app/tasks",
+    label: "My Tasks",
+    icon: ClipboardList,
+    roles: ["marketing", "account_manager", "billing"],
+  },
+  {
+    href: "/app/time",
+    label: "Time Entry",
+    icon: Clock,
+    roles: ["marketing", "account_manager", "billing"],
+  },
+  {
+    href: "/app/work",
+    label: "Work",
+    icon: Briefcase,
+    roles: ["marketing", "client"],
+  },
+  {
+    href: "/app/costs",
+    label: "Costs",
+    icon: DollarSign,
+    roles: ["account_manager"],
+  },
+  {
+    href: "/app/approvals",
+    label: "Approvals",
+    icon: CheckSquare,
+    roles: ["account_manager", "marketing", "client"],
   },
 ];
 
+function dashboardTitle(role: UserRole) {
+  if (role === "client") return "Customer Dashboard";
+  if (role === "agency_manager") return "Executive Dashboard";
+  if (role === "account_manager") return "Account Manager";
+  return "Employee Dashboard";
+}
+
 export function AppShell({
   profile,
+  notificationCount = 0,
   children,
 }: {
   profile: Profile;
+  notificationCount?: number;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const items = NAV.filter((n) => n.roles.includes(profile.role));
+  const forRole = NAV.filter((n) => n.roles.includes(profile.role));
+  const isAgency = profile.role === "agency_manager";
+  const isAm = profile.role === "account_manager";
+  const hasNotifications = notificationCount > 0;
+
+  const dashboards = forRole.filter((n) => n.href === "/app");
+  const rest = forRole.filter((n) => n.href !== "/app");
+
+  type NavItem = (typeof NAV)[number];
+  const groups = isAgency
+    ? AGENCY_NAV_GROUPS
+    : isAm
+      ? AM_NAV_GROUPS
+      : null;
+
+  const navSections: { label: string | null; items: NavItem[] }[] = groups
+    ? [
+        { label: null, items: dashboards },
+        ...groups
+          .map((g) => ({
+            label: g.label,
+            items: g.hrefs
+              .map((href) => rest.find((n) => n.href === href))
+              .filter(Boolean) as NavItem[],
+          }))
+          .filter((s) => s.items.length > 0),
+      ]
+    : [
+        {
+          label: null,
+          items: [
+            ...dashboards,
+            ...[...rest].sort((a, b) => a.label.localeCompare(b.label)),
+          ],
+        },
+      ];
 
   async function logout() {
     const supabase = createClient();
@@ -118,23 +289,42 @@ export function AppShell({
             </label>
             <div>
               <div className="text-sm font-black tracking-tight sm:text-base">
-                {profile.role === "client"
-                  ? "Customer Dashboard"
-                  : "Employee Dashboard"}
+                {dashboardTitle(profile.role)}
               </div>
               <div className="text-xs opacity-60">Rebel Marketing</div>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden text-right sm:block">
-              <div className="text-sm font-medium">{profile.full_name}</div>
-              <div className="badge badge-primary badge-sm">
-                {ROLE_LABELS[profile.role]}
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="hidden min-w-0 text-right sm:block">
+                <div className="truncate text-sm font-medium">{profile.full_name}</div>
+                <div className="badge badge-primary badge-sm max-w-full truncate">
+                  {ROLE_LABELS[profile.role]}
+                </div>
               </div>
+              <span className="badge badge-primary badge-sm sm:hidden">
+                {ROLE_LABELS[profile.role]}
+              </span>
+              <Link
+                href={notificationHref(profile.role)}
+                className="btn btn-ghost btn-circle btn-sm relative"
+                aria-label={
+                  hasNotifications
+                    ? `${notificationCount} notifications`
+                    : "Notifications"
+                }
+                title={
+                  hasNotifications
+                    ? `${notificationCount} notification${notificationCount === 1 ? "" : "s"}`
+                    : "No notifications"
+                }
+              >
+                <Bell className="h-5 w-5" />
+                {hasNotifications ? (
+                  <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-error ring-2 ring-base-100" />
+                ) : null}
+              </Link>
             </div>
-            <span className="badge badge-primary badge-sm sm:hidden">
-              {ROLE_LABELS[profile.role]}
-            </span>
             <ThemeSelector />
             <button className="btn btn-ghost btn-sm" onClick={logout}>
               <LogOut className="h-4 w-4" />
@@ -149,30 +339,49 @@ export function AppShell({
         <aside className="flex min-h-full w-72 flex-col bg-base-200 p-4">
           <div className="mb-6 px-2">
             <RebelLogo className="h-10 w-auto" />
-            <p className="mt-2 text-xs opacity-60">Connected contract-to-cash</p>
+            <p className="mt-2 text-xs font-medium tracking-wide opacity-70">
+              Rebel Marketing
+            </p>
+            <p className="text-xs opacity-50">Connected contract-to-cash</p>
           </div>
           <ul className="menu gap-1">
-            {items.map((item) => {
-              const active =
-                item.href === "/app"
-                  ? pathname === "/app"
-                  : pathname.startsWith(item.href);
-              const Icon = item.icon;
-              return (
-                <li key={item.href}>
-                  <Link href={item.href} className={active ? "active" : ""}>
-                    <Icon className="h-4 w-4" />
-                    {item.label}
-                  </Link>
-                </li>
-              );
+            {navSections.flatMap((section) => {
+              const links = section.items.map((item) => {
+                const active =
+                  item.href === "/app"
+                    ? pathname === "/app"
+                    : pathname.startsWith(item.href);
+                const Icon = item.icon;
+                return (
+                  <li key={`${item.href}-${item.label}`}>
+                    <Link
+                      href={item.href}
+                      className={`min-w-0 whitespace-normal leading-snug ${active ? "active" : ""}`}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="break-words">{item.label}</span>
+                    </Link>
+                  </li>
+                );
+              });
+              if (!section.label) return links;
+              return [
+                <li
+                  key={`title-${section.label}`}
+                  className="menu-title mt-2 px-3 text-[0.65rem] font-semibold uppercase tracking-wider opacity-50"
+                >
+                  <span>{section.label}</span>
+                </li>,
+                ...links,
+              ];
             })}
           </ul>
           <div className="mt-auto rounded-box bg-base-100 p-3 text-xs opacity-70">
-            Viewing as <strong>{ROLE_LABELS[profile.role]}</strong>.
+            Viewing as <strong>{ROLE_LABELS[profile.role]}</strong>
             {profile.role === "client"
-              ? " Use Customer sign-in for this portal."
-              : " Use Employee sign-in for this portal."}
+              ? " · Customer portal"
+              : " · Employee workspace"}
+            . Switch accounts from the login page to demo other roles.
           </div>
         </aside>
       </div>

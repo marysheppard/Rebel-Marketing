@@ -2,12 +2,15 @@ import { RecordPaymentForm } from "@/components/forms";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { daysBetween, money, num } from "@/lib/format";
 import { arAgingBucket, paidAmount, remainingBalance } from "@/lib/finance";
-import { canRecordPayments, getProfile } from "@/lib/page-auth";
+import { canRecordPayments, requireRoles } from "@/lib/page-auth";
 import Link from "next/link";
 
 export default async function ArPage() {
-  const { supabase, profile } = await getProfile();
-  if (!profile) return null;
+  const { supabase, profile } = await requireRoles([
+    "agency_manager",
+    "billing",
+    "client",
+  ]);
 
   const { data: invoices } = await supabase
     .from("invoices")

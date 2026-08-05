@@ -427,17 +427,27 @@ export function CreateCampaignForm({
 export function CreateWorkForm({
   campaigns,
   userId,
+  defaultCampaignId,
+  defaultTaskId,
+  defaultDescription,
+  compact = false,
 }: {
   campaigns: Option[];
   userId: string;
+  defaultCampaignId?: string;
+  defaultTaskId?: string;
+  defaultDescription?: string;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
     setLoading(true);
     const fd = new FormData(e.currentTarget);
     const hours = num(fd.get("hours"));
@@ -447,6 +457,7 @@ export function CreateWorkForm({
       return;
     }
 
+    const taskId = String(fd.get("task_id") ?? defaultTaskId ?? "").trim();
     const supabase = createClient();
     const { error: insertError } = await supabase.from("work_entries").insert({
       campaign_id: String(fd.get("campaign_id")),
@@ -458,22 +469,36 @@ export function CreateWorkForm({
       billable: fd.get("billable") === "on",
       approval_status: "Pending",
       billed: false,
+      task_id: taskId || null,
     });
     setLoading(false);
     if (insertError) {
       setError("Could not log work. Please check the details and try again.");
       return;
     }
+    setSuccess("Time logged.");
     (e.target as HTMLFormElement).reset();
     router.refresh();
   }
 
   return (
-    <form onSubmit={onSubmit} className="form-grid grid gap-4 sm:grid-cols-2">
+    <form
+      onSubmit={onSubmit}
+      className={`form-grid grid gap-4 ${compact ? "sm:grid-cols-2" : "sm:grid-cols-2"}`}
+    >
       <FormError message={error} />
+      <FormSuccess message={success} />
+      {defaultTaskId ? (
+        <input type="hidden" name="task_id" value={defaultTaskId} />
+      ) : null}
       <label className="sm:col-span-2">
         <span className="text-sm font-medium">Campaign *</span>
-        <select name="campaign_id" className="select select-bordered w-full" required>
+        <select
+          name="campaign_id"
+          className="select select-bordered w-full"
+          required
+          defaultValue={defaultCampaignId ?? ""}
+        >
           <option value="">Select campaign</option>
           {campaigns.map((c) => (
             <option key={c.id} value={c.id}>
@@ -509,7 +534,15 @@ export function CreateWorkForm({
       </label>
       <label>
         <span className="text-sm font-medium">Hours *</span>
-        <input name="hours" type="number" min={0} step="0.25" className="input input-bordered w-full" required defaultValue={1} />
+        <input
+          name="hours"
+          type="number"
+          min={0}
+          step="0.25"
+          className="input input-bordered w-full"
+          required
+          defaultValue={1}
+        />
       </label>
       <label className="flex-row items-center gap-2">
         <input name="billable" type="checkbox" className="checkbox" defaultChecked />
@@ -517,11 +550,16 @@ export function CreateWorkForm({
       </label>
       <label className="sm:col-span-2">
         <span className="text-sm font-medium">Description</span>
-        <textarea name="description" className="textarea textarea-bordered w-full" rows={2} />
+        <textarea
+          name="description"
+          className="textarea textarea-bordered w-full"
+          rows={2}
+          defaultValue={defaultDescription ?? ""}
+        />
       </label>
       <div className="sm:col-span-2">
         <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? "Saving…" : "Log work"}
+          {loading ? "Saving…" : "Log time"}
         </button>
       </div>
     </form>
@@ -583,16 +621,12 @@ export function CreateCostForm({ campaigns }: { campaigns: Option[] }) {
       <label>
         <span className="text-sm font-medium">Cost type *</span>
         <select name="cost_type" className="select select-bordered w-full" required>
-          <option>Employee Labor</option>
-          <option>Contractor</option>
-          <option>Advertising Spend</option>
-          <option>Software</option>
-          <option>Production</option>
-          <option>Travel</option>
-          <option>Materials</option>
-          <option>Vendor</option>
-          <option>Pass-Through</option>
-          <option>Other</option>
+          <option>Employee labor cost</option>
+          <option>Vendor/freelancer costs</option>
+          <option>Ad spend</option>
+          <option>Software/tool subscription costs</option>
+          <option>Production costs</option>
+          <option>Reimbursable/pass-through expenses</option>
         </select>
       </label>
       <label>
@@ -1141,101 +1175,3 @@ export function RecordPaymentForm({
   );
 }
 
-export function PtoRequestForm({ userId }: { userId: string }) {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-    setLoading(true);
-    const fd = new FormData(e.currentTarget);
-    const start_date = String(fd.get("start_date") ?? "");
-    const end_date = String(fd.get("end_date") ?? "");
-    const hours = num(fd.get("hours"));
-    const reason = String(fd.get("reason") ?? "").trim();
-
-    if (!start_date || !end_date) {
-      setError("Start and end dates are required.");
-      setLoading(false);
-      return;
-    }
-    if (end_date < start_date) {
-      setError("End date must be on or after the start date.");
-      setLoading(false);
-      return;
-    }
-
-    const supabase = createClient();
-    const { error: insertError } = await supabase.from("pto_requests").insert({
-      user_id: userId,
-      start_date,
-      end_date,
-      hours: hours || 8,
-      reason,
-      status: "Pending",
-    });
-    setLoading(false);
-    if (insertError) {
-      setError(insertError.message || "Could not submit PTO request.");
-      return;
-    }
-    setSuccess("PTO request submitted.");
-    e.currentTarget.reset();
-    router.refresh();
-  }
-
-  return (
-    <form className="form-grid grid gap-3 sm:grid-cols-2" onSubmit={onSubmit}>
-      <FormError message={error} />
-      <FormSuccess message={success} />
-      <label>
-        <span className="text-sm font-medium">Start date</span>
-        <input
-          name="start_date"
-          type="date"
-          className="input input-bordered w-full"
-          required
-        />
-      </label>
-      <label>
-        <span className="text-sm font-medium">End date</span>
-        <input
-          name="end_date"
-          type="date"
-          className="input input-bordered w-full"
-          required
-        />
-      </label>
-      <label>
-        <span className="text-sm font-medium">Hours</span>
-        <input
-          name="hours"
-          type="number"
-          min="0"
-          step="0.5"
-          defaultValue={8}
-          className="input input-bordered w-full"
-          required
-        />
-      </label>
-      <label className="sm:col-span-2">
-        <span className="text-sm font-medium">Reason</span>
-        <textarea
-          name="reason"
-          className="textarea textarea-bordered w-full"
-          rows={2}
-          placeholder="Vacation, appointment, personal day…"
-        />
-      </label>
-      <div className="sm:col-span-2">
-        <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? "Submitting…" : "Request PTO"}
-        </button>
-      </div>
-    </form>
-  );
-}

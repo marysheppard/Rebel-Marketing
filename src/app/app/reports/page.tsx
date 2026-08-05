@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader } from "@/components/ui";
+import { BudgetHealthBadge, PageHeader } from "@/components/ui";
 import { daysBetween, money, num, pct } from "@/lib/format";
 import {
   budgetHealth,
@@ -8,26 +8,23 @@ import {
   remainingBalance,
   sumCosts,
 } from "@/lib/finance";
-import { getProfile } from "@/lib/page-auth";
+import { loadFinanceBundle } from "@/lib/finance-data";
+import { requireRoles } from "@/lib/page-auth";
 
 export default async function ReportsPage() {
-  const { supabase } = await getProfile();
-
-  const [
-    { data: clients },
-    { data: campaigns },
-    { data: costs },
-    { data: invoices },
-    { data: approvals },
-    { data: work },
-  ] = await Promise.all([
-    supabase.from("clients").select("*").order("client_name"),
-    supabase.from("campaigns").select("*, clients(client_name)").order("campaign_name"),
-    supabase.from("costs").select("campaign_id, amount"),
-    supabase.from("invoices").select("*, payments(amount)"),
-    supabase.from("approvals").select("*"),
-    supabase.from("work_entries").select("*"),
+  const { supabase, profile, userId } = await requireRoles([
+    "agency_manager",
+    "account_manager",
+    "billing",
   ]);
+
+  const bundle = await loadFinanceBundle(supabase, userId, profile.role);
+  const clients = bundle.clients;
+  const campaigns = bundle.campaigns;
+  const costs = bundle.costs;
+  const invoices = bundle.invoices;
+  const approvals = bundle.approvals;
+  const work = bundle.work;
 
   const costsByCampaign = new Map<string, number>();
   for (const c of costs ?? []) {
@@ -269,21 +266,7 @@ export default async function ReportsPage() {
                     {money(r.variance)}
                   </td>
                   <td>
-                    <span
-                      className={`badge badge-sm ${
-                        r.health === "over"
-                          ? "badge-error"
-                          : r.health === "near"
-                            ? "badge-warning"
-                            : "badge-success"
-                      }`}
-                    >
-                      {r.health === "over"
-                        ? "Over"
-                        : r.health === "near"
-                          ? "Near"
-                          : "Under"}
-                    </span>
+                    <BudgetHealthBadge budget={r.budget} spent={r.spent} />
                   </td>
                 </tr>
               ))}

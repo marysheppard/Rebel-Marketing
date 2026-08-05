@@ -2,12 +2,14 @@ import { CreateInvoiceForm } from "@/components/forms";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { joinField, money, num } from "@/lib/format";
 import { remainingBalance } from "@/lib/finance";
-import { canManageBilling, getProfile } from "@/lib/page-auth";
+import { canManageBilling, requireRoles } from "@/lib/page-auth";
 import Link from "next/link";
 
 export default async function BillingPage() {
-  const { supabase, profile } = await getProfile();
-  if (!profile) return null;
+  const { supabase, profile } = await requireRoles([
+    "agency_manager",
+    "billing",
+  ]);
 
   const [
     { data: invoices },

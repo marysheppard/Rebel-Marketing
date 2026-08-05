@@ -1,9 +1,14 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { getNotificationCount } from "@/lib/notifications";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -18,5 +23,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (!profile) redirect("/login");
 
-  return <AppShell profile={profile as Profile}>{children}</AppShell>;
+  const typed = profile as Profile;
+  const notificationCount = await getNotificationCount(
+    supabase,
+    typed,
+    user.id,
+  );
+
+  return (
+    <AppShell profile={typed} notificationCount={notificationCount}>
+      {children}
+    </AppShell>
+  );
 }

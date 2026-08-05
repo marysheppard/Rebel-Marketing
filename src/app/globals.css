@@ -29,6 +29,29 @@ body {
   font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Let badge/chip labels wrap at spaces instead of clipping */
+.badge {
+  height: auto !important;
+  min-height: 1.25rem;
+  max-width: 100%;
+  white-space: normal !important;
+  overflow: visible;
+  padding-block: 0.2rem;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.badge.badge-xs {
+  min-height: 1rem;
+  padding-block: 0.1rem;
+  font-size: 0.65rem;
+  line-height: 1.2;
+}
+
+.badge.badge-nowrap {
+  white-space: nowrap !important;
+}
+
 .rebel-hero {
   background:
     linear-gradient(180deg, #ffffff 0%, #f4f7fb 55%, #e8eef6 100%);
