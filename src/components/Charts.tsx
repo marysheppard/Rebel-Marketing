@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -109,6 +111,9 @@ export function ClientProfitChart({
   data,
   title = "Profitability by Client",
   compact = false,
+  filterable = false,
+  href,
+  linkLabel = "View profitability",
 }: {
   data: {
     name: string;
@@ -119,25 +124,138 @@ export function ClientProfitChart({
   }[];
   title?: string;
   compact?: boolean;
+  /** Chart-local search / profit filter / sort (does not affect parent). */
+  filterable?: boolean;
+  href?: string;
+  linkLabel?: string;
 }) {
+  const [query, setQuery] = useState("");
+  const [profitFilter, setProfitFilter] = useState<
+    "all" | "profitable" | "unprofitable"
+  >("all");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const rows = useMemo(() => {
+    let list = [...data];
+    if (filterable) {
+      if (query.trim()) {
+        const q = query.trim().toLowerCase();
+        list = list.filter((r) => r.name.toLowerCase().includes(q));
+      }
+      if (profitFilter === "profitable") list = list.filter((r) => r.profit > 0);
+      if (profitFilter === "unprofitable")
+        list = list.filter((r) => r.profit <= 0);
+      list.sort((a, b) =>
+        sortDir === "asc" ? a.profit - b.profit : b.profit - a.profit,
+      );
+    }
+    return list;
+  }, [data, filterable, query, profitFilter, sortDir]);
+
+  const rowPx = 30;
+  const chartHeight = Math.max(
+    compact ? 160 : 200,
+    rows.length * rowPx + 24,
+  );
+  const viewportClass = compact ? "h-48" : "h-64";
+  const yWidth = compact ? 88 : 112;
+
   return (
-    <ChartCard title={title} empty={!data.length} compact={compact}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-          <XAxis type="number" tickFormatter={formatAxisMoney} tick={{ fontSize: 11 }} />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={compact ? 72 : 100}
-            tick={{ fontSize: 11 }}
-          />
-          <Tooltip content={<ProfitTooltip />} />
-          <ReferenceLine x={0} stroke="currentColor" strokeOpacity={0.25} />
-          <Bar dataKey="profit" fill="#4ade80" name="Profit" />
-        </BarChart>
-      </ResponsiveContainer>
-    </ChartCard>
+    <div className="rounded-box border border-base-300 bg-base-100 p-4 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <h3 className="font-semibold">{title}</h3>
+        {href ? (
+          <Link href={href} className="link link-primary text-xs shrink-0">
+            {linkLabel}
+          </Link>
+        ) : null}
+      </div>
+
+      {filterable ? (
+        <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <label className="form-control min-w-0">
+            <span className="label-text text-xs opacity-70">Search</span>
+            <input
+              className="input input-bordered input-sm w-full"
+              placeholder="Customer name?"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </label>
+          <label className="form-control min-w-0">
+            <span className="label-text text-xs opacity-70">Profit</span>
+            <select
+              className="select select-bordered select-sm w-full"
+              value={profitFilter}
+              onChange={(e) =>
+                setProfitFilter(
+                  e.target.value as "all" | "profitable" | "unprofitable",
+                )
+              }
+            >
+              <option value="all">All</option>
+              <option value="profitable">Profitable</option>
+              <option value="unprofitable">Unprofitable</option>
+            </select>
+          </label>
+          <label className="form-control min-w-0">
+            <span className="label-text text-xs opacity-70">Sort</span>
+            <select
+              className="select select-bordered select-sm w-full"
+              value={sortDir}
+              onChange={(e) =>
+                setSortDir(e.target.value as "asc" | "desc")
+              }
+            >
+              <option value="asc">Low ? high</option>
+              <option value="desc">High ? low</option>
+            </select>
+          </label>
+        </div>
+      ) : null}
+
+      {!data.length ? (
+        <div
+          className={`flex items-center justify-center text-sm opacity-60 ${viewportClass}`}
+        >
+          Not enough data yet for this chart.
+        </div>
+      ) : !rows.length ? (
+        <div
+          className={`flex items-center justify-center text-sm opacity-60 ${viewportClass}`}
+        >
+          No customers match these filters.
+        </div>
+      ) : (
+        <div className={`w-full overflow-y-auto ${viewportClass}`}>
+          <div style={{ height: chartHeight, minHeight: "100%" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={rows}
+                layout="vertical"
+                margin={{ left: 8, right: 8, top: 4, bottom: 4 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis
+                  type="number"
+                  tickFormatter={formatAxisMoney}
+                  tick={{ fontSize: 11 }}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={yWidth}
+                  tick={{ fontSize: 11 }}
+                />
+                <Tooltip content={<ProfitTooltip />} />
+                <ReferenceLine x={0} stroke="currentColor" strokeOpacity={0.25} />
+                <Bar dataKey="profit" fill="#4ade80" name="Profit" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

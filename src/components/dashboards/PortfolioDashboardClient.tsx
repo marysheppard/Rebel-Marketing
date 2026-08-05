@@ -587,21 +587,20 @@ export function PortfolioDashboardClient({
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Link
-          href={p("/app/profitability")}
-          className="block min-w-0 transition hover:opacity-95"
-        >
+        <div className="min-w-0">
           <ClientProfitChart
             title={isAm ? "Profit by client (your book)" : "Profitability by customer"}
             compact
-            data={byClient.slice(0, 8).map((r) => ({
+            filterable
+            href={p("/app/profitability")}
+            data={byClient.map((r) => ({
               name: r.name,
               revenue: r.revenue,
               costs: r.costs,
               profit: r.profit,
             }))}
           />
-        </Link>
+        </div>
         <Link
           href={p("/app/profitability")}
           className="block min-w-0 transition hover:opacity-95"
