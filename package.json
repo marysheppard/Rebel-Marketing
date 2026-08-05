@@ -10,8 +10,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/gateway": "^4.0.41",
+    "@ai-sdk/react": "^4.0.55",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.0",
+    "ai": "^7.0.52",
     "daisyui": "^5.7.16",
     "date-fns": "^4.4.0",
     "leaflet": "^1.9.4",

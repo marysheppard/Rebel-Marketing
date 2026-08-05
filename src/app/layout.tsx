@@ -16,7 +16,7 @@ const body = IBM_Plex_Sans({
 export const metadata: Metadata = {
   title: "Rebel Marketing | Strategy, Campaigns & Growth",
   description:
-    "Rebel Marketing is a growth-focused agency for brand campaigns, client partnerships, and measurable results.",
+    "Rebel Marketing is a growth-focused agency based in Oxford, Mississippi—brand campaigns, client partnerships, and measurable results.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
