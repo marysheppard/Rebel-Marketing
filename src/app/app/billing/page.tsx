@@ -1,156 +1,132 @@
-import { CreateInvoiceModal } from "@/components/CreateInvoiceModal";
-import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
-import { joinField, money, num } from "@/lib/format";
+import { BillingPageClient } from "@/components/billing/BillingPageClient";
+import {
+  DEFAULT_BILL_RATE_USD,
+  estimateEntryAmount,
+  partitionInvoices,
+  type BillingInvoiceRow,
+  type UnbilledEntry,
+} from "@/lib/billing";
 import { remainingBalance } from "@/lib/finance";
+import { joinField, num } from "@/lib/format";
 import { canManageBilling, getProfile } from "@/lib/page-auth";
-import Link from "next/link";
 
 export default async function BillingPage() {
   const { supabase, profile } = await getProfile();
   if (!profile) return null;
 
-  const [
-    { data: invoices },
-    { data: clients },
-    { data: contracts },
-    { data: campaigns },
-    { data: unbilledWork },
-  ] = await Promise.all([
-    supabase
-      .from("invoices")
-      .select("*, clients(client_name), payments(amount)")
-      .order("invoice_date", { ascending: false }),
-    supabase.from("clients").select("id, client_name").order("client_name"),
-    supabase
-      .from("contracts")
-      .select("id, contract_name, contract_number, client_id")
-      .order("contract_name"),
-    supabase.from("campaigns").select("id, campaign_name, client_id").order("campaign_name"),
-    supabase
-      .from("work_entries")
-      .select("id, campaign_id, hours, work_date, work_type, description, campaigns(campaign_name)")
-      .eq("billable", true)
-      .eq("billed", false)
-      .eq("approval_status", "Approved")
-      .order("work_date", { ascending: false }),
-  ]);
+  const canManage = canManageBilling(profile.role);
 
-  const unbilledWorkByCampaign: Record<string, number> = {};
-  for (const w of unbilledWork ?? []) {
-    unbilledWorkByCampaign[w.campaign_id] =
-      (unbilledWorkByCampaign[w.campaign_id] ?? 0) + num(w.hours);
-  }
+  const [{ data: invoicesRaw }, { data: unbilledWork }, { data: campaignsMeta }] =
+    await Promise.all([
+      supabase
+        .from("invoices")
+        .select("*, clients(client_name), payments(amount), campaigns(campaign_name)")
+        .order("invoice_date", { ascending: false }),
+      supabase
+        .from("work_entries")
+        .select(
+          "id, campaign_id, hours, work_date, work_type, description, campaigns(campaign_name, client_id, clients(client_name))",
+        )
+        .eq("billable", true)
+        .eq("billed", false)
+        .eq("approval_status", "Approved")
+        .order("work_date", { ascending: false }),
+      supabase.from("campaigns").select("id, campaign_name"),
+    ]);
 
-  const list = invoices ?? [];
-  const showCreate = canManageBilling(profile.role);
-  const clientOptions = (clients ?? []).map((c) => ({ id: c.id, label: c.client_name }));
-  const contractOptions = (contracts ?? []).map((c) => ({
-    id: c.id,
-    label: `${c.contract_name} (${c.contract_number})`,
-    client_id: c.client_id,
-  }));
-  const campaignOptions = (campaigns ?? []).map((c) => ({
-    id: c.id,
-    label: c.campaign_name,
-    client_id: c.client_id,
-  }));
+  const campaignNameById = new Map(
+    (campaignsMeta ?? []).map((c) => [c.id as string, c.campaign_name as string]),
+  );
+
+  const unbilled: UnbilledEntry[] = (unbilledWork ?? []).map((w) => {
+    const camps = w.campaigns as
+      | {
+          campaign_name?: string;
+          client_id?: string;
+          clients?:
+            | { client_name?: string }
+            | { client_name?: string }[]
+            | null;
+        }
+      | Array<{
+          campaign_name?: string;
+          client_id?: string;
+          clients?:
+            | { client_name?: string }
+            | { client_name?: string }[]
+            | null;
+        }>
+      | null;
+
+    const camp = Array.isArray(camps) ? camps[0] : camps;
+    const clientsRel = camp?.clients;
+    const clientObj = Array.isArray(clientsRel) ? clientsRel[0] : clientsRel;
+    const hours = num(w.hours);
+    const rate = DEFAULT_BILL_RATE_USD;
+
+    return {
+      id: w.id as string,
+      work_date: String(w.work_date ?? ""),
+      hours,
+      work_type: String(w.work_type ?? ""),
+      description: String(w.description ?? ""),
+      campaign_id: String(w.campaign_id ?? ""),
+      campaign_name:
+        camp?.campaign_name ??
+        campaignNameById.get(String(w.campaign_id)) ??
+        "Campaign",
+      client_id: String(camp?.client_id ?? ""),
+      client_name: clientObj?.client_name ?? "Client",
+      estimated_rate: rate,
+      estimated_amount: estimateEntryAmount(hours, rate),
+    };
+  });
+
+  const invoiceRows: BillingInvoiceRow[] = (invoicesRaw ?? []).map((i) => {
+    const clientName =
+      joinField(
+        (i as { clients?: { client_name: string } }).clients,
+        "client_name",
+      ) || "—";
+    const campLabel =
+      joinField(
+        (i as { campaigns?: { campaign_name: string } }).campaigns,
+        "campaign_name",
+      ) || (i.campaign_id ? campaignNameById.get(i.campaign_id) ?? "—" : "—");
+
+    return {
+      id: i.id,
+      client_id: i.client_id,
+      contract_id: i.contract_id,
+      campaign_id: i.campaign_id,
+      invoice_number: i.invoice_number,
+      invoice_date: i.invoice_date,
+      due_date: i.due_date,
+      subtotal: num(i.subtotal),
+      pass_through_amount: num(i.pass_through_amount),
+      tax_amount: num(i.tax_amount),
+      total_amount: num(i.total_amount),
+      status: i.status,
+      disputed: Boolean(i.disputed),
+      notes: i.notes ?? "",
+      created_at: i.created_at,
+      client_name: clientName === "—" ? "Client" : clientName,
+      remaining: remainingBalance(i),
+      campaign_label: campLabel,
+      payments: i.payments as { amount: number }[] | null,
+    };
+  });
+
+  const { drafts, active, history } = partitionInvoices(invoiceRows);
 
   return (
-    <div>
-      <PageHeader
-        title="Billing"
-        subtitle="Invoices, unbilled work, and revenue recognition"
-        actions={
-          showCreate ? (
-            <CreateInvoiceModal
-              clients={clientOptions}
-              contracts={contractOptions}
-              campaigns={campaignOptions}
-              unbilledWorkByCampaign={unbilledWorkByCampaign}
-            />
-          ) : null
-        }
-      />
-
-      {(unbilledWork ?? []).length > 0 ? (
-        <section className="mb-8 rounded-box border border-warning/40 bg-warning/10 p-4">
-          <h2 className="font-semibold">Unbilled approved work</h2>
-          <p className="mt-1 text-sm opacity-70">
-            {(unbilledWork ?? []).length} entries ready to invoice (
-            {(unbilledWork ?? []).reduce((s, w) => s + num(w.hours), 0).toFixed(1)} hours)
-          </p>
-          <div className="mt-3 overflow-x-auto">
-            <table className="table table-sm">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Campaign</th>
-                  <th>Type</th>
-                  <th className="text-right">Hours</th>
-                  <th>Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(unbilledWork ?? []).slice(0, 10).map((w) => (
-                  <tr key={w.id}>
-                    <td>{w.work_date}</td>
-                    <td>
-                      <Link href={`/app/campaigns/${w.campaign_id}`} className="link link-hover">
-                        {joinField(w.campaigns, "campaign_name")}
-                      </Link>
-                    </td>
-                    <td>{w.work_type}</td>
-                    <td className="text-right">{w.hours}</td>
-                    <td className="max-w-xs truncate">{w.description || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
-
-      {list.length === 0 ? (
-        <EmptyState
-          title="No invoices"
-          description="Create invoices from approved work and contract terms."
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-box border border-base-300">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Invoice #</th>
-                <th>Client</th>
-                <th>Date</th>
-                <th>Due</th>
-                <th className="text-right">Total</th>
-                <th className="text-right">Remaining</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((i) => (
-                <tr key={i.id}>
-                  <td className="font-medium">{i.invoice_number}</td>
-                  <td>
-                    <Link href={`/app/clients/${i.client_id}`} className="link link-hover">
-                      {(i as { clients?: { client_name: string } }).clients?.client_name ?? "—"}
-                    </Link>
-                  </td>
-                  <td>{i.invoice_date}</td>
-                  <td>{i.due_date}</td>
-                  <td className="text-right">{money(i.total_amount)}</td>
-                  <td className="text-right">{money(remainingBalance(i))}</td>
-                  <td>
-                    <StatusBadge status={i.status} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+    <BillingPageClient
+      unbilled={unbilled}
+      drafts={drafts}
+      active={active}
+      history={history}
+      allInvoices={invoiceRows}
+      canManage={canManage}
+    />
   );
 }

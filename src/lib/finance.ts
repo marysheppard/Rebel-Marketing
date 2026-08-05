@@ -56,3 +56,40 @@ export function arAgingBucket(dueDate: string, asOf = new Date()) {
   if (daysPastDue <= 90) return "61–90";
   return "90+";
 }
+
+/** Hours beyond the contract's included agency hours. */
+export function overageHours(includedHours: number, loggedHours: number) {
+  return Math.max(0, num(loggedHours) - num(includedHours));
+}
+
+/** Billable amount for hours beyond included agency hours. */
+export function overageAmount(
+  includedHours: number,
+  loggedHours: number,
+  overageHourlyRate: number,
+) {
+  return overageHours(includedHours, loggedHours) * num(overageHourlyRate);
+}
+
+/** Suggest invoice subtotal from retainer / project fee terms. */
+export function suggestedInvoiceSubtotal(contract: {
+  billing_method?: string | null;
+  monthly_retainer?: number | string | null;
+  project_fee?: number | string | null;
+}) {
+  const method = contract.billing_method ?? "";
+  const retainer = num(contract.monthly_retainer);
+  const project = num(contract.project_fee);
+  if (["Monthly Retainer", "Hybrid", "Mixed"].includes(method) && retainer > 0) {
+    return retainer;
+  }
+  if (
+    ["Project Fee", "Hybrid", "Mixed", "Campaign Billing"].includes(method) &&
+    project > 0
+  ) {
+    return project;
+  }
+  if (retainer > 0) return retainer;
+  if (project > 0) return project;
+  return 0;
+}

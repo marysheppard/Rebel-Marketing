@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { PageHeader } from "@/components/ui";
+import { AlertList, PageHeader } from "@/components/ui";
 import { daysBetween, money, num, pct } from "@/lib/format";
+import { buildControlAlerts } from "@/lib/controls";
 import {
   budgetHealth,
   budgetVariance,
@@ -20,14 +21,80 @@ export default async function ReportsPage() {
     { data: invoices },
     { data: approvals },
     { data: work },
+    { data: contracts },
   ] = await Promise.all([
     supabase.from("clients").select("*").order("client_name"),
     supabase.from("campaigns").select("*, clients(client_name)").order("campaign_name"),
-    supabase.from("costs").select("campaign_id, amount"),
+    supabase
+      .from("costs")
+      .select("id, campaign_id, amount, approved, cost_date, cost_type, pass_through"),
     supabase.from("invoices").select("*, payments(amount)"),
     supabase.from("approvals").select("*"),
     supabase.from("work_entries").select("*"),
+    supabase
+      .from("contracts")
+      .select(
+        "id, contract_name, contract_status, end_date, approval_required, campaign_budget, spending_approval_threshold",
+      ),
   ]);
+
+  const controlAlerts = buildControlAlerts({
+    campaigns: (campaigns ?? []).map((c) => ({
+      id: c.id,
+      campaign_name: c.campaign_name,
+      campaign_budget: num(c.campaign_budget),
+      campaign_status: c.campaign_status,
+      end_date: c.end_date,
+      contract_id: c.contract_id,
+      client_id: c.client_id,
+    })),
+    contracts: (contracts ?? []).map((c) => ({
+      id: c.id,
+      contract_name: c.contract_name,
+      contract_status: c.contract_status,
+      end_date: c.end_date,
+      approval_required: Boolean(c.approval_required),
+      campaign_budget: num(c.campaign_budget),
+      spending_approval_threshold: num(c.spending_approval_threshold),
+    })),
+    costs: (costs ?? []).map((c) => ({
+      id: c.id,
+      campaign_id: c.campaign_id,
+      amount: num(c.amount),
+      approved: Boolean(c.approved),
+      cost_date: c.cost_date,
+      cost_type: c.cost_type,
+      pass_through: Boolean(c.pass_through),
+    })),
+    work: (work ?? []).map((w) => ({
+      id: w.id,
+      campaign_id: w.campaign_id,
+      billable: Boolean(w.billable),
+      billed: Boolean(w.billed),
+      hours: num(w.hours),
+      work_date: w.work_date,
+      approval_status: w.approval_status,
+    })),
+    approvals: (approvals ?? []).map((a) => ({
+      id: a.id,
+      campaign_id: a.campaign_id,
+      approval_status: a.approval_status,
+      requested_date: a.requested_date,
+      description: a.description,
+    })),
+    invoices: (invoices ?? []).map((i) => ({
+      id: i.id,
+      invoice_number: i.invoice_number,
+      invoice_date: i.invoice_date,
+      due_date: i.due_date,
+      total_amount: num(i.total_amount),
+      status: i.status,
+      disputed: Boolean(i.disputed),
+      campaign_id: i.campaign_id,
+      payments: i.payments,
+    })),
+    clients: (clients ?? []).map((c) => ({ id: c.id, client_name: c.client_name })),
+  });
 
   const costsByCampaign = new Map<string, number>();
   for (const c of costs ?? []) {
@@ -157,6 +224,14 @@ export default async function ReportsPage() {
         title="Reports"
         subtitle="Live profitability, budget, billing, and operational performance"
       />
+
+      <section className="mt-2 mb-8">
+        <h2 className="mb-3 text-xl font-bold">Management controls</h2>
+        <p className="mb-3 text-sm opacity-70">
+          Includes MSA advertising budgets, approval thresholds, and operational risk flags.
+        </p>
+        <AlertList alerts={controlAlerts} />
+      </section>
 
       <section className="mt-2">
         <h2 className="mb-3 text-xl font-bold">Client profitability</h2>

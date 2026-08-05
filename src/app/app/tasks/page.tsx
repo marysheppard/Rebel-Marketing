@@ -1,5 +1,6 @@
 import { TasksBoard } from "@/components/TasksBoard";
 import {
+  canAssignTasks,
   getProfile,
   isClientRole,
   isEmployeeWorkRole,
@@ -9,6 +10,14 @@ import { redirect } from "next/navigation";
 export default async function TasksPage() {
   const { supabase, profile, userId } = await getProfile();
   if (!profile || !userId) return null;
+
+  if (canAssignTasks(profile.role)) {
+    const { ManagerTasksPage } = await import(
+      "@/components/tasks/ManagerTasksPage"
+    );
+    return <ManagerTasksPage />;
+  }
+
   if (isClientRole(profile.role) || !isEmployeeWorkRole(profile.role)) {
     redirect("/app");
   }

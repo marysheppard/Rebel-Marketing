@@ -33,13 +33,69 @@ export function num(value: unknown) {
 }
 
 /** Unwrap a Supabase joined relation (object or single-element array). */
+export function joinOne<T extends Record<string, unknown>>(
+  rel: T | T[] | null | undefined,
+): T | null {
+  if (!rel) return null;
+  return Array.isArray(rel) ? (rel[0] ?? null) : rel;
+}
+
+/** Unwrap a Supabase joined relation field (object or single-element array). */
 export function joinField(
   rel: Record<string, unknown> | Record<string, unknown>[] | null | undefined,
   field: string,
 ): string {
   if (!rel) return "—";
-  const obj = Array.isArray(rel) ? rel[0] : rel;
-  if (!obj || typeof obj !== "object") return "—";
+  const obj = joinOne(rel);
+  if (!obj) return "—";
   const val = obj[field];
   return val != null && val !== "" ? String(val) : "—";
+}
+
+/**
+ * Human-readable contract length from start/end dates.
+ * Missing end, invalid range, or multi-decade spans → "Ongoing".
+ */
+export function contractLength(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+): string {
+  if (!startDate) return "—";
+  if (!endDate) return "Ongoing";
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return "—";
+  }
+  if (end < start) return "Ongoing";
+
+  const monthsApprox =
+    (end.getFullYear() - start.getFullYear()) * 12 +
+    (end.getMonth() - start.getMonth()) +
+    (end.getDate() >= start.getDate() ? 0 : -1);
+
+  if (monthsApprox >= 120) return "Ongoing";
+  if (monthsApprox <= 0) {
+    const days = daysBetween(start, end);
+    if (days <= 0) return "Ongoing";
+    if (days < 45) return "1 month";
+    return "1 month";
+  }
+
+  const months = Math.max(1, Math.round(monthsApprox));
+  if (months === 1) return "1 month";
+  return `${months} months`;
+}
+
+/** Short locale date for table cells. */
+export function formatDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }

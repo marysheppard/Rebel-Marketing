@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageHeader, StatCard, StatusBadge } from "@/components/ui";
+import { BudgetHealthBadge, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { money, num, pct } from "@/lib/format";
 import { budgetHealth, budgetVariance, profitMargin, remainingBalance, sumCosts } from "@/lib/finance";
 import { getProfile } from "@/lib/page-auth";
@@ -56,9 +56,22 @@ export default async function CampaignDetailPage({
     <div>
       <PageHeader
         title={campaign.campaign_name}
-        subtitle={[clientName, campaign.campaign_type].filter(Boolean).join(" · ")}
+        subtitle={
+          <span>
+            {clientName ? (
+              <Link href={`/app/clients/${campaign.client_id}`} className="link link-hover">
+                {clientName}
+              </Link>
+            ) : null}
+            {clientName && campaign.campaign_type ? " · " : null}
+            {campaign.campaign_type}
+          </span>
+        }
         actions={
           <>
+            <Link href={`/app/clients/${campaign.client_id}`} className="btn btn-ghost btn-sm">
+              Client
+            </Link>
             <Link href={`/app/contracts/${campaign.contract_id}`} className="btn btn-ghost btn-sm">
               Contract
             </Link>
@@ -71,9 +84,7 @@ export default async function CampaignDetailPage({
 
       <div className="mb-4 flex flex-wrap gap-2">
         <StatusBadge status={campaign.campaign_status} />
-        <span className="badge badge-outline badge-sm">
-          {health === "over" ? "Over budget" : health === "near" ? "Near budget" : health === "under" ? "Under budget" : "Budget N/A"}
-        </span>
+        <BudgetHealthBadge budget={budget} spent={spent} />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

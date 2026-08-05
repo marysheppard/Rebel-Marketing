@@ -1,9 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ActivateEngagementButton } from "@/components/ActivateEngagementButton";
+import { ContractExecutionPanel } from "@/components/ContractExecutionPanel";
+import { ContractTimeline } from "@/components/ContractTimeline";
 import { PageHeader, StatCard, StatusBadge } from "@/components/ui";
+import { normalizeContractStatus } from "@/lib/contract-status";
 import { money, num, pct } from "@/lib/format";
 import { profitMargin, sumCosts } from "@/lib/finance";
-import { getProfile } from "@/lib/page-auth";
+import {
+  canCountersign,
+  canManageContracts,
+  getProfile,
+  isClientRole,
+} from "@/lib/page-auth";
+import type { Contract } from "@/lib/types";
 
 export default async function ContractDetailPage({
   params,
@@ -11,20 +21,28 @@ export default async function ContractDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { supabase } = await getProfile();
+  const { supabase, profile } = await getProfile();
 
   const { data: contract } = await supabase
     .from("contracts")
-    .select("*, clients(client_name)")
+    .select("*, clients(client_name, customer_id)")
     .eq("id", id)
     .single();
   if (!contract) notFound();
 
-  const [{ data: campaigns }, { data: invoices }, { data: costs }] = await Promise.all([
-    supabase.from("campaigns").select("*").eq("contract_id", id),
-    supabase.from("invoices").select("*").eq("contract_id", id),
-    supabase.from("costs").select("amount, campaign_id"),
-  ]);
+  const [{ data: campaigns }, { data: invoices }, { data: costs }, { data: request }] =
+    await Promise.all([
+      supabase.from("campaigns").select("*").eq("contract_id", id),
+      supabase.from("invoices").select("*").eq("contract_id", id),
+      supabase.from("costs").select("amount, campaign_id"),
+      supabase
+        .from("signature_requests")
+        .select("*")
+        .eq("contract_id", id)
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
   const campIds = new Set((campaigns ?? []).map((c) => c.id));
   const contractCosts = sumCosts(
@@ -36,38 +54,175 @@ export default async function ContractDetailPage({
   const profit = revenue - contractCosts;
   const margin = profitMargin(revenue, contractCosts);
 
-  const clientName = (contract as { clients?: { client_name: string } }).clients?.client_name;
+  const clientMeta = (
+    contract as {
+      clients?: { client_name: string; customer_id?: string } | null;
+    }
+  ).clients;
+  const clientName = clientMeta?.client_name;
+  const canManage =
+    !!profile && canManageContracts(profile.role) && !isClientRole(profile.role);
+  const canSignAgency =
+    !!profile && canCountersign(profile.role) && !isClientRole(profile.role);
+  const status = normalizeContractStatus(contract.contract_status);
+  const html =
+    contract.signed_agreement_html || contract.agreement_html || "";
 
   return (
     <div>
       <PageHeader
         title={contract.contract_name}
-        subtitle={`${contract.contract_number}${clientName ? ` · ${clientName}` : ""}`}
+        subtitle={`${contract.contract_number}${clientName ? ` · ${clientName}` : ""}${
+          clientMeta?.customer_id ? ` · ${clientMeta.customer_id}` : ""
+        }`}
         actions={
-          <>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {canManage ? (
+              <ContractExecutionPanel
+                contract={contract as Contract}
+                canManage={canManage}
+                canCountersign={canSignAgency}
+                hasCampaign={(campaigns ?? []).length > 0}
+                profileName={profile?.full_name || ""}
+                openRequest={
+                  request && ["Sent", "Viewed"].includes(String(request.status))
+                    ? {
+                        id: String(request.id),
+                        status: String(request.status),
+                        recipient_email: request.recipient_email as string | null,
+                        email_delivery_status: request.email_delivery_status as
+                          | string
+                          | null,
+                        invite_expires_at: request.invite_expires_at as string | null,
+                      }
+                    : null
+                }
+                showResendActivation={
+                  !!contract.client_signed_at &&
+                  status !== "Draft" &&
+                  status !== "Finalized"
+                }
+              />
+            ) : null}
+            {profile && isClientRole(profile.role) &&
+            status === "Awaiting Client Signature" ? (
+              <Link href={`/app/contracts/${id}/sign`} className="btn btn-primary btn-sm">
+                Review &amp; Sign
+              </Link>
+            ) : null}
+            <ActivateEngagementButton
+              contract={{ ...(contract as Contract), contract_status: status }}
+              hasCampaign={(campaigns ?? []).length > 0}
+            />
             <Link href={`/app/clients/${contract.client_id}`} className="btn btn-ghost btn-sm">
-              Client
+              Client profile
+            </Link>
+            <Link
+              href={`/app/contracts/builder?clientId=${contract.client_id}`}
+              className="btn btn-outline btn-sm"
+            >
+              New contract (same client)
             </Link>
             <Link href="/app/contracts" className="btn btn-ghost btn-sm">
               ← All contracts
             </Link>
-          </>
+          </div>
         }
       />
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <StatusBadge status={contract.contract_status} />
+        <StatusBadge status={status} />
         <span className="badge badge-outline badge-sm">{contract.billing_method}</span>
+        {contract.agreement_locked ? (
+          <span className="badge badge-warning badge-sm">Agreement locked</span>
+        ) : null}
+        {contract.current_version_number ? (
+          <span className="badge badge-outline badge-sm">
+            v{contract.current_version_number}
+          </span>
+        ) : null}
         {contract.approval_required ? (
           <span className="badge badge-warning badge-sm">Approval required</span>
         ) : null}
       </div>
 
+      <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_260px]">
+        <div className="rounded-box border border-base-300 bg-base-100 p-4 text-sm">
+          {(contract.client_signed_at || contract.agency_signed_at) && (
+            <div className="mb-3 space-y-1">
+              {contract.client_signed_at ? (
+                <p>
+                  Client signed by <strong>{contract.client_signer_name || "—"}</strong>
+                  {contract.client_signer_title ? ` (${contract.client_signer_title})` : ""} on{" "}
+                  {new Date(contract.client_signed_at).toLocaleString()}
+                </p>
+              ) : null}
+              {contract.agency_signed_at ? (
+                <p>
+                  Agency countersigned by{" "}
+                  <strong>{contract.agency_signer_name || "—"}</strong> on{" "}
+                  {new Date(contract.agency_signed_at).toLocaleString()}
+                </p>
+              ) : null}
+            </div>
+          )}
+          {request?.decline_reason ? (
+            <p className="text-error">
+              Declined: {request.decline_reason}
+            </p>
+          ) : request?.recipient_email &&
+            ["Sent", "Viewed"].includes(String(request.status)) ? (
+            <p className="opacity-70">
+              Signing invitation{" "}
+              {request.email_delivery_status === "sent"
+                ? "emailed"
+                : request.email_delivery_status === "failed"
+                  ? "failed to send"
+                  : "recorded (simulated)"}{" "}
+              to <strong>{String(request.recipient_email)}</strong>
+              {request.invite_expires_at
+                ? ` · code expires ${new Date(String(request.invite_expires_at)).toLocaleString()}`
+                : ""}
+              . Access code is not shown here after send.
+            </p>
+          ) : status === "Fully Executed" || status === "Active" ? (
+            <p className="opacity-70">
+              Agreement fully executed. Use Sync engagement if needed.
+            </p>
+          ) : (
+            <p className="opacity-70">
+              Engagement sync is available after the agreement is fully executed.
+            </p>
+          )}
+        </div>
+        <div className="rounded-box border border-base-300 bg-base-100 p-4">
+          <h3 className="mb-3 font-semibold">Execution timeline</h3>
+          <ContractTimeline
+            contractStatus={status}
+            finalizedAt={contract.finalized_at}
+            clientSignedAt={contract.client_signed_at}
+            agencySignedAt={contract.agency_signed_at}
+            fullyExecutedAt={contract.fully_executed_at}
+            declinedAt={request?.declined_at}
+            requestStatus={request?.status}
+            viewedAt={request?.viewed_at}
+            sentAt={request?.sent_at}
+          />
+        </div>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Monthly retainer" value={money(contract.monthly_retainer)} />
         <StatCard label="Project fee" value={money(contract.project_fee)} />
-        <StatCard label="Campaign budget" value={money(contract.campaign_budget)} />
+        <StatCard label="Ad / campaign budget" value={money(contract.campaign_budget)} />
         <StatCard label="Profit margin" value={pct(margin)} tone={profit >= 0 ? "good" : "bad"} />
+        <StatCard label="Included hours" value={String(num(contract.included_agency_hours))} />
+        <StatCard label="Overage rate" value={money(contract.overage_hourly_rate)} />
+        <StatCard label="Pass-through markup" value={`${num(contract.pass_through_markup_pct)}%`} />
+        <StatCard
+          label="Approval threshold"
+          value={contract.approval_required ? money(contract.spending_approval_threshold) : "N/A"}
+        />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -81,6 +236,10 @@ export default async function ContractDetailPage({
               </dd>
             </div>
             <div className="flex justify-between gap-4">
+              <dt className="opacity-60">Billing frequency</dt>
+              <dd>{contract.billing_frequency || "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
               <dt className="opacity-60">Payment terms</dt>
               <dd>{contract.payment_terms || "—"}</dd>
             </div>
@@ -89,77 +248,65 @@ export default async function ContractDetailPage({
               <dd>{money(contract.deposit_amount)}</dd>
             </div>
             <div className="flex justify-between gap-4">
+              <dt className="opacity-60">Ad spend treatment</dt>
+              <dd>{contract.advertising_spend_treatment || "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="opacity-60">Reimbursable vendors</dt>
+              <dd>{contract.reimbursable_vendor_costs ? "Yes" : "No"}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
               <dt className="opacity-60">Renewal option</dt>
               <dd>{contract.renewal_option ? "Yes" : "No"}</dd>
             </div>
+            <div className="flex justify-between gap-4">
+              <dt className="opacity-60">Cancellation notice</dt>
+              <dd>{contract.cancellation_notice_days ?? 0} days</dd>
+            </div>
           </dl>
-          {contract.scope ? (
+          {(contract.service_types as string[] | null)?.length ? (
             <p className="mt-4 text-sm opacity-80">
+              <span className="font-medium">Services:</span>{" "}
+              {(contract.service_types as string[]).join(", ")}
+            </p>
+          ) : null}
+          {contract.deliverables ? (
+            <p className="mt-2 text-sm opacity-80">
+              <span className="font-medium">Deliverables:</span> {contract.deliverables}
+            </p>
+          ) : null}
+          {contract.scope ? (
+            <p className="mt-2 text-sm opacity-80">
               <span className="font-medium">Scope:</span> {contract.scope}
             </p>
           ) : null}
-          {contract.notes ? (
-            <p className="mt-2 text-sm opacity-70">{contract.notes}</p>
+          {contract.renewal_terms ? (
+            <p className="mt-2 text-sm opacity-70">
+              <span className="font-medium">Renewal terms:</span> {contract.renewal_terms}
+            </p>
+          ) : null}
+          {contract.cancellation_terms ? (
+            <p className="mt-2 text-sm opacity-70">
+              <span className="font-medium">Cancellation:</span> {contract.cancellation_terms}
+            </p>
           ) : null}
         </div>
 
         <div className="rounded-box border border-base-300 bg-base-100 p-4">
-          <h3 className="font-semibold">Profitability</h3>
-          <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="opacity-60">Revenue</dt>
-              <dd className="text-success">{money(revenue)}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="opacity-60">Costs</dt>
-              <dd>{money(contractCosts)}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="opacity-60">Gross profit</dt>
-              <dd className={profit >= 0 ? "text-success" : "text-error"}>{money(profit)}</dd>
-            </div>
-          </dl>
+          <h3 className="mb-3 font-semibold">Agreement document</h3>
+          {html ? (
+            <iframe
+              title="Agreement"
+              className="min-h-[420px] w-full rounded-box border border-base-300 bg-white"
+              srcDoc={html}
+            />
+          ) : (
+            <p className="text-sm opacity-70">
+              Generate an agreement from the Contract Builder to preview it here.
+            </p>
+          )}
         </div>
       </div>
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-xl font-bold">Linked campaigns</h2>
-        <div className="overflow-x-auto rounded-box border border-base-300">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Campaign</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th className="text-right">Budget</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(campaigns ?? []).map((c) => (
-                <tr key={c.id}>
-                  <td>
-                    <Link href={`/app/campaigns/${c.id}`} className="link link-hover">
-                      {c.campaign_name}
-                    </Link>
-                  </td>
-                  <td>{c.campaign_type}</td>
-                  <td>
-                    <StatusBadge status={c.campaign_status} />
-                  </td>
-                  <td className="text-right">{money(c.campaign_budget)}</td>
-                </tr>
-              ))}
-              {!campaigns?.length ? (
-                <tr>
-                  <td colSpan={4} className="text-center opacity-60">
-                    No campaigns linked to this contract.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </section>
     </div>
   );
 }

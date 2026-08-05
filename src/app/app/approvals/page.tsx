@@ -1,7 +1,7 @@
 import { ApprovalsBoard } from "@/components/ApprovalsBoard";
 import { CreateApprovalForm } from "@/components/forms";
 import { PageHeader } from "@/components/ui";
-import { daysBetween } from "@/lib/format";
+import { daysBetween, joinOne, num } from "@/lib/format";
 import {
   canCreateApprovals,
   getProfile,
@@ -14,7 +14,12 @@ export default async function ApprovalsPage() {
   const { supabase, profile, userId } = await getProfile();
   if (!profile || !userId) return null;
 
-  if (!isMarketingRole(profile.role) && !isClientRole(profile.role)) {
+  if (
+    !isMarketingRole(profile.role) &&
+    !isClientRole(profile.role) &&
+    profile.role !== "account_manager" &&
+    profile.role !== "agency_manager"
+  ) {
     redirect("/app");
   }
 
@@ -25,7 +30,9 @@ export default async function ApprovalsPage() {
       .order("requested_date", { ascending: false }),
     supabase
       .from("campaigns")
-      .select("id, campaign_name, client_id")
+      .select(
+        "id, campaign_name, client_id, contracts(approval_required, spending_approval_threshold)",
+      )
       .in("campaign_status", ["Active", "Late", "On Hold"])
       .order("campaign_name"),
   ]);
@@ -138,11 +145,33 @@ export default async function ApprovalsPage() {
           <h2 className="mb-4 text-xl font-bold">Request approval</h2>
           <CreateApprovalForm
             userId={userId}
-            campaigns={(campaigns ?? []).map((c) => ({
-              id: c.id,
-              label: c.campaign_name,
-              client_id: c.client_id,
-            }))}
+            campaigns={(campaigns ?? []).map((c) => {
+              const contract = joinOne(
+                (
+                  c as {
+                    contracts?:
+                      | {
+                          approval_required: boolean;
+                          spending_approval_threshold: number;
+                        }
+                      | {
+                          approval_required: boolean;
+                          spending_approval_threshold: number;
+                        }[]
+                      | null;
+                  }
+                ).contracts,
+              );
+              return {
+                id: c.id,
+                label: c.campaign_name,
+                client_id: c.client_id,
+                approval_required: Boolean(contract?.approval_required),
+                spending_approval_threshold: num(
+                  contract?.spending_approval_threshold,
+                ),
+              };
+            })}
           />
         </section>
       ) : null}
