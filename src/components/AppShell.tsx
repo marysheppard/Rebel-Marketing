@@ -115,13 +115,13 @@ const NAV: {
     href: "/app/approvals",
     label: "Approvals",
     icon: CheckSquare,
-    roles: ["marketing", "client", "account_manager"],
+    roles: ["marketing", "account_manager"],
   },
   {
     href: "/app/ar",
     label: "Accounts Receivable",
     icon: Wallet,
-    roles: ["agency_manager", "billing", "account_manager", "client"],
+    roles: ["agency_manager", "billing", "account_manager"],
   },
   {
     href: "/app/accounting",
@@ -145,7 +145,7 @@ const NAV: {
     href: "/app/campaigns",
     label: "Campaigns",
     icon: Megaphone,
-    roles: ["marketing", "client", "account_manager", "agency_manager"],
+    roles: ["marketing", "account_manager", "agency_manager"],
   },
   {
     href: "/app/clients",
