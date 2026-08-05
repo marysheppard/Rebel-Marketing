@@ -1,4 +1,5 @@
 import { CreateApprovalForm, UpdateApprovalStatusForm } from "@/components/forms";
+import { ApprovalStatusPieChart } from "@/components/Charts";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { daysBetween } from "@/lib/format";
 import { canCreateApprovals, getProfile, isClientRole } from "@/lib/page-auth";
@@ -149,6 +150,17 @@ export default async function ApprovalsPage({
         />
       ) : (
         <>
+          <div className="mb-6 max-w-xl">
+            <ApprovalStatusPieChart
+              data={[
+                { name: "Pending", value: pendingCount },
+                { name: "Changes Requested", value: changesCount },
+                { name: "Approved", value: approvedCount },
+                { name: "Rejected", value: rejectedCount },
+              ]}
+            />
+          </div>
+
           <div className="mb-4 flex flex-wrap gap-2">
             {tabs.map((tab) => {
               const active = filter === tab.id;
