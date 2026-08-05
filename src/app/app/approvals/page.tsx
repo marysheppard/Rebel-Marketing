@@ -2,11 +2,21 @@ import { ApprovalsBoard } from "@/components/ApprovalsBoard";
 import { CreateApprovalForm } from "@/components/forms";
 import { PageHeader } from "@/components/ui";
 import { daysBetween } from "@/lib/format";
-import { canCreateApprovals, getProfile, isClientRole } from "@/lib/page-auth";
+import {
+  canCreateApprovals,
+  getProfile,
+  isClientRole,
+  isMarketingRole,
+} from "@/lib/page-auth";
+import { redirect } from "next/navigation";
 
 export default async function ApprovalsPage() {
   const { supabase, profile, userId } = await getProfile();
   if (!profile || !userId) return null;
+
+  if (!isMarketingRole(profile.role) && !isClientRole(profile.role)) {
+    redirect("/app");
+  }
 
   const [{ data: approvals }, { data: campaigns }] = await Promise.all([
     supabase

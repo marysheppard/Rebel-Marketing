@@ -40,14 +40,6 @@ export default async function AnalyticsPage({ searchParams }: Search) {
     redirect("/app");
   }
 
-  if (
-    profile.role !== "agency_manager" &&
-    profile.role !== "account_manager" &&
-    profile.role !== "marketing"
-  ) {
-    redirect("/app");
-  }
-
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
   const d30 = new Date(today);

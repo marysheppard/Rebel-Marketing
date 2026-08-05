@@ -14,13 +14,6 @@ export default async function CalendarPage() {
   if (isClientRole(profile.role) || !isEmployeeWorkRole(profile.role)) {
     redirect("/app");
   }
-  if (
-    profile.role !== "agency_manager" &&
-    profile.role !== "account_manager" &&
-    profile.role !== "marketing"
-  ) {
-    redirect("/app");
-  }
 
   const todayStr = new Date().toISOString().slice(0, 10);
 

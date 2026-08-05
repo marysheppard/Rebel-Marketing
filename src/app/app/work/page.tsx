@@ -1,7 +1,13 @@
 import { TimePtoBoard } from "@/components/TimePtoBoard";
 import { num } from "@/lib/format";
-import { canLogWork, getProfile, isClientRole } from "@/lib/page-auth";
+import {
+  canLogWork,
+  getProfile,
+  isClientRole,
+  isMarketingRole,
+} from "@/lib/page-auth";
 import type { PtoRequest } from "@/lib/types";
+import { redirect } from "next/navigation";
 
 function startOfWeekMonday(d: Date) {
   const copy = new Date(d);
@@ -14,6 +20,10 @@ function startOfWeekMonday(d: Date) {
 export default async function WorkPage() {
   const { supabase, profile, userId } = await getProfile();
   if (!profile || !userId) return null;
+
+  if (!isMarketingRole(profile.role) && !isClientRole(profile.role)) {
+    redirect("/app");
+  }
 
   const isEmployee = canLogWork(profile.role) && !isClientRole(profile.role);
   const today = new Date();

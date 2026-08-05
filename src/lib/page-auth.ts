@@ -29,17 +29,18 @@ export function canManageCampaigns(role: UserRole) {
   return role === "agency_manager" || role === "account_manager";
 }
 
-export function canLogWork(role: UserRole) {
-  return (
-    role === "agency_manager" ||
-    role === "account_manager" ||
-    role === "marketing"
-  );
+/** Marketing employee (EMP-1003) — this branch’s employee dashboard audience */
+export function isMarketingRole(role: UserRole) {
+  return role === "marketing";
 }
 
-/** Roles that use the employee work & time module */
+export function canLogWork(role: UserRole) {
+  return isMarketingRole(role);
+}
+
+/** Roles that use the marketing employee work module (tabs, boards, charts) */
 export function isEmployeeWorkRole(role: UserRole) {
-  return canLogWork(role);
+  return isMarketingRole(role);
 }
 
 /** Statuses an employee may set on their own tasks (never Approved) */
@@ -59,19 +60,11 @@ export function canApproveTasks(role: UserRole) {
 }
 
 export function canManageCosts(role: UserRole) {
-  return (
-    role === "agency_manager" ||
-    role === "account_manager" ||
-    role === "marketing"
-  );
+  return isMarketingRole(role);
 }
 
 export function canCreateApprovals(role: UserRole) {
-  return (
-    role === "agency_manager" ||
-    role === "account_manager" ||
-    role === "marketing"
-  );
+  return isMarketingRole(role);
 }
 
 export function canManageBilling(role: UserRole) {

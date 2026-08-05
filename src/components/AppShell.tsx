@@ -25,6 +25,7 @@ import { RebelLogo } from "@/components/RebelLogo";
 import { createClient } from "@/lib/supabase/client";
 import { ROLE_LABELS, type Profile, type UserRole } from "@/lib/types";
 
+/** Marketing employee UX from this branch; manager/billing dashboards come later. */
 const NAV: {
   href: string;
   label: string;
@@ -47,13 +48,13 @@ const NAV: {
     href: "/app/analytics",
     label: "Analytics",
     icon: LineChart,
-    roles: ["agency_manager", "account_manager", "marketing"],
+    roles: ["marketing"],
   },
   {
     href: "/app/approvals",
     label: "Approvals",
     icon: CheckSquare,
-    roles: ["agency_manager", "account_manager", "marketing"],
+    roles: ["marketing", "client"],
   },
   {
     href: "/app/billing",
@@ -65,13 +66,13 @@ const NAV: {
     href: "/app/calendar",
     label: "Calendar",
     icon: CalendarDays,
-    roles: ["agency_manager", "account_manager", "marketing"],
+    roles: ["marketing"],
   },
   {
     href: "/app/campaigns",
     label: "Campaigns",
     icon: Megaphone,
-    roles: ["agency_manager", "account_manager", "marketing", "billing", "client"],
+    roles: ["marketing", "client"],
   },
   {
     href: "/app/clients",
@@ -89,7 +90,7 @@ const NAV: {
     href: "/app/costs",
     label: "Costs",
     icon: DollarSign,
-    roles: ["agency_manager", "account_manager", "marketing", "billing"],
+    roles: ["marketing"],
   },
   {
     href: "/app/reports",
@@ -101,13 +102,13 @@ const NAV: {
     href: "/app/tasks",
     label: "Tasks",
     icon: ListTodo,
-    roles: ["agency_manager", "account_manager", "marketing"],
+    roles: ["marketing"],
   },
   {
     href: "/app/work",
     label: "Time & PTO",
     icon: Clock,
-    roles: ["agency_manager", "account_manager", "marketing", "billing", "client"],
+    roles: ["marketing", "client"],
   },
 ];
 
@@ -184,7 +185,7 @@ export function AppShell({
             <span className="badge badge-primary badge-sm sm:hidden">
               {ROLE_LABELS[profile.role]}
             </span>
-            <NotificationBell />
+            {profile.role === "marketing" ? <NotificationBell /> : null}
             <button className="btn btn-ghost btn-sm" onClick={logout}>
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Log out</span>

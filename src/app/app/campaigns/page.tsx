@@ -1,11 +1,21 @@
 import { CampaignsBoard } from "@/components/CampaignsBoard";
 import { budgetHealth } from "@/lib/finance";
 import { num } from "@/lib/format";
-import { canManageCampaigns, getProfile, isClientRole } from "@/lib/page-auth";
+import {
+  canManageCampaigns,
+  getProfile,
+  isClientRole,
+  isMarketingRole,
+} from "@/lib/page-auth";
+import { redirect } from "next/navigation";
 
 export default async function CampaignsPage() {
   const { supabase, profile } = await getProfile();
   if (!profile) return null;
+
+  if (!isMarketingRole(profile.role) && !isClientRole(profile.role)) {
+    redirect("/app");
+  }
 
   const [{ data: campaigns }, { data: clients }, { data: contracts }, { data: costs }] =
     await Promise.all([

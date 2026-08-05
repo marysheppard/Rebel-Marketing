@@ -7,7 +7,7 @@ import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { WelcomeMessage } from "@/components/WelcomeMessage";
 import { remainingBalance } from "@/lib/finance";
 import { money, num } from "@/lib/format";
-import { getProfile, isClientRole } from "@/lib/page-auth";
+import { getProfile, isClientRole, isMarketingRole } from "@/lib/page-auth";
 import type { Campaign, Client, Invoice, Profile } from "@/lib/types";
 
 type ApprovalRow = {
@@ -42,6 +42,21 @@ export default async function DashboardPage() {
 
   if (isClientRole(profile.role)) {
     return <CustomerDashboard />;
+  }
+
+  if (!isMarketingRole(profile.role)) {
+    return (
+      <div>
+        <PageHeader
+          title={`Welcome, ${profile.full_name}`}
+          subtitle="Your role workspace is managed separately and will ship in a later update."
+        />
+        <EmptyState
+          title="Staff dashboard coming soon"
+          description="This branch delivers the Marketing employee experience (EMP-1003). Manager, billing, and account-manager dashboards are owned by other workstreams."
+        />
+      </div>
+    );
   }
 
   return (

@@ -1,10 +1,15 @@
 import { CostsBoard } from "@/components/CostsBoard";
 import { num } from "@/lib/format";
 import { canManageCosts, getProfile, isClientRole } from "@/lib/page-auth";
+import { redirect } from "next/navigation";
 
 export default async function CostsPage() {
   const { supabase, profile } = await getProfile();
   if (!profile) return null;
+
+  if (isClientRole(profile.role) || !canManageCosts(profile.role)) {
+    redirect("/app");
+  }
 
   const [{ data: costs }, { data: campaigns }] = await Promise.all([
     supabase
