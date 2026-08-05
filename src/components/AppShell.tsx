@@ -25,6 +25,7 @@ import {
   Calculator,
   Bell,
   Activity,
+  ScrollText,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { NotificationsBell } from "@/components/NotificationsBell";
@@ -53,7 +54,7 @@ const AGENCY_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
   },
   {
     label: "Risk",
-    hrefs: ["/app/controls"],
+    hrefs: ["/app/audit", "/app/controls"],
   },
 ];
 
@@ -175,6 +176,12 @@ const NAV: {
     href: "/app/controls",
     label: "Controls",
     icon: Shield,
+    roles: ["agency_manager"],
+  },
+  {
+    href: "/app/audit",
+    label: "Audit Trail",
+    icon: ScrollText,
     roles: ["agency_manager"],
   },
   {
