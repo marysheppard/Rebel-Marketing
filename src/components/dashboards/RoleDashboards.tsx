@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   PortfolioDashboardClient,
   type PortfolioDashboardSource,
@@ -18,6 +19,9 @@ async function buildDashboardSource(
   const { clients, campaigns, costs, invoices, work, profiles } = bundle;
 
   const campIds = campaigns.map((c) => c.id);
+  const clientIds = clients.map((c) => c.id);
+  const campIdSet = new Set(campIds);
+  const today = new Date().toISOString().slice(0, 10);
 
   const [
     { data: taskRows },
@@ -25,7 +29,9 @@ async function buildDashboardSource(
     exceptionsRes,
     approvalsRes,
   ] = await Promise.all([
-    supabase.from("tasks").select("id, assignee_id, status, due_date"),
+    supabase
+      .from("tasks")
+      .select("id, assignee_id, status, due_date, campaign_id"),
     campIds.length
       ? supabase
           .from("campaign_assignments")
@@ -40,24 +46,39 @@ async function buildDashboardSource(
           .select("id", { count: "exact", head: true })
           .neq("status", "Resolved")
       : Promise.resolve({ count: 0 }),
-    role === "account_manager"
+    role === "account_manager" && clientIds.length
       ? supabase
           .from("approvals")
           .select("id", { count: "exact", head: true })
           .eq("approval_status", "Pending")
-          .in(
-            "client_id",
-            clients.map((c) => c.id).length
-              ? clients.map((c) => c.id)
-              : ["00000000-0000-0000-0000-000000000000"],
-          )
+          .in("client_id", clientIds)
       : Promise.resolve({ count: 0 }),
   ]);
+
+  const scopedTasks = (taskRows ?? [])
+    .filter((t) =>
+      role === "account_manager"
+        ? campIdSet.has(t.campaign_id)
+        : true,
+    )
+    .map((t) => ({
+      id: t.id,
+      assignee_id: t.assignee_id as string | null,
+      status: t.status as string,
+      due_date: t.due_date as string | null,
+    }));
+
+  const openOnBook = scopedTasks.filter((t) => t.status !== "Completed");
+  const overdueOnBook = openOnBook.filter(
+    (t) => t.due_date != null && t.due_date < today,
+  );
 
   return {
     fullName: profile.full_name,
     openExceptions: exceptionsRes.count ?? 0,
     pendingApprovals: approvalsRes.count ?? 0,
+    openTasksOnBook: openOnBook.length,
+    overdueTasksOnBook: overdueOnBook.length,
     clients: clients.map((c) => ({
       id: c.id,
       client_name: c.client_name,
@@ -97,17 +118,26 @@ async function buildDashboardSource(
       role: p.role,
       internal_cost_rate: p.internal_cost_rate,
     })),
-    tasks: (taskRows ?? []).map((t) => ({
-      id: t.id,
-      assignee_id: t.assignee_id,
-      status: t.status,
-      due_date: t.due_date,
-    })),
+    tasks: scopedTasks,
     assignments: (assignmentRows ?? []).map((a) => ({
       user_id: a.user_id,
       campaign_id: a.campaign_id,
     })),
   };
+}
+
+function DashboardFallback() {
+  return (
+    <div className="space-y-4 py-8">
+      <div className="h-8 w-64 animate-pulse rounded bg-base-300" />
+      <div className="h-24 animate-pulse rounded-box bg-base-300" />
+      <div className="grid gap-3 sm:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-20 animate-pulse rounded-box bg-base-300" />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export async function AccountManagerDashboard({
@@ -126,7 +156,9 @@ export async function AccountManagerDashboard({
     "account_manager",
   );
   return (
-    <PortfolioDashboardClient source={source} variant="account_manager" />
+    <Suspense fallback={<DashboardFallback />}>
+      <PortfolioDashboardClient source={source} variant="account_manager" />
+    </Suspense>
   );
 }
 
@@ -145,5 +177,9 @@ export async function AgencyExecutiveDashboard({
     profile,
     "agency_manager",
   );
-  return <PortfolioDashboardClient source={source} variant="agency" />;
+  return (
+    <Suspense fallback={<DashboardFallback />}>
+      <PortfolioDashboardClient source={source} variant="agency" />
+    </Suspense>
+  );
 }

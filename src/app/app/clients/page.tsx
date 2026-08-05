@@ -2,9 +2,15 @@ import { ClientsExplorer } from "@/components/ClientsExplorer";
 import { CreateClientForm } from "@/components/forms";
 import { PageHeader } from "@/components/ui";
 import { canManageClients, requireRoles } from "@/lib/page-auth";
+import { parsePeriodParam } from "@/lib/period-url";
 import { getManagedClientIds } from "@/lib/portfolio";
 
-export default async function ClientsPage() {
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const sp = await searchParams;
   const { supabase, profile, userId } = await requireRoles([
     "agency_manager",
     "account_manager",
@@ -59,6 +65,7 @@ export default async function ClientsPage() {
       />
 
       <ClientsExplorer
+        initialPeriod={parsePeriodParam(sp.period)}
         source={{
           clients: list.map((c) => ({
             id: c.id,

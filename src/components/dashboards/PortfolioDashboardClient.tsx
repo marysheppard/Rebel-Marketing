@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   ClientProfitChart,
   EmployeeBudgetChart,
@@ -18,11 +18,15 @@ import {
   resolvePeriod,
   type PeriodKey,
 } from "@/lib/period";
+import { withPeriod } from "@/lib/period-url";
+import { usePeriodParam } from "@/lib/use-period-param";
 
 export type PortfolioDashboardSource = {
   fullName: string;
   openExceptions: number;
   pendingApprovals: number;
+  openTasksOnBook: number;
+  overdueTasksOnBook: number;
   clients: {
     id: string;
     client_name: string;
@@ -108,8 +112,9 @@ export function PortfolioDashboardClient({
   variant?: PortfolioDashboardVariant;
 }) {
   const isAm = variant === "account_manager";
-  const [period, setPeriod] = useState<PeriodKey>("ytd");
+  const { period, setPeriod } = usePeriodParam("ytd");
   const range = useMemo(() => resolvePeriod(period, "", ""), [period]);
+  const p = (href: string) => withPeriod(href, period);
 
   const periodInvoices = useMemo(
     () =>
@@ -234,7 +239,6 @@ export function PortfolioDashboardClient({
     return map;
   }, [periodCosts]);
 
-  // Budget health across all campaigns in scope (portfolio or agency)
   let campsUnder = 0;
   let campsNear = 0;
   let campsOver = 0;
@@ -267,16 +271,38 @@ export function PortfolioDashboardClient({
 
   let tasksOnTrack = 0;
   let tasksAtRisk = 0;
-  if (!isAm) {
-    for (const p of staff) {
-      for (const t of tasksByUser.get(p.id) ?? []) {
-        const ok =
-          t.status === "Completed" || !t.due_date || t.due_date >= today;
-        if (ok) tasksOnTrack++;
-        else tasksAtRisk++;
+  const capacityRows: {
+    id: string;
+    name: string;
+    open: number;
+    overdue: number;
+  }[] = [];
+
+  for (const pRow of staff) {
+    const list = tasksByUser.get(pRow.id) ?? [];
+    let open = 0;
+    let overdue = 0;
+    for (const t of list) {
+      if (t.status === "Completed") continue;
+      open++;
+      const late = t.due_date != null && t.due_date < today;
+      if (late) {
+        overdue++;
+        tasksAtRisk++;
+      } else {
+        tasksOnTrack++;
       }
     }
+    if (open > 0 || !isAm) {
+      capacityRows.push({
+        id: pRow.id,
+        name: pRow.full_name,
+        open,
+        overdue,
+      });
+    }
   }
+  capacityRows.sort((a, b) => b.overdue - a.overdue || b.open - a.open);
 
   const onTrackData = [
     { name: "On track", value: tasksOnTrack, fill: "#22c55e" },
@@ -292,26 +318,38 @@ export function PortfolioDashboardClient({
   const attention = (
     isAm
       ? [
-          overdueCount > 0
-            ? {
-                label: `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}`,
-                href: "/app/alerts",
-              }
-            : null,
-          campsOver > 0
-            ? {
-                label: `${campsOver} campaign${campsOver === 1 ? "" : "s"} over budget`,
-                href: "/app/campaigns",
-              }
-            : null,
           source.pendingApprovals > 0
             ? {
                 label: `${source.pendingApprovals} pending approval${source.pendingApprovals === 1 ? "" : "s"}`,
                 href: "/app/approvals",
               }
             : null,
+          source.overdueTasksOnBook > 0
+            ? {
+                label: `${source.overdueTasksOnBook} overdue task${source.overdueTasksOnBook === 1 ? "" : "s"} on your book`,
+                href: "/app/tasks",
+              }
+            : null,
+          campsOver > 0
+            ? {
+                label: `${campsOver} campaign${campsOver === 1 ? "" : "s"} over budget`,
+                href: p("/app/campaigns"),
+              }
+            : null,
+          overdueCount > 0
+            ? {
+                label: `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}`,
+                href: "/app/alerts",
+              }
+            : null,
         ]
       : [
+          source.openExceptions > 0
+            ? {
+                label: `${source.openExceptions} open exception${source.openExceptions === 1 ? "" : "s"}`,
+                href: "/app/controls",
+              }
+            : null,
           overdueCount > 0
             ? {
                 label: `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}`,
@@ -321,35 +359,67 @@ export function PortfolioDashboardClient({
           campsOver > 0
             ? {
                 label: `${campsOver} campaign${campsOver === 1 ? "" : "s"} over budget`,
-                href: "/app/campaigns",
+                href: p("/app/campaigns"),
               }
             : null,
-          source.openExceptions > 0
+          tasksAtRisk > 0
             ? {
-                label: `${source.openExceptions} open exception${source.openExceptions === 1 ? "" : "s"}`,
-                href: "/app/controls",
+                label: `${tasksAtRisk} overdue task${tasksAtRisk === 1 ? "" : "s"} across staff`,
+                href: "/app/employees",
               }
             : null,
         ]
   ).filter(Boolean) as { label: string; href: string }[];
 
+  const deliveryLinks = [
+    {
+      label: "Approvals",
+      href: "/app/approvals",
+      hint:
+        source.pendingApprovals > 0
+          ? `${source.pendingApprovals} pending`
+          : "Client sign-off",
+      tone: source.pendingApprovals > 0 ? ("warn" as const) : undefined,
+    },
+    {
+      label: "My Tasks",
+      href: "/app/tasks",
+      hint:
+        source.overdueTasksOnBook > 0
+          ? `${source.overdueTasksOnBook} overdue`
+          : `${source.openTasksOnBook} open`,
+      tone: source.overdueTasksOnBook > 0 ? ("warn" as const) : undefined,
+    },
+    {
+      label: "Time Entry",
+      href: "/app/time",
+      hint: "Log hours",
+    },
+    {
+      label: "Costs",
+      href: "/app/costs",
+      hint: "Campaign spend",
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm opacity-70">
+          <h1 className="text-2xl font-bold tracking-tight">
+            {isAm ? "My portfolio" : "Executive overview"}
+          </h1>
+          <p className="mt-1 text-sm opacity-70">
             {isAm
-              ? `Portfolio view · ${source.fullName} · ${source.clients.length} client${source.clients.length === 1 ? "" : "s"}`
-              : `Agency-wide view · ${source.fullName}`}
+              ? `What needs you today · ${source.fullName} · ${source.clients.length} client${source.clients.length === 1 ? "" : "s"}`
+              : `Where the business is unhealthy · ${source.fullName}`}
           </p>
           <p className="text-xs opacity-50">
             Figures use {range.label}
             {range.start || range.end
               ? ` (${range.start ?? "…"} → ${range.end ?? "…"})`
               : ""}
-            {isAm
-              ? "."
-              : ". AR is current open balance."}
+            {isAm ? "." : ". AR is current open balance."}
           </p>
         </div>
         <label className="form-control w-full min-w-0 max-w-xs">
@@ -380,90 +450,149 @@ export function PortfolioDashboardClient({
               {a.label}
             </Link>
           ))}
+          <Link href="/app/alerts" className="link link-hover text-sm opacity-60">
+            All alerts
+          </Link>
         </div>
       ) : (
         <p className="border-b border-base-300 pb-4 text-sm opacity-60">
-          No urgent exceptions right now.
+          {isAm
+            ? "Nothing urgent on your book right now."
+            : "No urgent exceptions right now."}{" "}
+          <Link href="/app/alerts" className="link link-hover">
+            View alerts
+          </Link>
         </p>
       )}
+
+      {isAm ? (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">
+            Delivery today
+          </h2>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {deliveryLinks.map((d) => (
+              <Link
+                key={d.href}
+                href={d.href}
+                className="rounded-box border border-base-300 bg-base-100 px-4 py-3 transition hover:border-primary/40 hover:bg-base-200/40"
+              >
+                <div className="font-semibold">{d.label}</div>
+                <div
+                  className={`text-sm ${d.tone === "warn" ? "text-warning" : "opacity-60"}`}
+                >
+                  {d.hint}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {isAm ? (
           <>
             <StatCard
-              label="Revenue"
-              value={money(revenue)}
-              hint={range.label}
-              href="/app/profitability"
-            />
-            <StatCard
-              label="Profit"
-              value={money(profit)}
-              tone={profit >= 0 ? "good" : "bad"}
-              hint={range.label}
-              href="/app/profitability"
-            />
-            <StatCard
-              label="Margin"
-              value={pct(margin)}
-              href="/app/profitability"
+              label="Pending approvals"
+              value={String(source.pendingApprovals)}
+              hint="Needs decision"
+              tone={source.pendingApprovals > 0 ? "warn" : "good"}
+              href="/app/approvals"
             />
             <StatCard
               label="Clients"
               value={String(source.clients.length)}
-              hint="In your portfolio"
-              href="/app/clients"
+              hint="In your book"
+              href={p("/app/clients")}
             />
             <StatCard
               label="Campaigns at risk"
               value={String(campsOver)}
               hint="Over budget"
               tone={campsOver > 0 ? "bad" : "good"}
-              href="/app/campaigns"
+              href={p("/app/campaigns")}
+            />
+            <StatCard
+              label="Book revenue"
+              value={money(revenue)}
+              hint={range.label}
+              href={p("/app/profitability")}
+            />
+            <StatCard
+              label="Book margin"
+              value={pct(margin)}
+              href={p("/app/profitability")}
             />
           </>
         ) : (
           <>
             <StatCard
-              label="Revenue"
-              value={money(revenue)}
-              hint={range.label}
-              href="/app/accounting"
-            />
-            <StatCard
-              label="Profit"
-              value={money(profit)}
-              tone={profit >= 0 ? "good" : "bad"}
-              hint={range.label}
-              href="/app/profitability"
-            />
-            <StatCard
-              label="Margin"
-              value={pct(margin)}
-              href="/app/profitability"
+              label="Open exceptions"
+              value={String(source.openExceptions)}
+              hint="Controls"
+              tone={source.openExceptions > 0 ? "bad" : "good"}
+              href="/app/controls"
             />
             <StatCard
               label="AR"
               value={money(ar)}
               hint="Accounts receivable"
+              tone={overdueCount > 0 ? "warn" : undefined}
               href="/app/ar"
             />
             <StatCard
-              label="Open invoices"
-              value={String(outstandingCount)}
+              label="Overdue invoices"
+              value={String(overdueCount)}
+              hint={`${outstandingCount} open total`}
+              tone={overdueCount > 0 ? "bad" : "good"}
               href="/app/ar"
+            />
+            <StatCard
+              label="Campaigns over budget"
+              value={String(campsOver)}
+              tone={campsOver > 0 ? "bad" : "good"}
+              href={p("/app/campaigns")}
+            />
+            <StatCard
+              label="Firm margin"
+              value={pct(margin)}
+              hint={range.label}
+              href={p("/app/profitability")}
             />
           </>
         )}
       </div>
 
+      {!isAm ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <StatCard
+            label="Revenue"
+            value={money(revenue)}
+            hint={range.label}
+            href="/app/accounting"
+          />
+          <StatCard
+            label="Profit"
+            value={money(profit)}
+            tone={profit >= 0 ? "good" : "bad"}
+            hint={range.label}
+            href={p("/app/profitability")}
+          />
+          <StatCard
+            label="Open invoices"
+            value={String(outstandingCount)}
+            href="/app/billing"
+          />
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Link
-          href="/app/profitability"
+          href={p("/app/profitability")}
           className="block min-w-0 transition hover:opacity-95"
         >
           <ClientProfitChart
-            title="Profitability by customer"
+            title={isAm ? "Profit by client (your book)" : "Profitability by customer"}
             compact
             data={byClient.slice(0, 8).map((r) => ({
               name: r.name,
@@ -474,7 +603,7 @@ export function PortfolioDashboardClient({
           />
         </Link>
         <Link
-          href="/app/profitability"
+          href={p("/app/profitability")}
           className="block min-w-0 transition hover:opacity-95"
         >
           <MonthlySeriesChart
@@ -488,7 +617,7 @@ export function PortfolioDashboardClient({
 
       {isAm ? (
         <Link
-          href="/app/campaigns"
+          href={p("/app/campaigns")}
           className="block min-w-0 max-w-xl transition hover:opacity-95"
         >
           <EmployeeBudgetChart data={onBudgetData} />
@@ -497,7 +626,7 @@ export function PortfolioDashboardClient({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <EmployeeTrackChart data={onTrackData} />
           <Link
-            href="/app/campaigns"
+            href={p("/app/campaigns")}
             className="block min-w-0 transition hover:opacity-95"
           >
             <EmployeeBudgetChart data={onBudgetData} />
@@ -508,8 +637,16 @@ export function PortfolioDashboardClient({
       {isAm ? (
         <section className="space-y-3">
           <div className="flex items-end justify-between gap-3">
-            <h2 className="text-lg font-semibold">My Clients</h2>
-            <Link href="/app/clients" className="link link-primary text-sm">
+            <div>
+              <h2 className="text-lg font-semibold">My Clients</h2>
+              <p className="text-xs opacity-60">
+                Open a client hub for campaigns, approvals, and costs
+              </p>
+            </div>
+            <Link
+              href={p("/app/clients")}
+              className="link link-primary text-sm"
+            >
               View all
             </Link>
           </div>
@@ -522,6 +659,7 @@ export function PortfolioDashboardClient({
                   <th className="text-right">Profit</th>
                   <th className="text-right">Margin</th>
                   <th>Status</th>
+                  <th>Hub</th>
                 </tr>
               </thead>
               <tbody>
@@ -545,12 +683,34 @@ export function PortfolioDashboardClient({
                     <td>
                       <StatusBadge status={r.status} />
                     </td>
+                    <td>
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        <Link
+                          href={`/app/campaigns?client=${r.clientId}`}
+                          className="link link-hover opacity-70"
+                        >
+                          Campaigns
+                        </Link>
+                        <Link
+                          href={`/app/approvals?client=${r.clientId}`}
+                          className="link link-hover opacity-70"
+                        >
+                          Approvals
+                        </Link>
+                        <Link
+                          href={`/app/costs?client=${r.clientId}`}
+                          className="link link-hover opacity-70"
+                        >
+                          Costs
+                        </Link>
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {!byClient.length ? (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="py-6 text-center text-sm opacity-60"
                     >
                       No client activity in this period.
@@ -561,7 +721,55 @@ export function PortfolioDashboardClient({
             </table>
           </div>
         </section>
-      ) : null}
+      ) : (
+        <section className="space-y-3">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Team capacity</h2>
+              <p className="text-xs opacity-60">
+                Open and overdue tasks by person — who is stretched
+              </p>
+            </div>
+            <Link href="/app/employees" className="link link-primary text-sm">
+              Employees
+            </Link>
+          </div>
+          <div className="overflow-x-auto rounded-box border border-base-300/80">
+            <table className="table table-sm">
+              <thead className="sticky top-0 z-10 bg-base-100">
+                <tr>
+                  <th>Person</th>
+                  <th className="text-right">Open tasks</th>
+                  <th className="text-right">Overdue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {capacityRows.slice(0, 8).map((r) => (
+                  <tr key={r.id} className="hover">
+                    <td className="font-medium">{r.name}</td>
+                    <td className="text-right">{r.open}</td>
+                    <td
+                      className={`text-right ${r.overdue > 0 ? "text-error font-medium" : ""}`}
+                    >
+                      {r.overdue}
+                    </td>
+                  </tr>
+                ))}
+                {!capacityRows.length ? (
+                  <tr>
+                    <td
+                      colSpan={3}
+                      className="py-6 text-center text-sm opacity-60"
+                    >
+                      No open staff tasks to show.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -572,7 +780,5 @@ export function AgencyDashboardClient({
 }: {
   source: PortfolioDashboardSource;
 }) {
-  return (
-    <PortfolioDashboardClient source={source} variant="agency" />
-  );
+  return <PortfolioDashboardClient source={source} variant="agency" />;
 }

@@ -6,26 +6,48 @@ import { budgetVariance } from "@/lib/finance";
 import { canManageCosts, requireRoles } from "@/lib/page-auth";
 import Link from "next/link";
 
-export default async function CostsPage() {
+export default async function CostsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ client?: string }>;
+}) {
+  const { client: clientFilter } = await searchParams;
   const { supabase, profile } = await requireRoles([
     "agency_manager",
     "account_manager",
   ]);
 
-  const [{ data: costs }, { data: campaigns }] = await Promise.all([
-    supabase
-      .from("costs")
-      .select("*, campaigns(campaign_name, campaign_budget)")
-      .order("cost_date", { ascending: false }),
-    supabase
-      .from("campaigns")
-      .select("id, campaign_name")
-      .in("campaign_status", ["Active", "Late", "On Hold", "Completed"])
-      .order("campaign_name"),
-  ]);
+  const [{ data: costs }, { data: campaigns }, { data: clients }] =
+    await Promise.all([
+      supabase
+        .from("costs")
+        .select("*, campaigns(campaign_name, campaign_budget, client_id)")
+        .order("cost_date", { ascending: false }),
+      supabase
+        .from("campaigns")
+        .select("id, campaign_name, client_id")
+        .in("campaign_status", ["Active", "Late", "On Hold", "Completed"])
+        .order("campaign_name"),
+      supabase.from("clients").select("id, client_name").order("client_name"),
+    ]);
+
+  const campClient = new Map(
+    (campaigns ?? []).map((c) => [c.id, c.client_id]),
+  );
+
+  let list = costs ?? [];
+  if (clientFilter) {
+    list = list.filter((c) => {
+      const fromJoin = (
+        c as { campaigns?: { client_id?: string } | null }
+      ).campaigns?.client_id;
+      const fromMap = c.campaign_id ? campClient.get(c.campaign_id) : null;
+      return (fromJoin ?? fromMap) === clientFilter;
+    });
+  }
 
   const spentByCampaign = new Map<string, number>();
-  for (const c of costs ?? []) {
+  for (const c of list) {
     if (!c.campaign_id) continue;
     spentByCampaign.set(
       c.campaign_id,
@@ -33,8 +55,10 @@ export default async function CostsPage() {
     );
   }
 
-  const list = costs ?? [];
   const showForm = canManageCosts(profile.role);
+  const filterName = clientFilter
+    ? (clients ?? []).find((c) => c.id === clientFilter)?.client_name
+    : null;
 
   const byType = new Map<string, number>();
   for (const c of list) {
@@ -49,17 +73,36 @@ export default async function CostsPage() {
     .sort((a, b) => b.value - a.value)
     .slice(0, 8);
 
+  const formCampaigns = (campaigns ?? []).filter(
+    (c) => !clientFilter || c.client_id === clientFilter,
+  );
+
   return (
     <div>
       <PageHeader
         title="Costs"
-        subtitle="Campaign spend with budget variance context"
+        subtitle={
+          filterName
+            ? `Campaign spend for ${filterName}`
+            : "Campaign spend with budget variance context"
+        }
+        actions={
+          filterName ? (
+            <Link href="/app/costs" className="btn btn-ghost btn-sm">
+              Clear client filter
+            </Link>
+          ) : null
+        }
       />
 
       {list.length === 0 ? (
         <EmptyState
           title="No costs recorded"
-          description="Track media, production, freelance, and pass-through expenses against campaigns."
+          description={
+            filterName
+              ? `No costs for ${filterName} yet.`
+              : "Track media, production, freelance, and pass-through expenses against campaigns."
+          }
         />
       ) : (
         <>
@@ -141,7 +184,7 @@ export default async function CostsPage() {
         <section className="mt-8 rounded-box border border-base-300 bg-base-100 p-6">
           <h2 className="mb-4 text-xl font-bold">Record cost</h2>
           <CreateCostForm
-            campaigns={(campaigns ?? []).map((c) => ({
+            campaigns={formCampaigns.map((c) => ({
               id: c.id,
               label: c.campaign_name,
             }))}

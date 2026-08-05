@@ -60,6 +60,36 @@ export default async function ClientDetailPage({
         ) : null}
       </div>
 
+      <nav className="mb-8 flex flex-wrap gap-2">
+        <Link
+          href={`/app/campaigns?client=${id}`}
+          className="btn btn-outline btn-sm"
+        >
+          Campaigns
+        </Link>
+        <Link
+          href={`/app/approvals?client=${id}`}
+          className="btn btn-outline btn-sm"
+        >
+          Approvals
+        </Link>
+        <Link href={`/app/costs?client=${id}`} className="btn btn-outline btn-sm">
+          Costs
+        </Link>
+        <Link
+          href={`/app/contracts?client=${id}`}
+          className="btn btn-outline btn-sm"
+        >
+          Contracts
+        </Link>
+        <Link
+          href={`/app/profitability?client=${id}`}
+          className="btn btn-outline btn-sm"
+        >
+          Profitability
+        </Link>
+      </nav>
+
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard label="Revenue" value={money(revenue)} tone="good" />
         <StatCard label="Outstanding balance" value={money(outstanding)} tone="warn" />

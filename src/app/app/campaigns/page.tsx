@@ -6,9 +6,15 @@ import {
   isClientRole,
   requireRoles,
 } from "@/lib/page-auth";
+import { parsePeriodParam } from "@/lib/period-url";
 import { getManagedClientIds } from "@/lib/portfolio";
 
-export default async function CampaignsPage() {
+export default async function CampaignsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string; client?: string }>;
+}) {
+  const sp = await searchParams;
   const { supabase, profile, userId } = await requireRoles([
     "agency_manager",
     "account_manager",
@@ -64,6 +70,8 @@ export default async function CampaignsPage() {
       />
 
       <CampaignsExplorer
+        initialPeriod={parsePeriodParam(sp.period)}
+        initialClientId={sp.client ?? "all"}
         source={{
           campaigns: list.map((c) => ({
             id: c.id,

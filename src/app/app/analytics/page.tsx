@@ -2,8 +2,14 @@ import { AnalyticsExplorer } from "@/components/dashboards/AnalyticsExplorer";
 import { PageHeader } from "@/components/ui";
 import { loadFinanceBundle } from "@/lib/finance-data";
 import { requireRoles } from "@/lib/page-auth";
+import { parsePeriodParam } from "@/lib/period-url";
 
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const sp = await searchParams;
   const { supabase, profile, userId } = await requireRoles([
     "agency_manager",
     "account_manager",
@@ -43,14 +49,15 @@ export default async function AnalyticsPage() {
   return (
     <div>
       <PageHeader
-        title="Analytics"
+        title="Portfolio Analytics"
         subtitle={
           profile.role === "agency_manager"
-            ? "Agency and employee media performance — clicks, impressions, and delivery"
-            : "Portfolio media performance for your clients and team"
+            ? "Cross-client media & delivery — distinct from firm profitability (money)"
+            : "Media & delivery for your book — distinct from client profitability (money)"
         }
       />
       <AnalyticsExplorer
+        initialPeriod={parsePeriodParam(sp.period)}
         source={{
           profiles: scopedProfiles.map((p) => ({
             id: p.id,

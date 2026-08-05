@@ -312,11 +312,15 @@ function buildRows(
 export function ProfitabilityExplorer({
   source,
   showAccountManagers,
+  initialPeriod = "ytd",
+  initialClientId,
 }: {
   source: ProfitabilitySource;
   showAccountManagers: boolean;
+  initialPeriod?: PeriodKey;
+  initialClientId?: string;
 }) {
-  const [period, setPeriod] = useState<PeriodKey>("ytd");
+  const [period, setPeriod] = useState<PeriodKey>(initialPeriod);
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [category, setCategory] = useState<Category>("client");
@@ -324,7 +328,7 @@ export function ProfitabilityExplorer({
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
   const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");
   const [accountManager, setAccountManager] = useState("all");
-  const [selectedItem, setSelectedItem] = useState("all");
+  const [selectedItem, setSelectedItem] = useState(initialClientId ?? "all");
   const [query, setQuery] = useState("");
 
   const range = useMemo(

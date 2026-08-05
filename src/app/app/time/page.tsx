@@ -81,7 +81,7 @@ export default async function TimePage() {
     }
 
     const { data } = await campaignQuery;
-    campaignRows = (data ?? []) as typeof campaignRows;
+    campaignRows = (data ?? []) as unknown as typeof campaignRows;
   }
 
   const campaigns = campaignRows.map((c) => ({

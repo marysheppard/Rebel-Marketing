@@ -57,8 +57,14 @@ type ClientRow = {
   outstanding: number;
 };
 
-export function ClientsExplorer({ source }: { source: ClientsExplorerSource }) {
-  const [period, setPeriod] = useState<PeriodKey>("ytd");
+export function ClientsExplorer({
+  source,
+  initialPeriod = "ytd",
+}: {
+  source: ClientsExplorerSource;
+  initialPeriod?: PeriodKey;
+}) {
+  const [period, setPeriod] = useState<PeriodKey>(initialPeriod);
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [query, setQuery] = useState("");

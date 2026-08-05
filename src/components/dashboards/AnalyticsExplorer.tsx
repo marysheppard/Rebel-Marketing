@@ -100,8 +100,14 @@ type EmployeeRow = {
   cpa: number | null;
 };
 
-export function AnalyticsExplorer({ source }: { source: AnalyticsSource }) {
-  const [period, setPeriod] = useState<PeriodKey>("ytd");
+export function AnalyticsExplorer({
+  source,
+  initialPeriod = "ytd",
+}: {
+  source: AnalyticsSource;
+  initialPeriod?: PeriodKey;
+}) {
+  const [period, setPeriod] = useState<PeriodKey>(initialPeriod);
   const [sortKey, setSortKey] = useState<
     "clicks" | "impressions" | "conversions" | "hours" | "name"
   >("clicks");

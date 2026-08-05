@@ -57,16 +57,21 @@ type CampaignRow = {
 
 export function CampaignsExplorer({
   source,
+  initialPeriod = "ytd",
+  initialClientId = "all",
 }: {
   source: CampaignsExplorerSource;
+  initialPeriod?: PeriodKey;
+  initialClientId?: string;
 }) {
-  const [period, setPeriod] = useState<PeriodKey>("ytd");
+  const [period, setPeriod] = useState<PeriodKey>(initialPeriod);
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [selectedId, setSelectedId] = useState("all");
+  const [clientFilter, setClientFilter] = useState(initialClientId);
   const [sortKey, setSortKey] = useState<SortKey>("name");
 
   const range = useMemo(
@@ -91,10 +96,21 @@ export function CampaignsExplorer({
   const campaignOptions = useMemo(
     () =>
       [...source.campaigns]
+        .filter((c) => clientFilter === "all" || c.client_id === clientFilter)
         .sort((a, b) => a.campaign_name.localeCompare(b.campaign_name))
         .map((c) => ({ value: c.id, label: c.campaign_name })),
-    [source.campaigns],
+    [source.campaigns, clientFilter],
   );
+
+  const clientOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of source.campaigns) {
+      map.set(c.client_id, c.clients?.client_name ?? "—");
+    }
+    return [...map.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [source.campaigns]);
 
   const rows = useMemo(() => {
     return source.campaigns
@@ -128,6 +144,9 @@ export function CampaignsExplorer({
 
   const filtered = useMemo(() => {
     let list = [...rows];
+    if (clientFilter !== "all") {
+      list = list.filter((r) => r.clientId === clientFilter);
+    }
     if (selectedId !== "all") {
       list = list.filter((r) => r.id === selectedId);
     }
@@ -165,7 +184,7 @@ export function CampaignsExplorer({
       }
     });
     return list;
-  }, [rows, selectedId, query, statusFilter, typeFilter, sortKey]);
+  }, [rows, selectedId, clientFilter, query, statusFilter, typeFilter, sortKey]);
 
   const statusChart = useMemo(() => {
     const counts = new Map<string, number>();
@@ -240,7 +259,25 @@ export function CampaignsExplorer({
         ) : null}
       </div>
 
-      <div className="grid gap-3 rounded-box border border-base-300 bg-base-100 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-3 rounded-box border border-base-300 bg-base-100 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <label className="form-control min-w-0">
+          <span className="label-text text-xs opacity-70">Client</span>
+          <select
+            className="select select-bordered select-sm w-full max-w-full"
+            value={clientFilter}
+            onChange={(e) => {
+              setClientFilter(e.target.value);
+              setSelectedId("all");
+            }}
+          >
+            <option value="all">All clients</option>
+            {clientOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="form-control min-w-0">
           <span className="label-text text-xs opacity-70">Campaign</span>
           <select

@@ -5,8 +5,14 @@ import {
 } from "@/components/dashboards/ProfitabilityExplorer";
 import { loadFinanceBundle } from "@/lib/finance-data";
 import { requireRoles } from "@/lib/page-auth";
+import { parsePeriodParam } from "@/lib/period-url";
 
-export default async function ProfitabilityPage() {
+export default async function ProfitabilityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string; client?: string }>;
+}) {
+  const sp = await searchParams;
   const { supabase, profile, userId } = await requireRoles([
     "account_manager",
     "agency_manager",
@@ -59,19 +65,21 @@ export default async function ProfitabilityPage() {
       <PageHeader
         title={
           profile.role === "agency_manager"
-            ? "Agency Profitability"
+            ? "Firm Profitability"
             : "Client Profitability"
         }
         subtitle={
           profile.role === "agency_manager"
-            ? "Filter by period, then by client, campaign, or account manager"
-            : "Filter by period and profitability for your managed clients"
+            ? "Money view — filter by period, client, campaign, or account manager"
+            : "Money view for your managed clients"
         }
       />
 
       <ProfitabilityExplorer
         source={source}
         showAccountManagers={profile.role === "agency_manager"}
+        initialPeriod={parsePeriodParam(sp.period)}
+        initialClientId={sp.client}
       />
     </div>
   );

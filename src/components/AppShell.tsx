@@ -60,15 +60,15 @@ const AM_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
     hrefs: [
       "/app/analytics",
       "/app/campaigns",
-      "/app/profitability",
+      "/app/clients",
       "/app/contracts",
       "/app/metrics",
-      "/app/clients",
+      "/app/profitability",
     ],
   },
   {
     label: "Delivery",
-    hrefs: ["/app/approvals", "/app/costs", "/app/tasks", "/app/time"],
+    hrefs: ["/app/approvals", "/app/tasks", "/app/time", "/app/costs"],
   },
 ];
 
@@ -89,13 +89,19 @@ const NAV: {
   // Account Manager
   {
     href: "/app",
-    label: "Dashboard",
+    label: "My Portfolio",
     icon: LayoutDashboard,
-    roles: ["account_manager", "marketing", "billing", "client"],
+    roles: ["account_manager"],
   },
   {
     href: "/app",
-    label: "Executive Dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    roles: ["marketing", "billing", "client"],
+  },
+  {
+    href: "/app",
+    label: "Executive Overview",
     icon: LayoutDashboard,
     roles: ["agency_manager"],
   },
@@ -125,13 +131,13 @@ const NAV: {
   },
   {
     href: "/app/profitability",
-    label: "Profitability",
+    label: "Firm Profitability",
     icon: LineChart,
     roles: ["agency_manager"],
   },
   {
     href: "/app/metrics",
-    label: "Marketing Metrics",
+    label: "Campaign Performance",
     icon: BarChart3,
     roles: ["account_manager"],
   },
@@ -143,7 +149,7 @@ const NAV: {
   },
   {
     href: "/app/analytics",
-    label: "Analytics",
+    label: "Portfolio Analytics",
     icon: Activity,
     roles: ["agency_manager", "account_manager"],
   },
@@ -218,8 +224,8 @@ const NAV: {
 
 function dashboardTitle(role: UserRole) {
   if (role === "client") return "Customer Dashboard";
-  if (role === "agency_manager") return "Executive Dashboard";
-  if (role === "account_manager") return "Account Manager";
+  if (role === "agency_manager") return "Agency Portal";
+  if (role === "account_manager") return "Account Manager Portal";
   return "Employee Dashboard";
 }
 
@@ -380,7 +386,11 @@ export function AppShell({
             Viewing as <strong>{ROLE_LABELS[profile.role]}</strong>
             {profile.role === "client"
               ? " · Customer portal"
-              : " · Employee workspace"}
+              : profile.role === "agency_manager"
+                ? " · Firm-wide oversight"
+                : profile.role === "account_manager"
+                  ? " · Your client book & delivery"
+                  : " · Employee workspace"}
             . Switch accounts from the login page to demo other roles.
           </div>
         </aside>

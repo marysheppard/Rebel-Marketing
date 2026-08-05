@@ -8,25 +8,38 @@ import { daysBetween } from "@/lib/format";
 import { canCreateApprovals, getProfile, isClientRole } from "@/lib/page-auth";
 import Link from "next/link";
 
-export default async function ApprovalsPage() {
+export default async function ApprovalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ client?: string }>;
+}) {
+  const { client: clientFilter } = await searchParams;
   const { supabase, profile, userId } = await getProfile();
   if (!profile || !userId) return null;
 
-  const [{ data: approvals }, { data: campaigns }] = await Promise.all([
-    supabase
-      .from("approvals")
-      .select("*, clients(client_name), campaigns(campaign_name)")
-      .order("requested_date", { ascending: false }),
-    supabase
-      .from("campaigns")
-      .select("id, campaign_name, client_id")
-      .in("campaign_status", ["Active", "Late", "On Hold"])
-      .order("campaign_name"),
-  ]);
+  const [{ data: approvals }, { data: campaigns }, { data: clients }] =
+    await Promise.all([
+      supabase
+        .from("approvals")
+        .select("*, clients(client_name), campaigns(campaign_name)")
+        .order("requested_date", { ascending: false }),
+      supabase
+        .from("campaigns")
+        .select("id, campaign_name, client_id")
+        .in("campaign_status", ["Active", "Late", "On Hold"])
+        .order("campaign_name"),
+      supabase.from("clients").select("id, client_name").order("client_name"),
+    ]);
 
-  const list = approvals ?? [];
+  let list = approvals ?? [];
+  if (clientFilter) {
+    list = list.filter((a) => a.client_id === clientFilter);
+  }
   const isClient = isClientRole(profile.role);
   const showCreateForm = canCreateApprovals(profile.role) && !isClient;
+  const filterName = clientFilter
+    ? (clients ?? []).find((c) => c.id === clientFilter)?.client_name
+    : null;
 
   const statusCounts = new Map<string, number>();
   for (const a of list) {
@@ -44,13 +57,28 @@ export default async function ApprovalsPage() {
     <div>
       <PageHeader
         title="Approval Center"
-        subtitle="Client sign-off on creative, budget, and launch decisions"
+        subtitle={
+          filterName
+            ? `Client sign-off for ${filterName}`
+            : "Client sign-off on creative, budget, and launch decisions"
+        }
+        actions={
+          filterName ? (
+            <Link href="/app/approvals" className="btn btn-ghost btn-sm">
+              Clear client filter
+            </Link>
+          ) : null
+        }
       />
 
       {list.length === 0 ? (
         <EmptyState
           title="No approval requests"
-          description="Staff can request client approval on campaigns. Clients respond here."
+          description={
+            filterName
+              ? `No approvals for ${filterName} yet.`
+              : "Staff can request client approval on campaigns. Clients respond here."
+          }
         />
       ) : (
         <>
@@ -142,11 +170,13 @@ export default async function ApprovalsPage() {
           <h2 className="mb-4 text-xl font-bold">Request approval</h2>
           <CreateApprovalForm
             userId={userId}
-            campaigns={(campaigns ?? []).map((c) => ({
-              id: c.id,
-              label: c.campaign_name,
-              client_id: c.client_id,
-            }))}
+            campaigns={(campaigns ?? [])
+              .filter((c) => !clientFilter || c.client_id === clientFilter)
+              .map((c) => ({
+                id: c.id,
+                label: c.campaign_name,
+                client_id: c.client_id,
+              }))}
           />
         </section>
       ) : null}

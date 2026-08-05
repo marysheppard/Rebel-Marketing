@@ -61,11 +61,11 @@ export default async function MarketingMetricsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Marketing Metrics"
+        title="Campaign Performance"
         subtitle={
           profile.role === "account_manager"
-            ? "CAC, ROI, ROAS, CTR, retention, and CLV for your portfolio"
-            : "Agency marketing performance metrics"
+            ? "CAC, ROI, ROAS, CTR, retention, and CLV for your portfolio — performance metrics, not P&L"
+            : "Agency marketing performance metrics — distinct from profitability"
         }
       />
 
