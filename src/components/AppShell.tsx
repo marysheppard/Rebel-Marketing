@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Users,
   FileText,
+  FolderOpen,
   Megaphone,
   LineChart,
   Clock,
@@ -21,6 +22,7 @@ import {
   Menu,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
+import { NotificationsBell } from "@/components/NotificationsBell";
 import { RebelLogo } from "@/components/RebelLogo";
 import { createClient } from "@/lib/supabase/client";
 import { ROLE_LABELS, type Profile, type UserRole } from "@/lib/types";
@@ -85,6 +87,12 @@ const NAV: {
     label: "Contracts",
     icon: FileText,
     roles: ["agency_manager", "account_manager", "billing", "client"],
+  },
+  {
+    href: "/app/contracts/documents",
+    label: "Contracts & Documents",
+    icon: FolderOpen,
+    roles: ["client"],
   },
   {
     href: "/app/costs",
@@ -186,6 +194,11 @@ export function AppShell({
               {ROLE_LABELS[profile.role]}
             </span>
             {profile.role === "marketing" ? <NotificationBell /> : null}
+            {profile.role === "client" ||
+            profile.role === "agency_manager" ||
+            profile.role === "account_manager" ? (
+              <NotificationsBell />
+            ) : null}
             <button className="btn btn-ghost btn-sm" onClick={logout}>
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Log out</span>

@@ -24,6 +24,13 @@ export default async function ContractsPage() {
       <PageHeader
         title="Contracts"
         subtitle="Commercial terms, billing methods, and budgets"
+        actions={
+          showForm ? (
+            <Link href="/app/contracts/builder" className="btn btn-primary btn-sm">
+              Create Marketing Contract
+            </Link>
+          ) : null
+        }
       />
 
       {list.length === 0 ? (

@@ -1,9 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { num } from "@/lib/format";
+import { money, num } from "@/lib/format";
+import {
+  overageAmount,
+  overageHours,
+  suggestedInvoiceSubtotal,
+} from "@/lib/finance";
 
 function FormError({ message }: { message: string | null }) {
   if (!message) return null;
@@ -712,19 +717,82 @@ export function SubmitTaskForm({
   );
 }
 
-export function CreateCostForm({ campaigns }: { campaigns: Option[] }) {
+type CostCampaignOption = Option & {
+  contract_id?: string | null;
+  reimbursable_vendor_costs?: boolean;
+  pass_through_markup_pct?: number;
+  advertising_spend_treatment?: string;
+  approval_required?: boolean;
+  spending_approval_threshold?: number;
+};
+
+export function CreateCostForm({
+  campaigns,
+}: {
+  campaigns: CostCampaignOption[];
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [campaignId, setCampaignId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [passThrough, setPassThrough] = useState(false);
+  const [approved, setApproved] = useState(false);
+
+  const selected = campaigns.find((c) => c.id === campaignId);
+  const markup = num(selected?.pass_through_markup_pct);
+  const threshold = num(selected?.spending_approval_threshold);
+  const treatment = selected?.advertising_spend_treatment || "";
+  const amountNum = num(amount);
+  const markedUp =
+    passThrough && markup > 0 ? amountNum * (1 + markup / 100) : amountNum;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     const fd = new FormData(e.currentTarget);
-    const amount = num(fd.get("amount"));
-    if (amount < 0) {
+    const amt = num(fd.get("amount"));
+    const isPassThrough = fd.get("pass_through") === "on";
+    const isApproved = fd.get("approved") === "on";
+    const costType = String(fd.get("cost_type"));
+    const camp = campaigns.find((c) => c.id === String(fd.get("campaign_id")));
+
+    if (amt < 0) {
       setError("Amount cannot be negative.");
+      setLoading(false);
+      return;
+    }
+
+    if (isPassThrough && camp && camp.reimbursable_vendor_costs === false) {
+      setError(
+        "This contract does not allow reimbursable / pass-through vendor costs.",
+      );
+      setLoading(false);
+      return;
+    }
+
+    if (
+      costType === "Advertising Spend" &&
+      treatment === "Client pays vendors directly" &&
+      isPassThrough
+    ) {
+      setError(
+        "Contract terms say the client pays ad vendors directly — do not mark advertising as pass-through.",
+      );
+      setLoading(false);
+      return;
+    }
+
+    if (
+      camp?.approval_required &&
+      threshold > 0 &&
+      amt >= threshold &&
+      !isApproved
+    ) {
+      setError(
+        `MSA requires client approval for spend of ${money(threshold)} or more. Check Approved or submit an approval request first.`,
+      );
       setLoading(false);
       return;
     }
@@ -733,10 +801,10 @@ export function CreateCostForm({ campaigns }: { campaigns: Option[] }) {
     const approved = fd.get("approved") === "on";
     const { error: insertError } = await supabase.from("costs").insert({
       campaign_id: String(fd.get("campaign_id")),
-      contract_id: null,
-      cost_type: String(fd.get("cost_type")),
+      contract_id: camp?.contract_id || null,
+      cost_type: costType,
       description: String(fd.get("description") ?? "").trim(),
-      amount,
+      amount: amt,
       cost_date: String(fd.get("cost_date")),
       vendor_name: String(fd.get("vendor_name") ?? "").trim(),
       approved,
@@ -749,6 +817,10 @@ export function CreateCostForm({ campaigns }: { campaigns: Option[] }) {
       return;
     }
     (e.target as HTMLFormElement).reset();
+    setCampaignId("");
+    setAmount("");
+    setPassThrough(false);
+    setApproved(false);
     router.refresh();
   }
 
@@ -757,7 +829,13 @@ export function CreateCostForm({ campaigns }: { campaigns: Option[] }) {
       <FormError message={error} />
       <label className="sm:col-span-2">
         <span className="text-sm font-medium">Campaign *</span>
-        <select name="campaign_id" className="select select-bordered w-full" required>
+        <select
+          name="campaign_id"
+          className="select select-bordered w-full"
+          required
+          value={campaignId}
+          onChange={(e) => setCampaignId(e.target.value)}
+        >
           <option value="">Select campaign</option>
           {campaigns.map((c) => (
             <option key={c.id} value={c.id}>
@@ -766,6 +844,18 @@ export function CreateCostForm({ campaigns }: { campaigns: Option[] }) {
           ))}
         </select>
       </label>
+      {selected ? (
+        <div className="alert alert-info text-sm sm:col-span-2">
+          Pass-through:{" "}
+          {selected.reimbursable_vendor_costs === false
+            ? "not allowed on this MSA"
+            : `allowed${markup > 0 ? ` · ${markup}% markup` : " · no markup"}`}
+          {treatment ? ` · Ad spend: ${treatment}` : ""}
+          {selected.approval_required && threshold > 0
+            ? ` · Approval required at ${money(threshold)}+`
+            : ""}
+        </div>
+      ) : null}
       <label>
         <span className="text-sm font-medium">Cost type *</span>
         <select name="cost_type" className="select select-bordered w-full" required>
@@ -784,7 +874,21 @@ export function CreateCostForm({ campaigns }: { campaigns: Option[] }) {
       </label>
       <label>
         <span className="text-sm font-medium">Amount *</span>
-        <input name="amount" type="number" min={0} step="0.01" className="input input-bordered w-full" required />
+        <input
+          name="amount"
+          type="number"
+          min={0}
+          step="0.01"
+          className="input input-bordered w-full"
+          required
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+        {passThrough && markup > 0 && amountNum > 0 ? (
+          <span className="mt-1 block text-xs opacity-70">
+            Client billable with markup: {money(markedUp)}
+          </span>
+        ) : null}
       </label>
       <label>
         <span className="text-sm font-medium">Cost date *</span>
@@ -805,11 +909,24 @@ export function CreateCostForm({ campaigns }: { campaigns: Option[] }) {
         <textarea name="description" className="textarea textarea-bordered w-full" rows={2} />
       </label>
       <label className="flex-row items-center gap-2">
-        <input name="pass_through" type="checkbox" className="checkbox" />
+        <input
+          name="pass_through"
+          type="checkbox"
+          className="checkbox"
+          checked={passThrough}
+          onChange={(e) => setPassThrough(e.target.checked)}
+          disabled={selected?.reimbursable_vendor_costs === false}
+        />
         <span className="text-sm font-medium">Pass-through to client</span>
       </label>
       <label className="flex-row items-center gap-2">
-        <input name="approved" type="checkbox" className="checkbox" />
+        <input
+          name="approved"
+          type="checkbox"
+          className="checkbox"
+          checked={approved}
+          onChange={(e) => setApproved(e.target.checked)}
+        />
         <span className="text-sm font-medium">Approved</span>
       </label>
       <div className="sm:col-span-2">
@@ -825,20 +942,29 @@ export function CreateApprovalForm({
   campaigns,
   userId,
 }: {
-  campaigns: { id: string; label: string; client_id: string }[];
+  campaigns: {
+    id: string;
+    label: string;
+    client_id: string;
+    approval_required?: boolean;
+    spending_approval_threshold?: number;
+  }[];
   userId: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [campaignId, setCampaignId] = useState("");
+
+  const selected = campaigns.find((c) => c.id === campaignId);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     const fd = new FormData(e.currentTarget);
-    const campaignId = String(fd.get("campaign_id"));
-    const camp = campaigns.find((c) => c.id === campaignId);
+    const selectedCampaignId = String(fd.get("campaign_id"));
+    const camp = campaigns.find((c) => c.id === selectedCampaignId);
     if (!camp) {
       setError("Please select a campaign.");
       setLoading(false);
@@ -847,7 +973,7 @@ export function CreateApprovalForm({
 
     const supabase = createClient();
     const { error: insertError } = await supabase.from("approvals").insert({
-      campaign_id: campaignId,
+      campaign_id: selectedCampaignId,
       client_id: camp.client_id,
       approval_type: String(fd.get("approval_type")),
       description: String(fd.get("description")).trim(),
@@ -862,6 +988,7 @@ export function CreateApprovalForm({
       return;
     }
     (e.target as HTMLFormElement).reset();
+    setCampaignId("");
     router.refresh();
   }
 
@@ -870,7 +997,13 @@ export function CreateApprovalForm({
       <FormError message={error} />
       <label className="sm:col-span-2">
         <span className="text-sm font-medium">Campaign *</span>
-        <select name="campaign_id" className="select select-bordered w-full" required>
+        <select
+          name="campaign_id"
+          className="select select-bordered w-full"
+          required
+          value={campaignId}
+          onChange={(e) => setCampaignId(e.target.value)}
+        >
           <option value="">Select campaign</option>
           {campaigns.map((c) => (
             <option key={c.id} value={c.id}>
@@ -879,9 +1012,28 @@ export function CreateApprovalForm({
           ))}
         </select>
       </label>
+      {selected?.approval_required ? (
+        <div className="alert alert-warning text-sm sm:col-span-2">
+          MSA requires client approval
+          {num(selected.spending_approval_threshold) > 0
+            ? ` for spend of ${money(selected.spending_approval_threshold)} or more, and for deliverables.`
+            : " for deliverables and material spend."}
+        </div>
+      ) : null}
       <label>
         <span className="text-sm font-medium">Approval type *</span>
-        <select name="approval_type" className="select select-bordered w-full" required>
+        <select
+          name="approval_type"
+          className="select select-bordered w-full"
+          required
+          defaultValue={
+            selected?.approval_required &&
+            num(selected.spending_approval_threshold) > 0
+              ? "Budget"
+              : "Creative"
+          }
+          key={campaignId || "none"}
+        >
           <option>Creative</option>
           <option>Budget</option>
           <option>Scope Change</option>
@@ -982,7 +1134,17 @@ export function CreateInvoiceForm({
   unbilledWorkByCampaign,
 }: {
   clients: Option[];
-  contracts: { id: string; label: string; client_id: string }[];
+  contracts: {
+    id: string;
+    label: string;
+    client_id: string;
+    billing_method?: string;
+    monthly_retainer?: number;
+    project_fee?: number;
+    included_agency_hours?: number;
+    overage_hourly_rate?: number;
+    logged_billable_hours?: number;
+  }[];
   campaigns: { id: string; label: string; client_id: string }[];
   unbilledWorkByCampaign: Record<string, number>;
 }) {
@@ -990,24 +1152,46 @@ export function CreateInvoiceForm({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [clientId, setClientId] = useState("");
+  const [contractId, setContractId] = useState("");
   const [campaignId, setCampaignId] = useState("");
+  const [subtotal, setSubtotal] = useState("");
   const [markWorkBilled, setMarkWorkBilled] = useState(true);
 
   const filteredContracts = contracts.filter((c) => !clientId || c.client_id === clientId);
   const filteredCampaigns = campaigns.filter((c) => !clientId || c.client_id === clientId);
   const unbilledHours = campaignId ? unbilledWorkByCampaign[campaignId] ?? 0 : 0;
+  const selectedContract = contracts.find((c) => c.id === contractId);
+
+  const overageHelper = useMemo(() => {
+    if (!selectedContract) return null;
+    const included = num(selectedContract.included_agency_hours);
+    const rate = num(selectedContract.overage_hourly_rate);
+    const logged = num(selectedContract.logged_billable_hours);
+    if (included <= 0 && rate <= 0) return null;
+    const hours = overageHours(included, logged);
+    const amount = overageAmount(included, logged, rate);
+    return { included, rate, logged, hours, amount };
+  }, [selectedContract]);
+
+  function applyContractPrefill(nextContractId: string) {
+    setContractId(nextContractId);
+    const contract = contracts.find((c) => c.id === nextContractId);
+    if (!contract) return;
+    const suggested = suggestedInvoiceSubtotal(contract);
+    if (suggested > 0) setSubtotal(String(suggested));
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     const fd = new FormData(e.currentTarget);
-    const subtotal = num(fd.get("subtotal"));
+    const sub = num(fd.get("subtotal"));
     const pass_through_amount = num(fd.get("pass_through_amount"));
     const tax_amount = num(fd.get("tax_amount"));
-    const total_amount = num(fd.get("total_amount")) || subtotal + pass_through_amount + tax_amount;
+    const total_amount = num(fd.get("total_amount")) || sub + pass_through_amount + tax_amount;
 
-    if (subtotal < 0 || pass_through_amount < 0 || tax_amount < 0 || total_amount < 0) {
+    if (sub < 0 || pass_through_amount < 0 || tax_amount < 0 || total_amount < 0) {
       setError("Amounts cannot be negative.");
       setLoading(false);
       return;
@@ -1024,7 +1208,7 @@ export function CreateInvoiceForm({
         invoice_number: String(fd.get("invoice_number")).trim(),
         invoice_date: String(fd.get("invoice_date")),
         due_date: String(fd.get("due_date")),
-        subtotal,
+        subtotal: sub,
         pass_through_amount,
         tax_amount,
         total_amount,
@@ -1054,7 +1238,9 @@ export function CreateInvoiceForm({
     setLoading(false);
     (e.target as HTMLFormElement).reset();
     setClientId("");
+    setContractId("");
     setCampaignId("");
+    setSubtotal("");
     router.refresh();
   }
 
@@ -1071,6 +1257,8 @@ export function CreateInvoiceForm({
           onChange={(e) => {
             setClientId(e.target.value);
             setCampaignId("");
+            setContractId("");
+            setSubtotal("");
           }}
         >
           <option value="">Select client</option>
@@ -1092,7 +1280,12 @@ export function CreateInvoiceForm({
       </label>
       <label>
         <span className="text-sm font-medium">Contract</span>
-        <select name="contract_id" className="select select-bordered w-full" defaultValue="">
+        <select
+          name="contract_id"
+          className="select select-bordered w-full"
+          value={contractId}
+          onChange={(e) => applyContractPrefill(e.target.value)}
+        >
           <option value="">None</option>
           {filteredContracts.map((c) => (
             <option key={c.id} value={c.id}>
@@ -1117,6 +1310,26 @@ export function CreateInvoiceForm({
           ))}
         </select>
       </label>
+      {selectedContract ? (
+        <div className="alert alert-info text-sm sm:col-span-2">
+          Prefill from MSA: {selectedContract.billing_method || "billing"}
+          {num(selectedContract.monthly_retainer) > 0
+            ? ` · retainer ${money(selectedContract.monthly_retainer)}`
+            : ""}
+          {num(selectedContract.project_fee) > 0
+            ? ` · project fee ${money(selectedContract.project_fee)}`
+            : ""}
+          {overageHelper ? (
+            <>
+              {" "}
+              · included {overageHelper.included}h / logged {overageHelper.logged.toFixed(1)}h
+              {overageHelper.hours > 0
+                ? ` · overage ${overageHelper.hours.toFixed(1)}h ≈ ${money(overageHelper.amount)}`
+                : " · no overage yet"}
+            </>
+          ) : null}
+        </div>
+      ) : null}
       <label>
         <span className="text-sm font-medium">Invoice date *</span>
         <input
@@ -1133,7 +1346,16 @@ export function CreateInvoiceForm({
       </label>
       <label>
         <span className="text-sm font-medium">Subtotal *</span>
-        <input name="subtotal" type="number" min={0} step="0.01" className="input input-bordered w-full" required />
+        <input
+          name="subtotal"
+          type="number"
+          min={0}
+          step="0.01"
+          className="input input-bordered w-full"
+          required
+          value={subtotal}
+          onChange={(e) => setSubtotal(e.target.value)}
+        />
       </label>
       <label>
         <span className="text-sm font-medium">Pass-through</span>

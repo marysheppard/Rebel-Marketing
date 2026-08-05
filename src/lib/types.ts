@@ -74,14 +74,45 @@ export type CampaignAssignment = {
 
 export type Client = {
   id: string;
+  customer_id: string;
   client_name: string;
+  dba_brand_name: string;
   industry: string;
+  website: string;
+  business_phone: string;
+  street_address: string;
+  address_line_2: string;
+  city: string;
+  state: string;
+  zip_code: string;
   contact_name: string;
+  contact_first_name: string;
+  contact_last_name: string;
+  contact_job_title: string;
   contact_email: string;
   contact_phone: string;
+  authorized_approver: boolean;
+  billing_same_as_primary: boolean;
+  billing_first_name: string;
+  billing_last_name: string;
+  billing_job_title: string;
+  billing_email: string;
+  billing_phone: string;
+  requested_services: string[];
+  services_other: string;
+  primary_objective: string;
+  objective_other: string;
+  client_notes: string;
+  engagement_type: string;
+  expected_start_date: string | null;
+  engagement_length: string;
+  estimated_monthly_marketing_budget: number;
+  estimated_monthly_advertising_budget: number;
   status: string;
+  portal_status: string;
   account_manager_id: string | null;
   created_at: string;
+  updated_at?: string;
 };
 
 export type Contract = {
@@ -104,8 +135,34 @@ export type Contract = {
   approval_required: boolean;
   notes: string;
   included_hours_monthly: number;
+  service_types: string[];
+  deliverables: string;
+  billing_frequency: string;
+  included_agency_hours: number;
+  overage_hourly_rate: number;
+  advertising_spend_treatment: string;
+  reimbursable_vendor_costs: boolean;
+  pass_through_markup_pct: number;
+  spending_approval_threshold: number;
+  renewal_terms: string;
+  cancellation_notice_days: number;
+  agreement_html: string;
+  agreement_generated_at: string | null;
+  agreement_locked?: boolean;
+  current_version_number?: number;
+  finalized_at?: string | null;
+  finalized_by?: string | null;
+  fully_executed_at?: string | null;
+  client_signed_at?: string | null;
+  client_signer_name?: string;
+  client_signer_title?: string;
+  agency_signed_at?: string | null;
+  agency_signer_id?: string | null;
+  agency_signer_name?: string;
+  signed_agreement_html?: string;
   created_at: string;
-  clients?: { client_name: string } | null;
+  updated_at?: string;
+  clients?: { client_name: string; customer_id?: string } | null;
 };
 
 export type Campaign = {
@@ -141,7 +198,11 @@ export type WorkEntry = {
   approval_status: string;
   billed: boolean;
   created_at: string;
-  campaigns?: { campaign_name: string; client_id: string } | null;
+  campaigns?: {
+    campaign_name: string;
+    client_id: string;
+    clients?: { client_name: string } | null;
+  } | null;
   profiles?: { full_name: string } | null;
   tasks?: { title: string } | null;
 };

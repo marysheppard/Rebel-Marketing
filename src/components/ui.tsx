@@ -146,6 +146,13 @@ export function StatusBadge({
     "On Hold": "badge-warning",
     "Changes Requested": "badge-warning",
     "Pending Renewal": "badge-warning",
+    Finalized: "badge-info",
+    "Awaiting Client Signature": "badge-warning",
+    "Awaiting Agency Signature": "badge-warning",
+    "Fully Executed": "badge-success",
+    "Client Declined": "badge-error",
+    "Ready for Signature": "badge-info",
+    "Client Signed — Awaiting Agency Signature": "badge-warning",
   };
   const cls = map?.[status] ?? defaults[status] ?? "badge-neutral";
   return <span className={`badge ${cls} badge-sm`}>{status}</span>;

@@ -561,6 +561,7 @@ async function CustomerDashboard() {
     { data: invoicesData },
     { data: approvalsData },
     { data: costsData },
+    { data: pendingSignatures },
   ] = await Promise.all([
     supabase.from("clients").select("*").order("client_name"),
     supabase
@@ -573,6 +574,11 @@ async function CustomerDashboard() {
       .select("*, clients(client_name), campaigns(campaign_name)")
       .order("requested_date", { ascending: false }),
     supabase.from("costs").select("campaign_id, amount"),
+    supabase
+      .from("signature_requests")
+      .select("id")
+      .eq("signer_user_id", profile.id)
+      .in("status", ["Sent", "Viewed"]),
   ]);
 
   const clients = (clientsData ?? []) as Client[];
@@ -597,6 +603,7 @@ async function CustomerDashboard() {
 
   const balance = invoices.reduce((s, i) => s + remainingBalance(i), 0);
   const pending = approvals.filter((a) => a.approval_status === "Pending");
+  const awaitingSignature = pendingSignatures?.length ?? 0;
 
   return (
     <div>
@@ -605,7 +612,7 @@ async function CustomerDashboard() {
         subtitle={`Welcome, ${profile.full_name}. Track campaigns, balances, and deliverables.`}
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Active campaigns" value={String(
           campaigns.filter((c) => c.campaign_status === "Active").length,
         )} />
@@ -619,6 +626,14 @@ async function CustomerDashboard() {
           value={String(pending.length)}
           tone={pending.length ? "warn" : undefined}
         />
+        <Link href="/app/contracts/documents" className="block">
+          <StatCard
+            label="Contracts awaiting signature"
+            value={String(awaitingSignature)}
+            tone={awaitingSignature ? "warn" : "good"}
+            hint="Open Contracts & Documents"
+          />
+        </Link>
       </div>
 
       <section className="mt-8">

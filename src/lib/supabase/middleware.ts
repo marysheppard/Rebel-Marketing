@@ -50,8 +50,14 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isAuthPage =
     path === "/login" || path === "/signup" || path.startsWith("/auth");
-  // Public marketing site is always viewable (including when logged in).
-  const isPublic = isAuthPage || path === "/";
+  // Public marketing site + scoped signing invite access (not the full client portal).
+  const isPublic =
+    isAuthPage ||
+    path === "/" ||
+    path === "/sign" ||
+    path.startsWith("/sign/") ||
+    path === "/activate" ||
+    path.startsWith("/activate/");
 
   if (!user && !isPublic && path.startsWith("/app")) {
     const url = request.nextUrl.clone();
@@ -59,14 +65,14 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Authenticated users leave auth pages for /app; homepage stays public.
+  // Authenticated users leave auth pages for /app; homepage and /sign stay reachable.
   if (user && (path === "/login" || path === "/signup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/app";
     return NextResponse.redirect(url);
   }
 
-  // Clients may only access /app (Customer Dashboard) — not admin routes.
+  // Clients may only access allowed portal paths — not admin routes.
   if (user && path.startsWith("/app") && isAdminOnlyAppPath(path)) {
     const { data: profile } = await supabase
       .from("profiles")
@@ -81,6 +87,13 @@ export async function updateSession(request: NextRequest) {
       url.searchParams.set("denied", "1");
       return NextResponse.redirect(url);
     }
+  }
+
+  // Legacy temp portal routes → customer login (do not revive broader portal cookies)
+  if (path.startsWith("/portal")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
   }
 
   return supabaseResponse;

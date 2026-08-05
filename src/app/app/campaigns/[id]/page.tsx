@@ -56,9 +56,22 @@ export default async function CampaignDetailPage({
     <div>
       <PageHeader
         title={campaign.campaign_name}
-        subtitle={[clientName, campaign.campaign_type].filter(Boolean).join(" · ")}
+        subtitle={
+          <span>
+            {clientName ? (
+              <Link href={`/app/clients/${campaign.client_id}`} className="link link-hover">
+                {clientName}
+              </Link>
+            ) : null}
+            {clientName && campaign.campaign_type ? " · " : null}
+            {campaign.campaign_type}
+          </span>
+        }
         actions={
           <>
+            <Link href={`/app/clients/${campaign.client_id}`} className="btn btn-ghost btn-sm">
+              Client
+            </Link>
             <Link href={`/app/contracts/${campaign.contract_id}`} className="btn btn-ghost btn-sm">
               Contract
             </Link>

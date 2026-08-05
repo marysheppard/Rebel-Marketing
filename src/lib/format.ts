@@ -33,13 +33,21 @@ export function num(value: unknown) {
 }
 
 /** Unwrap a Supabase joined relation (object or single-element array). */
+export function joinOne<T extends Record<string, unknown>>(
+  rel: T | T[] | null | undefined,
+): T | null {
+  if (!rel) return null;
+  return Array.isArray(rel) ? (rel[0] ?? null) : rel;
+}
+
+/** Unwrap a Supabase joined relation field (object or single-element array). */
 export function joinField(
   rel: Record<string, unknown> | Record<string, unknown>[] | null | undefined,
   field: string,
 ): string {
   if (!rel) return "—";
-  const obj = Array.isArray(rel) ? rel[0] : rel;
-  if (!obj || typeof obj !== "object") return "—";
+  const obj = joinOne(rel);
+  if (!obj) return "—";
   const val = obj[field];
   return val != null && val !== "" ? String(val) : "—";
 }

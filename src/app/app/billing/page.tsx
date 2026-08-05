@@ -15,6 +15,7 @@ export default async function BillingPage() {
     { data: contracts },
     { data: campaigns },
     { data: unbilledWork },
+    { data: billableWork },
   ] = await Promise.all([
     supabase
       .from("invoices")
@@ -23,9 +24,14 @@ export default async function BillingPage() {
     supabase.from("clients").select("id, client_name").order("client_name"),
     supabase
       .from("contracts")
-      .select("id, contract_name, contract_number, client_id")
+      .select(
+        "id, contract_name, contract_number, client_id, billing_method, monthly_retainer, project_fee, included_agency_hours, overage_hourly_rate",
+      )
       .order("contract_name"),
-    supabase.from("campaigns").select("id, campaign_name, client_id").order("campaign_name"),
+    supabase
+      .from("campaigns")
+      .select("id, campaign_name, client_id, contract_id")
+      .order("campaign_name"),
     supabase
       .from("work_entries")
       .select("id, campaign_id, hours, work_date, work_type, description, campaigns(campaign_name)")
@@ -33,12 +39,34 @@ export default async function BillingPage() {
       .eq("billed", false)
       .eq("approval_status", "Approved")
       .order("work_date", { ascending: false }),
+    supabase
+      .from("work_entries")
+      .select("campaign_id, hours")
+      .eq("billable", true),
   ]);
 
   const unbilledWorkByCampaign: Record<string, number> = {};
   for (const w of unbilledWork ?? []) {
     unbilledWorkByCampaign[w.campaign_id] =
       (unbilledWorkByCampaign[w.campaign_id] ?? 0) + num(w.hours);
+  }
+
+  const hoursByCampaign = new Map<string, number>();
+  for (const w of billableWork ?? []) {
+    hoursByCampaign.set(
+      w.campaign_id,
+      (hoursByCampaign.get(w.campaign_id) ?? 0) + num(w.hours),
+    );
+  }
+
+  const hoursByContract = new Map<string, number>();
+  for (const c of campaigns ?? []) {
+    if (!c.contract_id) continue;
+    hoursByContract.set(
+      c.contract_id,
+      (hoursByContract.get(c.contract_id) ?? 0) +
+        (hoursByCampaign.get(c.id) ?? 0),
+    );
   }
 
   const list = invoices ?? [];
@@ -140,6 +168,12 @@ export default async function BillingPage() {
               id: c.id,
               label: `${c.contract_name} (${c.contract_number})`,
               client_id: c.client_id,
+              billing_method: c.billing_method,
+              monthly_retainer: num(c.monthly_retainer),
+              project_fee: num(c.project_fee),
+              included_agency_hours: num(c.included_agency_hours),
+              overage_hourly_rate: num(c.overage_hourly_rate),
+              logged_billable_hours: hoursByContract.get(c.id) ?? 0,
             }))}
             campaigns={(campaigns ?? []).map((c) => ({
               id: c.id,

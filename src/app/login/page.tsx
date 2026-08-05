@@ -16,6 +16,8 @@ import {
 type Portal = "employee" | "customer";
 type Step = "choose" | "credentials";
 
+const GENERIC_CUSTOMER_ERROR = "The CustomerID or access code is incorrect.";
+
 function portalFromQuery(raw: string | null): Portal | null {
   if (!raw) return null;
   const v = raw.toLowerCase();
@@ -78,7 +80,9 @@ function LoginForm() {
     });
     if (err) {
       setLoading(false);
-      setError(err.message);
+      setError(
+        expectedPortal === "customer" ? GENERIC_CUSTOMER_ERROR : err.message,
+      );
       return;
     }
 
@@ -125,14 +129,20 @@ function LoginForm() {
 
   async function signInCustomer(e: React.FormEvent) {
     e.preventDefault();
-    const resolved = resolveCustomerLogin(customerId, accessCode);
-    if (!resolved) {
-      setError(
-        "Enter a valid customer ID (e.g. CUST-BLUERIDGE) or client email.",
-      );
+    const demoResolved = resolveCustomerLogin(customerId, accessCode);
+    if (demoResolved) {
+      await authenticate(demoResolved.email, demoResolved.password, "customer");
       return;
     }
-    await authenticate(resolved.email, resolved.password, "customer");
+    const { resolveClientLoginEmailAction } = await import(
+      "@/app/actions/dashboard-activation"
+    );
+    const resolved = await resolveClientLoginEmailAction(customerId);
+    if (!resolved.ok) {
+      setError(GENERIC_CUSTOMER_ERROR);
+      return;
+    }
+    await authenticate(resolved.email, accessCode, "customer");
   }
 
   async function fillEmployeeDemo(id: string) {
@@ -250,7 +260,7 @@ function LoginForm() {
                         Client Portal Login
                       </span>
                       <span className="mt-1 block text-sm text-[#1e3a5f]/b8">
-                        Client partners — customer ID and access code
+                        Client partners — customer ID and password
                       </span>
                     </span>
                   </button>
@@ -354,8 +364,8 @@ function LoginForm() {
                     Client Portal Login
                   </h2>
                   <p className="mt-1.5 text-sm text-[#1e3a5f]/a0">
-                    Enter your customer ID and access code for the Customer
-                    Dashboard.
+                    Enter your customer ID and password to open your dashboard,
+                    including contracts awaiting signature.
                   </p>
                 </div>
                 <form className="form-grid space-y-3.5" onSubmit={signInCustomer}>
@@ -365,13 +375,13 @@ function LoginForm() {
                       className="input input-bordered w-full border-[#0b1f3a22] bg-white focus:border-[#0b1f3a]"
                       value={customerId}
                       onChange={(e) => setCustomerId(e.target.value)}
-                      placeholder="CUST-BLUERIDGE"
+                      placeholder="CUST-1048"
                       autoComplete="username"
                       required
                     />
                   </label>
                   <label>
-                    <span>Access code</span>
+                    <span>Password</span>
                     <input
                       className="input input-bordered w-full border-[#0b1f3a22] bg-white focus:border-[#0b1f3a]"
                       type="password"

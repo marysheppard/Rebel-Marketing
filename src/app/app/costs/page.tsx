@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { CreateCostForm } from "@/components/forms";
 import { CostDashboard } from "@/components/costs/CostDashboard";
+import { joinOne, num } from "@/lib/format";
 import { canManageCosts, getProfile, isClientRole } from "@/lib/page-auth";
 import type { CostRow, InvoicePassThroughRow } from "@/lib/costs/calculations";
 
@@ -27,7 +28,9 @@ export default async function CostsPage() {
       .order("cost_date", { ascending: false }),
     supabase
       .from("campaigns")
-      .select("id, campaign_name")
+      .select(
+        "id, campaign_name, contract_id, contracts(reimbursable_vendor_costs, pass_through_markup_pct, advertising_spend_treatment, approval_required, spending_approval_threshold)",
+      )
       .in("campaign_status", ["Active", "Late", "On Hold", "Completed"])
       .order("campaign_name"),
     supabase.from("clients").select("id, client_name").order("client_name"),
@@ -78,10 +81,44 @@ export default async function CostsPage() {
         >
           <h2 className="mb-4 text-xl font-bold">Record cost</h2>
           <CreateCostForm
-            campaigns={(campaigns ?? []).map((c) => ({
-              id: c.id,
-              label: c.campaign_name,
-            }))}
+            campaigns={(campaigns ?? []).map((c) => {
+              const contract = joinOne(
+                (
+                  c as {
+                    contracts?:
+                      | {
+                          reimbursable_vendor_costs: boolean;
+                          pass_through_markup_pct: number;
+                          advertising_spend_treatment: string;
+                          approval_required: boolean;
+                          spending_approval_threshold: number;
+                        }
+                      | {
+                          reimbursable_vendor_costs: boolean;
+                          pass_through_markup_pct: number;
+                          advertising_spend_treatment: string;
+                          approval_required: boolean;
+                          spending_approval_threshold: number;
+                        }[]
+                      | null;
+                  }
+                ).contracts,
+              );
+              return {
+                id: c.id,
+                label: c.campaign_name,
+                contract_id: c.contract_id,
+                reimbursable_vendor_costs:
+                  contract?.reimbursable_vendor_costs ?? true,
+                pass_through_markup_pct: num(contract?.pass_through_markup_pct),
+                advertising_spend_treatment:
+                  contract?.advertising_spend_treatment || "",
+                approval_required: Boolean(contract?.approval_required),
+                spending_approval_threshold: num(
+                  contract?.spending_approval_threshold,
+                ),
+              };
+            })}
           />
         </section>
       ) : null}

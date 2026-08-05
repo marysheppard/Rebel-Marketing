@@ -25,6 +25,18 @@ export function canManageContracts(role: UserRole) {
   return role === "agency_manager" || role === "account_manager";
 }
 
+export function canFinalizeContract(role: UserRole) {
+  return canManageContracts(role);
+}
+
+export function canCountersign(role: UserRole) {
+  return role === "agency_manager" || role === "account_manager";
+}
+
+export function canSignAsClient(role: UserRole) {
+  return role === "client";
+}
+
 export function canManageCampaigns(role: UserRole) {
   return role === "agency_manager" || role === "account_manager";
 }

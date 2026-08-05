@@ -17,6 +17,12 @@ function startOfWeekMonday(d: Date) {
   return copy.toISOString().slice(0, 10);
 }
 
+type WorkCampaign = {
+  campaign_name: string;
+  client_id: string;
+  clients?: { client_name: string } | null;
+};
+
 export default async function WorkPage() {
   const { supabase, profile, userId } = await getProfile();
   if (!profile || !userId) return null;

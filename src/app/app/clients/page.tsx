@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { CreateClientForm } from "@/components/forms";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { money, num } from "@/lib/format";
 import { remainingBalance } from "@/lib/finance";
@@ -9,16 +8,12 @@ export default async function ClientsPage() {
   const { supabase, profile } = await getProfile();
   if (!profile) return null;
 
-  const [{ data: clients }, { data: invoices }, { data: campaigns }, { data: costs }, { data: managers }] =
+  const [{ data: clients }, { data: invoices }, { data: campaigns }, { data: costs }] =
     await Promise.all([
       supabase.from("clients").select("*").order("client_name"),
       supabase.from("invoices").select("*, payments(amount)"),
       supabase.from("campaigns").select("id, client_id"),
       supabase.from("costs").select("campaign_id, amount"),
-      supabase
-        .from("profiles")
-        .select("id, full_name")
-        .in("role", ["agency_manager", "account_manager"]),
     ]);
 
   const list = clients ?? [];
@@ -55,13 +50,25 @@ export default async function ClientsPage() {
     <div>
       <PageHeader
         title="Clients"
-        subtitle="Accounts, profitability, and outstanding balances"
+        subtitle="One account per company — contracts and engagements attach here"
+        actions={
+          showForm ? (
+            <div className="flex flex-wrap gap-2">
+              <Link href="/app/clients/intake" className="btn btn-primary btn-sm">
+                New Client Intake
+              </Link>
+              <Link href="/app/contracts/builder" className="btn btn-outline btn-sm">
+                New contract
+              </Link>
+            </div>
+          ) : null
+        }
       />
 
       {list.length === 0 ? (
         <EmptyState
           title="No clients yet"
-          description="Add your first client to start tracking contracts, campaigns, and billing."
+          description="Start with Client Intake to create the company profile, then build contracts for each engagement."
         />
       ) : (
         <div className="overflow-x-auto rounded-box border border-base-300">
@@ -69,6 +76,7 @@ export default async function ClientsPage() {
             <thead>
               <tr>
                 <th>Client</th>
+                <th>CustomerID</th>
                 <th>Industry</th>
                 <th>Status</th>
                 <th className="text-right">Revenue</th>
@@ -85,6 +93,7 @@ export default async function ClientsPage() {
                       {cl.client_name}
                     </Link>
                   </td>
+                  <td className="font-mono text-xs">{cl.customer_id || "—"}</td>
                   <td>{cl.industry || "—"}</td>
                   <td>
                     <StatusBadge status={cl.status} />
@@ -104,13 +113,20 @@ export default async function ClientsPage() {
 
       {showForm ? (
         <section className="mt-8 rounded-box border border-base-300 bg-base-100 p-6">
-          <h2 className="mb-4 text-xl font-bold">New client</h2>
-          <CreateClientForm
-            accountManagers={(managers ?? []).map((m) => ({
-              id: m.id,
-              label: m.full_name,
-            }))}
-          />
+          <h2 className="mb-2 text-xl font-bold">Add or renew</h2>
+          <p className="mb-4 text-sm opacity-70">
+            New companies go through Client Intake. Renewals and additional engagements use{" "}
+            <strong>New contract</strong> on the existing client profile — never a second client
+            record.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/app/clients/intake" className="btn btn-primary btn-sm">
+              New Client Intake
+            </Link>
+            <Link href="/app/contracts/builder" className="btn btn-outline btn-sm">
+              Attach contract to existing client
+            </Link>
+          </div>
         </section>
       ) : null}
     </div>

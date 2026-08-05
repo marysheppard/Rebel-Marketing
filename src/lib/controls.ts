@@ -27,6 +27,8 @@ type ControlInput = {
     contract_status: string;
     end_date: string;
     approval_required: boolean;
+    campaign_budget?: number;
+    spending_approval_threshold?: number;
   }[];
   costs: {
     id: string;
@@ -34,6 +36,8 @@ type ControlInput = {
     amount: number;
     approved: boolean;
     cost_date: string;
+    cost_type?: string;
+    pass_through?: boolean;
   }[];
   work: {
     id: string;
@@ -142,19 +146,78 @@ export function buildControlAlerts(data: ControlInput): ControlAlert[] {
     }
   }
 
+  // Contract-level monthly advertising budget monitoring
+  const adSpendByContract = new Map<string, number>();
+  for (const cost of data.costs) {
+    if (!cost.campaign_id) continue;
+    const camp = campaignById.get(cost.campaign_id);
+    if (!camp) continue;
+    const isAd =
+      cost.cost_type === "Advertising Spend" ||
+      cost.cost_type === "Pass-Through" ||
+      Boolean(cost.pass_through);
+    if (!isAd) continue;
+    adSpendByContract.set(
+      camp.contract_id,
+      (adSpendByContract.get(camp.contract_id) ?? 0) + num(cost.amount),
+    );
+  }
+
+  for (const contract of data.contracts) {
+    const budget = num(contract.campaign_budget);
+    if (budget <= 0) continue;
+    const spent = adSpendByContract.get(contract.id) ?? 0;
+    const health = budgetHealth(budget, spent);
+    if (health === "over") {
+      alerts.push({
+        id: `contract-ad-over-${contract.id}`,
+        severity: "error",
+        risk: "This business faces advertising budget overrun risk against MSA terms.",
+        control:
+          "Our app reduces the risk by monitoring contract advertising budgets from the Marketing Services Agreement.",
+        title: "Contract advertising budget exceeded",
+        detail: `${contract.contract_name} ad/pass-through spend exceeds the contracted monthly advertising budget.`,
+        href: `/app/contracts/${contract.id}`,
+      });
+    } else if (health === "near") {
+      alerts.push({
+        id: `contract-ad-near-${contract.id}`,
+        severity: "warning",
+        risk: "This business faces advertising budget overrun risk against MSA terms.",
+        control:
+          "Our app reduces the risk by warning when spend approaches the contracted advertising budget.",
+        title: "Contract advertising budget nearly used",
+        detail: `${contract.contract_name} has used 85%+ of its contracted advertising budget.`,
+        href: `/app/contracts/${contract.id}`,
+      });
+    }
+  }
+
   for (const cost of data.costs) {
     if (!cost.approved) {
       const camp = cost.campaign_id
         ? campaignById.get(cost.campaign_id)
         : null;
+      const contract = camp ? contractById.get(camp.contract_id) : null;
+      const threshold = num(contract?.spending_approval_threshold);
+      const overThreshold =
+        Boolean(contract?.approval_required) &&
+        threshold > 0 &&
+        num(cost.amount) >= threshold;
       alerts.push({
         id: `unapproved-cost-${cost.id}`,
-        severity: "warning",
+        severity: overThreshold ? "error" : "warning",
         risk: "This business faces unapproved expense risk.",
         control:
-          "Our app reduces the risk by flagging costs that have not been approved.",
-        title: "Unapproved expense",
-        detail: `$${num(cost.amount).toLocaleString()} cost${camp ? ` on ${camp.campaign_name}` : ""} is not approved.`,
+          "Our app reduces the risk by flagging costs that have not been approved, especially those above the MSA spending threshold.",
+        title: overThreshold
+          ? "Unapproved cost above MSA threshold"
+          : "Unapproved expense",
+        detail: `$${num(cost.amount).toLocaleString()} cost${camp ? ` on ${camp.campaign_name}` : ""} is not approved${
+          overThreshold
+            ? ` and exceeds the $${threshold.toLocaleString()} approval threshold.`
+            : "."
+        }`,
         href: "/app/costs",
       });
     }
