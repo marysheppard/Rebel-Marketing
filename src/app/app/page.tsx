@@ -1,10 +1,14 @@
-import Link from "next/link";
-import { PtoRequestForm, UpdateApprovalStatusForm } from "@/components/forms";
+﻿import Link from "next/link";
+import { ClicksByCampaignChart } from "@/components/Charts";
+import { ClientMapDynamic } from "@/components/ClientMapDynamic";
+import { DashboardCalendar } from "@/components/DashboardCalendar";
+import { UpdateApprovalStatusForm } from "@/components/forms";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
+import { WelcomeMessage } from "@/components/WelcomeMessage";
 import { remainingBalance } from "@/lib/finance";
 import { money, num } from "@/lib/format";
 import { getProfile, isClientRole } from "@/lib/page-auth";
-import type { Campaign, Client, Invoice, PtoRequest } from "@/lib/types";
+import type { Campaign, Client, Invoice, Profile } from "@/lib/types";
 
 type ApprovalRow = {
   id: string;
@@ -43,7 +47,7 @@ export default async function DashboardPage() {
   return (
     <EmployeeDashboard
       userId={userId}
-      fullName={profile.full_name}
+      profile={profile}
       supabase={supabase}
     />
   );
@@ -51,17 +55,21 @@ export default async function DashboardPage() {
 
 async function EmployeeDashboard({
   userId,
-  fullName,
+  profile,
   supabase,
 }: {
   userId: string;
-  fullName: string;
+  profile: Profile;
   supabase: Awaited<ReturnType<typeof getProfile>>["supabase"];
 }) {
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+
   const [
     { data: managedClients },
     { data: assignments },
-    { data: ptoRows },
+    { data: taskRows },
+    { data: eventRows },
   ] = await Promise.all([
     supabase
       .from("clients")
@@ -75,13 +83,40 @@ async function EmployeeDashboard({
       )
       .eq("user_id", userId),
     supabase
-      .from("pto_requests")
-      .select("*")
+      .from("tasks")
+      .select(
+        "id, title, due_date, status, priority, campaign_id, campaigns(campaign_name, client_id, clients(client_name))",
+      )
+      .eq("assignee_id", userId)
+      .order("due_date", { ascending: true, nullsFirst: false }),
+    supabase
+      .from("calendar_events")
+      .select("id, title, event_date, clients(client_name)")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false }),
+      .order("event_date", { ascending: true }),
   ]);
 
-  const clients = (managedClients ?? []) as Client[];
+  const assignedCampaignIds = [
+    ...new Set((assignments ?? []).map((a) => String(a.campaign_id))),
+  ];
+
+  const { data: metricRows } =
+    assignedCampaignIds.length > 0
+      ? await supabase
+          .from("campaign_metrics")
+          .select("campaign_id, metric_date, impressions, clicks, conversions, spend")
+          .in("campaign_id", assignedCampaignIds)
+          .order("metric_date", { ascending: true })
+      : { data: [] as {
+          campaign_id: string;
+          metric_date: string;
+          impressions: number;
+          clicks: number;
+          conversions: number;
+          spend: number;
+        }[] };
+
+  const ownedClients = (managedClients ?? []) as Client[];
   const myAssignments: AssignmentRow[] = (assignments ?? []).map((row) => {
     const campRaw = row.campaigns as unknown;
     const campObj = Array.isArray(campRaw)
@@ -114,182 +149,388 @@ async function EmployeeDashboard({
       },
     };
   });
-  const pto = (ptoRows ?? []) as PtoRequest[];
-  const pendingPto = pto.filter((r) => r.status === "Pending").length;
+
+  type DashTask = {
+    id: string;
+    title: string;
+    due_date: string | null;
+    status: string;
+    priority: string;
+    campaign_id: string;
+    client_id: string;
+    campaign_name: string;
+    client_name: string;
+  };
+
+  const tasks: DashTask[] = (taskRows ?? []).map((t) => {
+    const campRaw = t.campaigns as unknown;
+    const campObj = Array.isArray(campRaw)
+      ? (campRaw[0] as Record<string, unknown> | undefined)
+      : (campRaw as Record<string, unknown> | null | undefined);
+    const clientsRaw = campObj?.clients as unknown;
+    const clientObj = Array.isArray(clientsRaw)
+      ? (clientsRaw[0] as { client_name?: string } | undefined)
+      : (clientsRaw as { client_name?: string } | null | undefined);
+    return {
+      id: String(t.id),
+      title: String(t.title),
+      due_date: t.due_date ? String(t.due_date) : null,
+      status: String(t.status),
+      priority: String(t.priority ?? "Medium"),
+      campaign_id: String(t.campaign_id),
+      client_id: String(campObj?.client_id ?? ""),
+      campaign_name: String(campObj?.campaign_name ?? "—"),
+      client_name: clientObj?.client_name ?? "—",
+    };
+  });
+
+  const priorityRank: Record<string, number> = {
+    Urgent: 0,
+    High: 1,
+    Medium: 2,
+    Low: 3,
+  };
+
+  const openTasks = tasks
+    .filter((t) => t.status !== "Approved")
+    .sort((a, b) => {
+      const pa = priorityRank[a.priority] ?? 99;
+      const pb = priorityRank[b.priority] ?? 99;
+      if (pa !== pb) return pa - pb;
+      const da = a.due_date ?? "9999-99-99";
+      const db = b.due_date ?? "9999-99-99";
+      return da.localeCompare(db);
+    });
+  const overdueTasks = openTasks.filter(
+    (t) =>
+      t.due_date &&
+      t.due_date < todayStr &&
+      t.status !== "Submitted" &&
+      t.status !== "Approved",
+  );
+  const awaitingApproval = tasks.filter((t) => t.status === "Submitted");
+
+  type WorkingCampaign = {
+    id: string;
+    name: string;
+    status: string;
+    end_date: string;
+  };
+
+  type WorkingClient = {
+    id: string;
+    name: string;
+    status: string | null;
+    campaigns: WorkingCampaign[];
+    openCount: number;
+    overdueCount: number;
+  };
+
+  const workingMap = new Map<string, WorkingClient>();
+
+  function ensureClient(
+    id: string,
+    name: string,
+    status: string | null = null,
+  ) {
+    if (!id) return null;
+    let row = workingMap.get(id);
+    if (!row) {
+      row = {
+        id,
+        name: name || "—",
+        status,
+        campaigns: [],
+        openCount: 0,
+        overdueCount: 0,
+      };
+      workingMap.set(id, row);
+    } else {
+      if (name && row.name === "—") row.name = name;
+      if (status && !row.status) row.status = status;
+    }
+    return row;
+  }
+
+  for (const c of ownedClients) {
+    ensureClient(c.id, c.client_name, c.status);
+  }
+
+  for (const a of myAssignments) {
+    const camp = a.campaigns;
+    if (!camp?.client_id) continue;
+    const row = ensureClient(
+      camp.client_id,
+      camp.clients?.client_name ?? "—",
+    );
+    if (!row) continue;
+    if (!row.campaigns.some((x) => x.id === camp.id)) {
+      row.campaigns.push({
+        id: camp.id,
+        name: camp.campaign_name,
+        status: camp.campaign_status,
+        end_date: camp.end_date,
+      });
+    }
+  }
+
+  for (const t of openTasks) {
+    if (!t.client_id) continue;
+    const row = ensureClient(t.client_id, t.client_name);
+    if (!row) continue;
+    row.openCount += 1;
+    if (
+      t.due_date &&
+      t.due_date < todayStr &&
+      t.status !== "Submitted" &&
+      t.status !== "Approved"
+    ) {
+      row.overdueCount += 1;
+    }
+  }
+
+  const workingClients = [...workingMap.values()].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+
+  const workingIds = workingClients.map((c) => c.id);
+  const { data: locationRows } =
+    workingIds.length > 0
+      ? await supabase
+          .from("clients")
+          .select("id, city, state, latitude, longitude")
+          .in("id", workingIds)
+      : {
+          data: [] as {
+            id: string;
+            city: string;
+            state: string;
+            latitude: number | null;
+            longitude: number | null;
+          }[],
+        };
+
+  const locationById = new Map(
+    (locationRows ?? []).map((r) => [r.id as string, r]),
+  );
+
+  const mapMarkers = workingClients
+    .map((c) => {
+      const loc = locationById.get(c.id);
+      const lat = loc?.latitude != null ? Number(loc.latitude) : NaN;
+      const lng = loc?.longitude != null ? Number(loc.longitude) : NaN;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return {
+        id: c.id,
+        name: c.name,
+        lat,
+        lng,
+        city: loc?.city || undefined,
+        state: loc?.state || undefined,
+      };
+    })
+    .filter((m): m is NonNullable<typeof m> => m != null);
+
+  const missingMapCount = workingClients.length - mapMarkers.length;
+
+  const calendarTasks = openTasks
+    .filter((t) => t.due_date)
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      date: t.due_date as string,
+      overdue: Boolean(
+        t.due_date &&
+          t.due_date < todayStr &&
+          t.status !== "Submitted" &&
+          t.status !== "Approved",
+      ),
+    }));
+
+  const calendarCampaigns = myAssignments
+    .filter((a) => a.campaigns?.end_date)
+    .map((a) => ({
+      id: a.campaigns!.id,
+      title: a.campaigns!.campaign_name,
+      date: a.campaigns!.end_date,
+    }));
+
+  const calendarEvents = (eventRows ?? []).map((ev) => {
+    const clientsRaw = ev.clients as unknown;
+    const clientObj = Array.isArray(clientsRaw)
+      ? (clientsRaw[0] as { client_name?: string } | undefined)
+      : (clientsRaw as { client_name?: string } | null | undefined);
+    return {
+      id: String(ev.id),
+      title: String(ev.title),
+      date: String(ev.event_date),
+      client_name: clientObj?.client_name ?? null,
+    };
+  });
+
+  const campaignNameById = new Map<string, string>();
+  for (const a of myAssignments) {
+    if (a.campaigns) {
+      campaignNameById.set(a.campaigns.id, a.campaigns.campaign_name);
+    }
+  }
+
+  const totalsByCampaign = new Map<
+    string,
+    { name: string; clicks: number }
+  >();
+
+  for (const m of metricRows ?? []) {
+    const cid = String(m.campaign_id);
+    const name = campaignNameById.get(cid) ?? "Campaign";
+    const prev = totalsByCampaign.get(cid) ?? { name, clicks: 0 };
+    prev.clicks += num(m.clicks);
+    totalsByCampaign.set(cid, prev);
+  }
+
+  const clicksByCampaign = [...totalsByCampaign.values()]
+    .map((r) => ({ name: r.name, clicks: r.clicks }))
+    .sort((a, b) => b.clicks - a.clicks);
+
+  const hasPerformance = clicksByCampaign.length > 0;
 
   return (
     <div>
       <PageHeader
-        title="Employee Dashboard"
-        subtitle={`Welcome back, ${fullName}. Your client assignments and PTO.`}
+        title={`Welcome back, ${profile.full_name}`}
+        subtitle={<WelcomeMessage />}
       />
 
+      {(overdueTasks.length > 0 || awaitingApproval.length > 0) && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {overdueTasks.length > 0 ? (
+            <span className="badge badge-error badge-outline">
+              {overdueTasks.length} overdue task
+              {overdueTasks.length === 1 ? "" : "s"}
+            </span>
+          ) : null}
+          {awaitingApproval.length > 0 ? (
+            <span className="badge badge-warning badge-outline">
+              {awaitingApproval.length} awaiting approval
+            </span>
+          ) : null}
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="Assigned clients" value={String(clients.length)} />
         <StatCard
-          label="Campaign assignments"
-          value={String(myAssignments.length)}
+          label="Clients you're on"
+          value={String(workingClients.length)}
         />
         <StatCard
-          label="Pending PTO"
-          value={String(pendingPto)}
-          tone={pendingPto ? "warn" : undefined}
+          label="Open tasks"
+          value={String(openTasks.length)}
+          tone={overdueTasks.length ? "warn" : undefined}
+        />
+        <StatCard
+          label="Overdue tasks"
+          value={String(overdueTasks.length)}
+          tone={overdueTasks.length ? "warn" : undefined}
         />
       </div>
 
-      <section className="mt-8">
-        <h2 className="mb-3 text-xl font-bold text-[#0b1f3a]">
-          Client assignments
-        </h2>
-        {clients.length === 0 && myAssignments.length === 0 ? (
-          <EmptyState
-            title="No assignments yet"
-            description="Clients you manage or campaigns you’re staffed on will show here."
-          />
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
+      <section className="mt-8 grid gap-4 lg:grid-cols-2">
+        <div>
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <h2 className="text-xl font-bold text-[#0b1f3a]">Pressing tasks</h2>
+            <Link href="/app/tasks" className="link link-hover text-sm">
+              View all
+            </Link>
+          </div>
+          {openTasks.length === 0 ? (
+            <EmptyState
+              title="No open tasks"
+              description="Your highest-priority work will show up here."
+            />
+          ) : (
             <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-              <table className="table">
+              <table className="table table-sm">
                 <thead>
                   <tr>
-                    <th>Client</th>
-                    <th>Industry</th>
-                    <th>Status</th>
-                    <th>Contact</th>
+                    <th>Task</th>
+                    <th>Due</th>
+                    <th>Priority</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {clients.map((c) => (
-                    <tr key={c.id}>
-                      <td>
-                        <Link
-                          href={`/app/clients/${c.id}`}
-                          className="link link-hover font-medium"
-                        >
-                          {c.client_name}
-                        </Link>
-                      </td>
-                      <td>{c.industry || "—"}</td>
-                      <td>
-                        <StatusBadge status={c.status} />
-                      </td>
-                      <td className="text-sm opacity-80">
-                        {c.contact_name || c.contact_email || "—"}
-                      </td>
-                    </tr>
-                  ))}
-                  {!clients.length ? (
-                    <tr>
-                      <td colSpan={4} className="opacity-60">
-                        No direct client ownership assigned.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Campaign</th>
-                    <th>Client</th>
-                    <th>Status</th>
-                    <th>Dates</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {myAssignments.map((a) => {
-                    const camp = a.campaigns;
-                    if (!camp) return null;
+                  {openTasks.slice(0, 3).map((t) => {
+                    const overdue =
+                      t.due_date &&
+                      t.due_date < todayStr &&
+                      t.status !== "Submitted";
                     return (
-                      <tr key={a.id}>
+                      <tr key={t.id}>
                         <td>
                           <Link
-                            href={`/app/campaigns/${camp.id}`}
+                            href={`/app/tasks/${t.id}`}
                             className="link link-hover font-medium"
                           >
-                            {camp.campaign_name}
+                            {t.title}
                           </Link>
                         </td>
-                        <td>
-                          {camp.clients?.client_name ? (
-                            <Link
-                              href={`/app/clients/${camp.client_id}`}
-                              className="link link-hover"
-                            >
-                              {camp.clients.client_name}
-                            </Link>
-                          ) : (
-                            "—"
-                          )}
+                        <td
+                          className={
+                            overdue
+                              ? "font-medium text-error"
+                              : "whitespace-nowrap"
+                          }
+                        >
+                          {t.due_date ?? "—"}
                         </td>
                         <td>
-                          <StatusBadge status={camp.campaign_status} />
-                        </td>
-                        <td className="text-sm whitespace-nowrap opacity-80">
-                          {camp.start_date} → {camp.end_date}
+                          <StatusBadge status={t.priority} />
                         </td>
                       </tr>
                     );
                   })}
-                  {!myAssignments.length ? (
-                    <tr>
-                      <td colSpan={4} className="opacity-60">
-                        No campaign staffing assignments.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="mt-10 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-box border border-base-300 bg-base-100 p-5">
-          <h2 className="mb-4 text-xl font-bold text-[#0b1f3a]">Request PTO</h2>
-          <PtoRequestForm userId={userId} />
-        </div>
-        <div className="rounded-box border border-base-300 bg-base-100 p-5">
-          <h2 className="mb-4 text-xl font-bold text-[#0b1f3a]">
-            Your PTO requests
-          </h2>
-          {pto.length === 0 ? (
-            <p className="text-sm opacity-60">No PTO requests submitted yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="table table-sm">
-                <thead>
-                  <tr>
-                    <th>Dates</th>
-                    <th>Hours</th>
-                    <th>Status</th>
-                    <th>Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pto.map((r) => (
-                    <tr key={r.id}>
-                      <td className="whitespace-nowrap">
-                        {r.start_date} → {r.end_date}
-                      </td>
-                      <td>{num(r.hours)}</td>
-                      <td>
-                        <StatusBadge status={r.status} />
-                      </td>
-                      <td className="max-w-[12rem] truncate text-sm">
-                        {r.reason || "—"}
-                      </td>
-                    </tr>
-                  ))}
                 </tbody>
               </table>
             </div>
           )}
         </div>
+        <ClientMapDynamic
+          markers={mapMarkers}
+          missingCount={missingMapCount}
+        />
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <h2 className="text-xl font-bold text-[#0b1f3a]">
+            Campaign performance
+          </h2>
+          <Link href="/app/analytics" className="link link-hover text-sm">
+            View client analytics
+          </Link>
+        </div>
+        {!hasPerformance ? (
+          <EmptyState
+            title="No performance data yet"
+            description="Clicks for your assigned campaigns will appear here."
+          />
+        ) : (
+          <ClicksByCampaignChart data={clicksByCampaign} />
+        )}
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <h2 className="text-xl font-bold text-[#0b1f3a]">Schedule</h2>
+          <Link href="/app/calendar" className="link link-hover text-sm">
+            Open calendar
+          </Link>
+        </div>
+        <DashboardCalendar
+          tasks={calendarTasks}
+          campaigns={calendarCampaigns}
+          events={calendarEvents}
+          todayStr={todayStr}
+        />
       </section>
     </div>
   );
@@ -516,7 +757,7 @@ async function CustomerDashboard() {
                     {a.campaigns?.campaign_name ?? "Campaign"}
                   </div>
                   <div className="mb-1 text-xs uppercase tracking-wide opacity-60">
-                    {a.approval_type} · requested {a.requested_date}
+                    {a.approval_type} Â· requested {a.requested_date}
                   </div>
                   <p className="mb-3 text-sm">{a.description}</p>
                   <UpdateApprovalStatusForm

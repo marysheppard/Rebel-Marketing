@@ -427,13 +427,20 @@ export function CreateCampaignForm({
 export function CreateWorkForm({
   campaigns,
   userId,
+  tasks = [],
 }: {
   campaigns: Option[];
   userId: string;
+  tasks?: { id: string; label: string; campaign_id: string }[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [campaignId, setCampaignId] = useState("");
+
+  const filteredTasks = tasks.filter(
+    (t) => !campaignId || t.campaign_id === campaignId,
+  );
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -447,15 +454,19 @@ export function CreateWorkForm({
       return;
     }
 
+    const taskId = String(fd.get("task_id") ?? "").trim();
     const supabase = createClient();
     const { error: insertError } = await supabase.from("work_entries").insert({
       campaign_id: String(fd.get("campaign_id")),
       user_id: userId,
+      task_id: taskId || null,
       work_date: String(fd.get("work_date")),
       work_type: String(fd.get("work_type")),
       description: String(fd.get("description") ?? "").trim(),
       hours,
       billable: fd.get("billable") === "on",
+      out_of_scope: fd.get("out_of_scope") === "on",
+      retainer_bucket: String(fd.get("retainer_bucket") ?? "Not Applicable"),
       approval_status: "Pending",
       billed: false,
     });
@@ -465,6 +476,7 @@ export function CreateWorkForm({
       return;
     }
     (e.target as HTMLFormElement).reset();
+    setCampaignId("");
     router.refresh();
   }
 
@@ -472,12 +484,29 @@ export function CreateWorkForm({
     <form onSubmit={onSubmit} className="form-grid grid gap-4 sm:grid-cols-2">
       <FormError message={error} />
       <label className="sm:col-span-2">
-        <span className="text-sm font-medium">Campaign *</span>
-        <select name="campaign_id" className="select select-bordered w-full" required>
+        <span className="text-sm font-medium">Campaign / client work *</span>
+        <select
+          name="campaign_id"
+          className="select select-bordered w-full"
+          required
+          value={campaignId}
+          onChange={(e) => setCampaignId(e.target.value)}
+        >
           <option value="">Select campaign</option>
           {campaigns.map((c) => (
             <option key={c.id} value={c.id}>
               {c.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="sm:col-span-2">
+        <span className="text-sm font-medium">Related task (optional)</span>
+        <select name="task_id" className="select select-bordered w-full">
+          <option value="">No specific task</option>
+          {filteredTasks.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.label}
             </option>
           ))}
         </select>
@@ -509,21 +538,176 @@ export function CreateWorkForm({
       </label>
       <label>
         <span className="text-sm font-medium">Hours *</span>
-        <input name="hours" type="number" min={0} step="0.25" className="input input-bordered w-full" required defaultValue={1} />
+        <input
+          name="hours"
+          type="number"
+          min={0}
+          step="0.25"
+          className="input input-bordered w-full"
+          required
+          defaultValue={1}
+        />
+      </label>
+      <label>
+        <span className="text-sm font-medium">Retainer hours bucket</span>
+        <select
+          name="retainer_bucket"
+          className="select select-bordered w-full"
+          defaultValue="Not Applicable"
+        >
+          <option>Not Applicable</option>
+          <option>Included</option>
+          <option>Overage</option>
+        </select>
       </label>
       <label className="flex-row items-center gap-2">
         <input name="billable" type="checkbox" className="checkbox" defaultChecked />
         <span className="text-sm font-medium">Billable</span>
       </label>
+      <label className="flex-row items-center gap-2">
+        <input name="out_of_scope" type="checkbox" className="checkbox" />
+        <span className="text-sm font-medium">
+          Outside original scope (change-order review)
+        </span>
+      </label>
       <label className="sm:col-span-2">
-        <span className="text-sm font-medium">Description</span>
-        <textarea name="description" className="textarea textarea-bordered w-full" rows={2} />
+        <span className="text-sm font-medium">Description of work performed</span>
+        <textarea
+          name="description"
+          className="textarea textarea-bordered w-full"
+          rows={2}
+        />
       </label>
       <div className="sm:col-span-2">
         <button type="submit" className="btn btn-primary" disabled={loading}>
           {loading ? "Saving…" : "Log work"}
         </button>
       </div>
+    </form>
+  );
+}
+
+export function UpdateTaskStatusForm({
+  taskId,
+  currentStatus,
+}: {
+  taskId: string;
+  currentStatus: string;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    const fd = new FormData(e.currentTarget);
+    const status = String(fd.get("status"));
+    if (status === "Approved") {
+      setError("You cannot approve your own work.");
+      setLoading(false);
+      return;
+    }
+    const supabase = createClient();
+    const { error: updateError } = await supabase
+      .from("tasks")
+      .update({ status })
+      .eq("id", taskId);
+    setLoading(false);
+    if (updateError) {
+      setError(updateError.message || "Could not update status.");
+      return;
+    }
+    router.refresh();
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="grid gap-3">
+      <FormError message={error} />
+      <label>
+        <span className="text-sm font-medium">Status</span>
+        <select
+          name="status"
+          className="select select-bordered w-full"
+          defaultValue={currentStatus === "Approved" ? "Submitted" : currentStatus}
+          required
+        >
+          <option>Not Started</option>
+          <option>In Progress</option>
+          <option>Submitted</option>
+          <option>Needs Revision</option>
+        </select>
+      </label>
+      <button type="submit" className="btn btn-primary btn-sm" disabled={loading}>
+        {loading ? "Saving…" : "Save status"}
+      </button>
+    </form>
+  );
+}
+
+export function SubmitTaskForm({
+  taskId,
+  defaultNotes = "",
+  defaultUrl = "",
+}: {
+  taskId: string;
+  defaultNotes?: string;
+  defaultUrl?: string;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    const fd = new FormData(e.currentTarget);
+    const supabase = createClient();
+    const { error: updateError } = await supabase
+      .from("tasks")
+      .update({
+        status: "Submitted",
+        deliverable_notes: String(fd.get("deliverable_notes") ?? "").trim(),
+        deliverable_url: String(fd.get("deliverable_url") ?? "").trim(),
+        submitted_at: new Date().toISOString(),
+      })
+      .eq("id", taskId);
+    setLoading(false);
+    if (updateError) {
+      setError(updateError.message || "Could not submit task.");
+      return;
+    }
+    router.refresh();
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="grid gap-3">
+      <FormError message={error} />
+      <label>
+        <span className="text-sm font-medium">Deliverable link / file reference</span>
+        <input
+          name="deliverable_url"
+          type="url"
+          className="input input-bordered w-full"
+          placeholder="https://…"
+          defaultValue={defaultUrl}
+        />
+      </label>
+      <label>
+        <span className="text-sm font-medium">Deliverable notes / summary</span>
+        <textarea
+          name="deliverable_notes"
+          className="textarea textarea-bordered w-full"
+          rows={3}
+          defaultValue={defaultNotes}
+          required
+        />
+      </label>
+      <button type="submit" className="btn btn-secondary btn-sm" disabled={loading}>
+        {loading ? "Submitting…" : "Mark as submitted"}
+      </button>
     </form>
   );
 }

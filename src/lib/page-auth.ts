@@ -37,6 +37,27 @@ export function canLogWork(role: UserRole) {
   );
 }
 
+/** Roles that use the employee work & time module */
+export function isEmployeeWorkRole(role: UserRole) {
+  return canLogWork(role);
+}
+
+/** Statuses an employee may set on their own tasks (never Approved) */
+export const EMPLOYEE_TASK_STATUSES = [
+  "Not Started",
+  "In Progress",
+  "Submitted",
+  "Needs Revision",
+] as const;
+
+export function canEmployeeSetTaskStatus(status: string) {
+  return (EMPLOYEE_TASK_STATUSES as readonly string[]).includes(status);
+}
+
+export function canApproveTasks(role: UserRole) {
+  return role === "agency_manager" || role === "account_manager";
+}
+
 export function canManageCosts(role: UserRole) {
   return (
     role === "agency_manager" ||

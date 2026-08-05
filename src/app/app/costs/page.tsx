@@ -1,9 +1,6 @@
-import { CreateCostForm } from "@/components/forms";
-import { EmptyState, PageHeader } from "@/components/ui";
-import { money, num } from "@/lib/format";
-import { budgetVariance } from "@/lib/finance";
+import { CostsBoard } from "@/components/CostsBoard";
+import { num } from "@/lib/format";
 import { canManageCosts, getProfile, isClientRole } from "@/lib/page-auth";
-import Link from "next/link";
 
 export default async function CostsPage() {
   const { supabase, profile } = await getProfile();
@@ -21,92 +18,99 @@ export default async function CostsPage() {
       .order("campaign_name"),
   ]);
 
+  const list = costs ?? [];
+
   const spentByCampaign = new Map<string, number>();
-  for (const c of costs ?? []) {
-    if (!c.campaign_id) continue;
-    spentByCampaign.set(
-      c.campaign_id,
-      (spentByCampaign.get(c.campaign_id) ?? 0) + num(c.amount),
-    );
+  const budgetByCampaign = new Map<string, number>();
+  const spendByType = new Map<string, number>();
+  const spendByCampaignName = new Map<string, { name: string; amount: number }>();
+
+  for (const c of list) {
+    const amount = num(c.amount);
+    const camp = c.campaigns as
+      | { campaign_name?: string; campaign_budget?: number }
+      | { campaign_name?: string; campaign_budget?: number }[]
+      | null;
+    const campObj = Array.isArray(camp) ? camp[0] : camp;
+
+    if (c.campaign_id) {
+      spentByCampaign.set(
+        c.campaign_id,
+        (spentByCampaign.get(c.campaign_id) ?? 0) + amount,
+      );
+      if (campObj?.campaign_budget != null) {
+        budgetByCampaign.set(c.campaign_id, num(campObj.campaign_budget));
+      }
+      const name = campObj?.campaign_name ?? "—";
+      const prev = spendByCampaignName.get(c.campaign_id);
+      spendByCampaignName.set(c.campaign_id, {
+        name,
+        amount: (prev?.amount ?? 0) + amount,
+      });
+    }
+
+    const type = String(c.cost_type || "Other");
+    spendByType.set(type, (spendByType.get(type) ?? 0) + amount);
   }
 
-  const list = costs ?? [];
-  const showForm = canManageCosts(profile.role) && !isClientRole(profile.role);
+  const items = list.map((c) => {
+    const camp = c.campaigns as
+      | { campaign_name?: string }
+      | { campaign_name?: string }[]
+      | null;
+    const campObj = Array.isArray(camp) ? camp[0] : camp;
+    return {
+      id: String(c.id),
+      cost_date: String(c.cost_date),
+      campaign_id: c.campaign_id ? String(c.campaign_id) : null,
+      campaign_name: campObj?.campaign_name ?? "—",
+      cost_type: String(c.cost_type ?? ""),
+      description: String(c.description || c.vendor_name || ""),
+      amount: num(c.amount),
+      approved: Boolean(c.approved),
+      pass_through: Boolean(c.pass_through),
+    };
+  });
+
+  const totalSpend = items.reduce((s, c) => s + c.amount, 0);
+  const unapprovedTotal = items
+    .filter((c) => !c.approved)
+    .reduce((s, c) => s + c.amount, 0);
+  const passThroughTotal = items
+    .filter((c) => c.pass_through)
+    .reduce((s, c) => s + c.amount, 0);
+
+  let overBudgetCampaigns = 0;
+  for (const [id, spent] of spentByCampaign) {
+    const budget = budgetByCampaign.get(id) ?? 0;
+    if (budget > 0 && spent > budget) overBudgetCampaigns += 1;
+  }
+
+  const typePie = [...spendByType.entries()]
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
+  const byCampaign = [...spendByCampaignName.values()]
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 8);
+
+  const showCreate =
+    canManageCosts(profile.role) && !isClientRole(profile.role);
 
   return (
-    <div>
-      <PageHeader
-        title="Costs"
-        subtitle="Campaign spend with budget variance context"
-      />
-
-      {list.length === 0 ? (
-        <EmptyState
-          title="No costs recorded"
-          description="Track media, production, freelance, and pass-through expenses against campaigns."
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-box border border-base-300">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Campaign</th>
-                <th>Type</th>
-                <th>Description</th>
-                <th className="text-right">Amount</th>
-                <th className="text-right">Budget var.</th>
-                <th>Approved</th>
-                <th>Pass-through</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((c) => {
-                const camp = (c as { campaigns?: { campaign_name: string; campaign_budget: number } }).campaigns;
-                const budget = num(camp?.campaign_budget);
-                const spent = c.campaign_id ? spentByCampaign.get(c.campaign_id) ?? 0 : 0;
-                const variance = budget > 0 ? budgetVariance(budget, spent) : null;
-                return (
-                  <tr key={c.id}>
-                    <td>{c.cost_date}</td>
-                    <td>
-                      {c.campaign_id ? (
-                        <Link href={`/app/campaigns/${c.campaign_id}`} className="link link-hover">
-                          {camp?.campaign_name ?? "—"}
-                        </Link>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td>{c.cost_type}</td>
-                    <td className="max-w-xs truncate">{c.description || c.vendor_name || "—"}</td>
-                    <td className="text-right">{money(c.amount)}</td>
-                    <td
-                      className={`text-right ${variance != null && variance < 0 ? "text-error" : ""}`}
-                    >
-                      {variance != null ? money(variance) : "—"}
-                    </td>
-                    <td>{c.approved ? "Yes" : "No"}</td>
-                    <td>{c.pass_through ? "Yes" : "No"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {showForm ? (
-        <section className="mt-8 rounded-box border border-base-300 bg-base-100 p-6">
-          <h2 className="mb-4 text-xl font-bold">Record cost</h2>
-          <CreateCostForm
-            campaigns={(campaigns ?? []).map((c) => ({
-              id: c.id,
-              label: c.campaign_name,
-            }))}
-          />
-        </section>
-      ) : null}
-    </div>
+    <CostsBoard
+      items={items}
+      showCreate={showCreate}
+      campaigns={(campaigns ?? []).map((c) => ({
+        id: c.id,
+        label: c.campaign_name,
+      }))}
+      typePie={typePie}
+      byCampaign={byCampaign}
+      totalSpend={totalSpend}
+      unapprovedTotal={unapprovedTotal}
+      passThroughTotal={passThroughTotal}
+      overBudgetCampaigns={overBudgetCampaigns}
+    />
   );
 }

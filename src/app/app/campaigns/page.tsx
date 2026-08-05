@@ -1,30 +1,7 @@
-import Link from "next/link";
-import { CreateCampaignForm } from "@/components/forms";
-import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
-import { money, num } from "@/lib/format";
+import { CampaignsBoard } from "@/components/CampaignsBoard";
 import { budgetHealth } from "@/lib/finance";
+import { num } from "@/lib/format";
 import { canManageCampaigns, getProfile, isClientRole } from "@/lib/page-auth";
-
-function BudgetBadge({ budget, spent }: { budget: number; spent: number }) {
-  const health = budgetHealth(budget, spent);
-  const cls =
-    health === "over"
-      ? "badge-error"
-      : health === "near"
-        ? "badge-warning"
-        : health === "under"
-          ? "badge-success"
-          : "badge-ghost";
-  const label =
-    health === "over"
-      ? "Over budget"
-      : health === "near"
-        ? "Near budget"
-        : health === "under"
-          ? "Under budget"
-          : "No budget";
-  return <span className={`badge badge-sm ${cls}`}>{label}</span>;
-}
 
 export default async function CampaignsPage() {
   const { supabase, profile } = await getProfile();
@@ -54,85 +31,91 @@ export default async function CampaignsPage() {
   }
 
   const list = campaigns ?? [];
-  const showForm = canManageCampaigns(profile.role) && !isClientRole(profile.role);
+  const showCreate =
+    canManageCampaigns(profile.role) && !isClientRole(profile.role);
+
+  const items = list.map((c) => {
+    const clientsRel = c.clients as
+      | { client_name?: string }
+      | { client_name?: string }[]
+      | null;
+    const clientObj = Array.isArray(clientsRel) ? clientsRel[0] : clientsRel;
+    const budget = num(c.campaign_budget);
+    const spent = spentByCampaign.get(c.id) ?? 0;
+    const health = budgetHealth(budget, spent);
+    return {
+      id: String(c.id),
+      client_id: String(c.client_id),
+      campaign_name: String(c.campaign_name),
+      client_name: clientObj?.client_name ?? "—",
+      campaign_type: String(c.campaign_type ?? ""),
+      campaign_status: String(c.campaign_status),
+      start_date: String(c.start_date ?? ""),
+      end_date: String(c.end_date ?? ""),
+      budget,
+      spent,
+      remaining: budget - spent,
+      health,
+    };
+  });
+
+  const activeCount = items.filter((c) => c.campaign_status === "Active").length;
+  const lateCount = items.filter((c) => c.campaign_status === "Late").length;
+  const overBudgetCount = items.filter((c) => c.health === "over").length;
+
+  const statusNames = [
+    "Active",
+    "Late",
+    "On Hold",
+    "Completed",
+    "Canceled",
+  ];
+  const statusPie: { name: string; value: number }[] = statusNames.map(
+    (name) => ({
+      name,
+      value: items.filter((c) => c.campaign_status === name).length,
+    }),
+  );
+  const known = new Set(statusNames);
+  const other = items.filter((c) => !known.has(c.campaign_status)).length;
+  if (other > 0) {
+    statusPie.push({ name: "Other", value: other });
+  }
+
+  const budgetHealthBars = [
+    {
+      bucket: "Under",
+      count: items.filter((c) => c.health === "under").length,
+    },
+    {
+      bucket: "Near",
+      count: items.filter((c) => c.health === "near").length,
+    },
+    {
+      bucket: "Over",
+      count: items.filter((c) => c.health === "over").length,
+    },
+    {
+      bucket: "No budget",
+      count: items.filter((c) => c.health === "unknown").length,
+    },
+  ];
 
   return (
-    <div>
-      <PageHeader
-        title="Campaigns"
-        subtitle="Delivery tracking with live budget health"
-      />
-
-      {list.length === 0 ? (
-        <EmptyState
-          title="No campaigns"
-          description="Launch a campaign under an active contract to track work, costs, and billing."
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-box border border-base-300">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Campaign</th>
-                <th>Client</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th className="text-right">Budget</th>
-                <th className="text-right">Spent</th>
-                <th className="text-right">Remaining</th>
-                <th>Health</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((c) => {
-                const spent = spentByCampaign.get(c.id) ?? 0;
-                const budget = num(c.campaign_budget);
-                const remaining = budget - spent;
-                return (
-                  <tr key={c.id} className="hover">
-                    <td>
-                      <Link href={`/app/campaigns/${c.id}`} className="link link-hover font-medium">
-                        {c.campaign_name}
-                      </Link>
-                    </td>
-                    <td>
-                      <Link href={`/app/clients/${c.client_id}`} className="link link-hover">
-                        {(c as { clients?: { client_name: string } }).clients?.client_name ?? "—"}
-                      </Link>
-                    </td>
-                    <td>{c.campaign_type}</td>
-                    <td>
-                      <StatusBadge status={c.campaign_status} />
-                    </td>
-                    <td className="text-right">{money(budget)}</td>
-                    <td className="text-right">{money(spent)}</td>
-                    <td className={`text-right ${remaining < 0 ? "text-error" : ""}`}>
-                      {money(remaining)}
-                    </td>
-                    <td>
-                      <BudgetBadge budget={budget} spent={spent} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {showForm ? (
-        <section className="mt-8 rounded-box border border-base-300 bg-base-100 p-6">
-          <h2 className="mb-4 text-xl font-bold">New campaign</h2>
-          <CreateCampaignForm
-            clients={(clients ?? []).map((c) => ({ id: c.id, label: c.client_name }))}
-            contracts={(contracts ?? []).map((c) => ({
-              id: c.id,
-              label: `${c.contract_name} (${c.contract_number})`,
-              client_id: c.client_id,
-            }))}
-          />
-        </section>
-      ) : null}
-    </div>
+    <CampaignsBoard
+      items={items}
+      showCreate={showCreate}
+      clients={(clients ?? []).map((c) => ({ id: c.id, label: c.client_name }))}
+      contracts={(contracts ?? []).map((c) => ({
+        id: c.id,
+        label: `${c.contract_name} (${c.contract_number})`,
+        client_id: c.client_id,
+      }))}
+      statusPie={statusPie}
+      budgetHealthBars={budgetHealthBars}
+      activeCount={activeCount}
+      lateCount={lateCount}
+      overBudgetCount={overBudgetCount}
+    />
   );
 }

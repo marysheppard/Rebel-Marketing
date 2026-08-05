@@ -10,7 +10,66 @@ export type Profile = {
   full_name: string;
   email: string;
   role: UserRole;
+  weekly_hour_target: number | null;
+  monthly_hour_target: number | null;
   created_at: string;
+};
+
+export type TaskStatus =
+  | "Not Started"
+  | "In Progress"
+  | "Submitted"
+  | "Approved"
+  | "Needs Revision";
+
+export type TaskPriority = "Low" | "Medium" | "High";
+
+export type RetainerBucket = "Included" | "Overage" | "Not Applicable";
+
+export type Task = {
+  id: string;
+  campaign_id: string;
+  assignee_id: string;
+  created_by: string | null;
+  title: string;
+  description: string;
+  due_date: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  deliverable_notes: string;
+  deliverable_url: string;
+  submitted_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  campaigns?: {
+    campaign_name: string;
+    description: string;
+    client_id: string;
+    contract_id: string;
+    clients?: { client_name: string } | null;
+    contracts?: {
+      contract_name: string;
+      contract_number: string;
+      scope: string;
+      included_hours_monthly: number;
+    } | null;
+  } | null;
+};
+
+export type CampaignAssignment = {
+  id: string;
+  campaign_id: string;
+  user_id: string;
+  created_at: string;
+  campaigns?: {
+    id: string;
+    campaign_name: string;
+    campaign_status: string;
+    start_date: string;
+    end_date: string;
+    client_id: string;
+    clients?: { client_name: string } | null;
+  } | null;
 };
 
 export type Client = {
@@ -44,6 +103,7 @@ export type Contract = {
   cancellation_terms: string;
   approval_required: boolean;
   notes: string;
+  included_hours_monthly: number;
   created_at: string;
   clients?: { client_name: string } | null;
 };
@@ -70,16 +130,20 @@ export type WorkEntry = {
   id: string;
   campaign_id: string;
   user_id: string;
+  task_id: string | null;
   work_date: string;
   work_type: string;
   description: string;
   hours: number;
   billable: boolean;
+  out_of_scope: boolean;
+  retainer_bucket: RetainerBucket;
   approval_status: string;
   billed: boolean;
   created_at: string;
   campaigns?: { campaign_name: string; client_id: string } | null;
   profiles?: { full_name: string } | null;
+  tasks?: { title: string } | null;
 };
 
 export type Cost = {

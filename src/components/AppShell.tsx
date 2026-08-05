@@ -8,7 +8,10 @@ import {
   Users,
   FileText,
   Megaphone,
-  Briefcase,
+  LineChart,
+  Clock,
+  ListTodo,
+  CalendarDays,
   DollarSign,
   CheckSquare,
   Receipt,
@@ -17,7 +20,7 @@ import {
   LogOut,
   Menu,
 } from "lucide-react";
-import { ThemeSelector } from "@/components/ThemeSelector";
+import { NotificationBell } from "@/components/NotificationBell";
 import { RebelLogo } from "@/components/RebelLogo";
 import { createClient } from "@/lib/supabase/client";
 import { ROLE_LABELS, type Profile, type UserRole } from "@/lib/types";
@@ -35,34 +38,16 @@ const NAV: {
     roles: ["agency_manager", "account_manager", "marketing", "billing", "client"],
   },
   {
-    href: "/app/clients",
-    label: "Clients",
-    icon: Users,
-    roles: ["agency_manager", "account_manager", "billing"],
+    href: "/app/ar",
+    label: "Accounts Receivable",
+    icon: Wallet,
+    roles: ["agency_manager", "billing", "account_manager", "client"],
   },
   {
-    href: "/app/contracts",
-    label: "Contracts",
-    icon: FileText,
-    roles: ["agency_manager", "account_manager", "billing"],
-  },
-  {
-    href: "/app/campaigns",
-    label: "Campaigns",
-    icon: Megaphone,
-    roles: ["agency_manager", "account_manager", "marketing", "billing"],
-  },
-  {
-    href: "/app/work",
-    label: "Work",
-    icon: Briefcase,
-    roles: ["agency_manager", "account_manager", "marketing", "billing"],
-  },
-  {
-    href: "/app/costs",
-    label: "Costs",
-    icon: DollarSign,
-    roles: ["agency_manager", "account_manager", "marketing", "billing"],
+    href: "/app/analytics",
+    label: "Analytics",
+    icon: LineChart,
+    roles: ["agency_manager", "account_manager", "marketing"],
   },
   {
     href: "/app/approvals",
@@ -77,16 +62,52 @@ const NAV: {
     roles: ["agency_manager", "billing", "account_manager"],
   },
   {
-    href: "/app/ar",
-    label: "Accounts Receivable",
-    icon: Wallet,
-    roles: ["agency_manager", "billing", "account_manager"],
+    href: "/app/calendar",
+    label: "Calendar",
+    icon: CalendarDays,
+    roles: ["agency_manager", "account_manager", "marketing"],
+  },
+  {
+    href: "/app/campaigns",
+    label: "Campaigns",
+    icon: Megaphone,
+    roles: ["agency_manager", "account_manager", "marketing", "billing", "client"],
+  },
+  {
+    href: "/app/clients",
+    label: "Clients",
+    icon: Users,
+    roles: ["agency_manager", "account_manager", "billing"],
+  },
+  {
+    href: "/app/contracts",
+    label: "Contracts",
+    icon: FileText,
+    roles: ["agency_manager", "account_manager", "billing", "client"],
+  },
+  {
+    href: "/app/costs",
+    label: "Costs",
+    icon: DollarSign,
+    roles: ["agency_manager", "account_manager", "marketing", "billing"],
   },
   {
     href: "/app/reports",
     label: "Reports",
     icon: BarChart3,
     roles: ["agency_manager", "account_manager", "billing"],
+  },
+  {
+    href: "/app/tasks",
+    label: "Tasks",
+    icon: ListTodo,
+    roles: ["agency_manager", "account_manager", "marketing"],
+  },
+  {
+    href: "/app/work",
+    label: "Time & PTO",
+    icon: Clock,
+    roles: ["agency_manager", "account_manager", "marketing", "billing", "client"],
   },
 ];
 
@@ -124,6 +145,11 @@ export function AppShell({
   const items = NAV.filter((n) => n.roles.includes(profile.role));
 
   async function logout() {
+    try {
+      sessionStorage.removeItem("rebel-welcome-msg");
+    } catch {
+      /* ignore */
+    }
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/");
@@ -158,7 +184,7 @@ export function AppShell({
             <span className="badge badge-primary badge-sm sm:hidden">
               {ROLE_LABELS[profile.role]}
             </span>
-            <ThemeSelector />
+            <NotificationBell />
             <button className="btn btn-ghost btn-sm" onClick={logout}>
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Log out</span>
