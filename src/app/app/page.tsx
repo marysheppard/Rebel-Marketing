@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ApprovalNotes } from "@/components/ApprovalNotes";
 import { PtoRequestForm, UpdateApprovalStatusForm } from "@/components/forms";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { remainingBalance } from "@/lib/finance";
@@ -14,6 +15,7 @@ type ApprovalRow = {
   description: string;
   requested_date: string;
   approval_status: string;
+  notes?: string;
   clients?: { client_name: string } | null;
   campaigns?: { campaign_name: string } | null;
 };
@@ -62,6 +64,7 @@ async function EmployeeDashboard({
     { data: managedClients },
     { data: assignments },
     { data: ptoRows },
+    { data: approvalsData },
   ] = await Promise.all([
     supabase
       .from("clients")
@@ -79,6 +82,7 @@ async function EmployeeDashboard({
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false }),
+    supabase.from("approvals").select("id, approval_status"),
   ]);
 
   const clients = (managedClients ?? []) as Client[];
@@ -116,6 +120,13 @@ async function EmployeeDashboard({
   });
   const pto = (ptoRows ?? []) as PtoRequest[];
   const pendingPto = pto.filter((r) => r.status === "Pending").length;
+  const pendingClientApprovals = (approvalsData ?? []).filter(
+    (a) => a.approval_status === "Pending",
+  ).length;
+  const changesRequested = (approvalsData ?? []).filter(
+    (a) => a.approval_status === "Changes Requested",
+  ).length;
+  const approvalsNeedingAttention = pendingClientApprovals + changesRequested;
 
   return (
     <div>
@@ -124,7 +135,7 @@ async function EmployeeDashboard({
         subtitle={`Welcome back, ${fullName}. Your client assignments and PTO.`}
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Assigned clients" value={String(clients.length)} />
         <StatCard
           label="Campaign assignments"
@@ -135,7 +146,42 @@ async function EmployeeDashboard({
           value={String(pendingPto)}
           tone={pendingPto ? "warn" : undefined}
         />
+        <StatCard
+          label="Approvals needing attention"
+          value={String(approvalsNeedingAttention)}
+          tone={approvalsNeedingAttention ? "warn" : undefined}
+        />
       </div>
+
+      {approvalsNeedingAttention > 0 ? (
+        <div className="alert mt-4 border border-warning/40 bg-warning/10 text-sm">
+          <div>
+            <p className="font-medium">
+              {pendingClientApprovals} waiting on clients
+              {changesRequested > 0
+                ? ` · ${changesRequested} need staff revisions`
+                : ""}
+            </p>
+            <p className="opacity-70">
+              Review the Approval Center to track client decisions and resubmit
+              when ready.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <Link href="/app/approvals" className="link link-primary">
+                Open Approval Center
+              </Link>
+              {changesRequested > 0 ? (
+                <Link
+                  href="/app/approvals?filter=changes"
+                  className="link link-primary"
+                >
+                  View needs changes
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="mt-8">
         <h2 className="mb-3 text-xl font-bold text-[#0b1f3a]">
@@ -341,6 +387,11 @@ async function CustomerDashboard() {
 
   const balance = invoices.reduce((s, i) => s + remainingBalance(i), 0);
   const pending = approvals.filter((a) => a.approval_status === "Pending");
+  const recentDecisions = approvals
+    .filter((a) =>
+      ["Approved", "Changes Requested", "Rejected"].includes(a.approval_status),
+    )
+    .slice(0, 8);
 
   return (
     <div>
@@ -359,7 +410,7 @@ async function CustomerDashboard() {
           tone={balance > 0 ? "warn" : "good"}
         />
         <StatCard
-          label="Deliverables awaiting decision"
+          label="Waiting on you"
           value={String(pending.length)}
           tone={pending.length ? "warn" : undefined}
         />
@@ -496,35 +547,42 @@ async function CustomerDashboard() {
 
         <div className="rounded-box border border-base-300 bg-base-100 p-5">
           <h2 className="mb-1 text-xl font-bold text-[#0b1f3a]">
-            Approve or reject deliverables
+            Waiting on you
           </h2>
           <p className="mb-4 text-sm opacity-70">
-            Review creative and campaign deliverables waiting on your decision.
+            Decisions Rebel Marketing needs from you before work can move forward.
           </p>
           {pending.length === 0 ? (
             <p className="text-sm opacity-60">
-              Nothing waiting for approval right now.
+              You’re all caught up — nothing is waiting on your decision.
             </p>
           ) : (
             <ul className="space-y-4">
-              {pending.map((a) => (
-                <li
-                  key={a.id}
-                  className="rounded-xl border border-[#0b1f3a14] bg-[#f7f9fc] p-4"
-                >
-                  <div className="mb-1 text-sm font-semibold text-[#0b1f3a]">
-                    {a.campaigns?.campaign_name ?? "Campaign"}
-                  </div>
-                  <div className="mb-1 text-xs uppercase tracking-wide opacity-60">
-                    {a.approval_type} · requested {a.requested_date}
-                  </div>
-                  <p className="mb-3 text-sm">{a.description}</p>
-                  <UpdateApprovalStatusForm
-                    approvalId={a.id}
-                    currentStatus={a.approval_status}
-                  />
-                </li>
-              ))}
+              {pending.map((a) => {
+                const notes = String(a.notes ?? "").trim();
+                return (
+                  <li
+                    key={a.id}
+                    className="rounded-xl border border-[#0b1f3a14] bg-[#f7f9fc] p-4"
+                  >
+                    <div className="mb-1 text-sm font-semibold text-[#0b1f3a]">
+                      {a.campaigns?.campaign_name ?? "Campaign"}
+                    </div>
+                    <div className="mb-1 text-xs uppercase tracking-wide opacity-60">
+                      {a.approval_type} · requested {a.requested_date}
+                    </div>
+                    <p className="mb-2 text-sm">{a.description}</p>
+                    <ApprovalNotes notes={notes} />
+                    <div className="mt-3">
+                      <UpdateApprovalStatusForm
+                        approvalId={a.id}
+                        currentStatus={a.approval_status}
+                        currentNotes={notes}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
           <p className="mt-4 text-sm">
@@ -533,6 +591,59 @@ async function CustomerDashboard() {
             </Link>
           </p>
         </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-1 text-xl font-bold text-[#0b1f3a]">
+          Recent decisions
+        </h2>
+        <p className="mb-3 text-sm opacity-70">
+          Your past approvals, change requests, and rejections.
+        </p>
+        {recentDecisions.length === 0 ? (
+          <p className="text-sm opacity-60">
+            No past decisions yet. After you approve, reject, or request changes,
+            history will show here.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Campaign</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Requested</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentDecisions.map((a) => {
+                  const notes = String(a.notes ?? "").trim();
+                  return (
+                    <tr key={a.id}>
+                      <td className="font-medium">
+                        {a.campaigns?.campaign_name ?? "Campaign"}
+                      </td>
+                      <td>{a.approval_type}</td>
+                      <td>
+                        <StatusBadge status={a.approval_status} />
+                      </td>
+                      <td className="text-sm opacity-70">{a.requested_date}</td>
+                      <td className="max-w-sm">
+                        {notes ? (
+                          <ApprovalNotes notes={notes} compact />
+                        ) : (
+                          <span className="opacity-50">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );

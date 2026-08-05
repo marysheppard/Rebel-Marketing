@@ -719,38 +719,94 @@ export function CreateApprovalForm({
   );
 }
 
+function todayStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function appendApprovalNote(existing: string, line: string) {
+  const base = existing.trim();
+  return base ? `${base}\n${line}` : line;
+}
+
 export function UpdateApprovalStatusForm({
   approvalId,
   currentStatus,
+  currentNotes = "",
 }: {
   approvalId: string;
   currentStatus: string;
+  currentNotes?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [responseNote, setResponseNote] = useState("");
 
   async function updateStatus(status: string) {
     setError(null);
+    setSuccess(null);
+    const trimmed = responseNote.trim();
+    if (
+      (status === "Changes Requested" || status === "Rejected") &&
+      !trimmed
+    ) {
+      setError("Please add a note explaining your decision.");
+      return;
+    }
+
     setLoading(true);
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
+    const payload: {
+      approval_status: string;
+      approved_date: string | null;
+      approved_by: string | null;
+      notes?: string;
+    } = {
+      approval_status: status,
+      approved_date: status === "Approved" ? todayStamp() : null,
+      approved_by: status === "Approved" ? user?.id ?? null : null,
+    };
+
+    if (trimmed) {
+      payload.notes = appendApprovalNote(
+        currentNotes,
+        `[Client · ${status} · ${todayStamp()}] ${trimmed}`,
+      );
+    }
+
     const { error: updateError } = await supabase
       .from("approvals")
-      .update({
-        approval_status: status,
-        approved_date: status === "Approved" ? new Date().toISOString().slice(0, 10) : null,
-        approved_by: status === "Approved" ? user?.id ?? null : null,
-      })
+      .update(payload)
       .eq("id", approvalId);
     setLoading(false);
     if (updateError) {
       setError("Could not update approval status.");
       return;
     }
-    router.refresh();
+    setResponseNote("");
+    const message =
+      status === "Approved"
+        ? "Approved."
+        : status === "Changes Requested"
+          ? "Changes requested."
+          : "Rejected.";
+    setSuccess(message);
+    window.setTimeout(() => {
+      router.refresh();
+    }, 1000);
+  }
+
+  if (success) {
+    return (
+      <div className="flex flex-col gap-2">
+        <FormSuccess message={success} />
+      </div>
+    );
   }
 
   if (currentStatus !== "Pending") return null;
@@ -758,6 +814,19 @@ export function UpdateApprovalStatusForm({
   return (
     <div className="flex flex-col gap-2">
       <FormError message={error} />
+      <label>
+        <span className="mb-1 block text-xs font-medium opacity-70">
+          Your response note (required for changes or reject)
+        </span>
+        <textarea
+          className="textarea textarea-bordered textarea-sm w-full min-w-[12rem]"
+          rows={2}
+          value={responseNote}
+          onChange={(e) => setResponseNote(e.target.value)}
+          placeholder="Optional for Approve; required for Changes / Reject"
+          disabled={loading}
+        />
+      </label>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -784,6 +853,96 @@ export function UpdateApprovalStatusForm({
           Reject
         </button>
       </div>
+    </div>
+  );
+}
+
+export function ResubmitApprovalForm({
+  approvalId,
+  currentStatus,
+  currentNotes = "",
+}: {
+  approvalId: string;
+  currentStatus: string;
+  currentNotes?: string;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [note, setNote] = useState("");
+
+  async function resubmit() {
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+    const supabase = createClient();
+    const trimmed = note.trim();
+    const nextNotes = trimmed
+      ? appendApprovalNote(
+          currentNotes,
+          `[Staff · Resubmitted · ${todayStamp()}] ${trimmed}`,
+        )
+      : appendApprovalNote(
+          currentNotes,
+          `[Staff · Resubmitted · ${todayStamp()}] Ready for client review again.`,
+        );
+
+    const { error: updateError } = await supabase
+      .from("approvals")
+      .update({
+        approval_status: "Pending",
+        approved_date: null,
+        approved_by: null,
+        notes: nextNotes,
+      })
+      .eq("id", approvalId);
+    setLoading(false);
+    if (updateError) {
+      setError("Could not resubmit approval.");
+      return;
+    }
+    setNote("");
+    setSuccess("Resubmitted for client review.");
+    window.setTimeout(() => {
+      router.refresh();
+    }, 1000);
+  }
+
+  if (success) {
+    return (
+      <div className="flex flex-col gap-2">
+        <FormSuccess message={success} />
+      </div>
+    );
+  }
+
+  if (currentStatus !== "Changes Requested") return null;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <FormError message={error} />
+      <label>
+        <span className="mb-1 block text-xs font-medium opacity-70">
+          Resubmit note (optional)
+        </span>
+        <textarea
+          className="textarea textarea-bordered textarea-sm w-full min-w-[12rem]"
+          rows={2}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="What did you revise?"
+          disabled={loading}
+        />
+      </label>
+      <button
+        type="button"
+        className="btn btn-primary btn-sm"
+        disabled={loading}
+        onClick={resubmit}
+      >
+        {loading ? "Resubmitting…" : "Resubmit for approval"}
+      </button>
     </div>
   );
 }
