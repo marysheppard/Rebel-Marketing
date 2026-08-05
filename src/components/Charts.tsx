@@ -526,7 +526,7 @@ export function CampaignStatusPieChart({
             formatter={(value, _name, item) => {
               const pct = item?.payload?.pct;
               return [
-                pct != null ? `${pct}% · ${value}` : String(value),
+                pct != null ? `${pct}% | ${value}` : String(value),
                 "Campaigns",
               ];
             }}
@@ -630,7 +630,7 @@ export function CostTypePieChart({
               const pct = item?.payload?.pct;
               const amount = formatMoney(Number(value));
               return [
-                pct != null ? `${pct}% · ${amount}` : amount,
+                pct != null ? `${pct}% | ${amount}` : amount,
                 "Spend",
               ];
             }}
@@ -758,7 +758,7 @@ export function TaskStatusPieChart({
             formatter={(value, _name, item) => {
               const pct = item?.payload?.pct;
               return [
-                pct != null ? `${pct}% · ${value}` : String(value),
+                pct != null ? `${pct}% | ${value}` : String(value),
                 "Tasks",
               ];
             }}
@@ -879,7 +879,7 @@ export function StrategySpendPieChart({
                 maximumFractionDigits: 0,
               }).format(Number(value));
               return [
-                pct != null ? `${pct}% · ${amount}` : amount,
+                pct != null ? `${pct}% | ${amount}` : amount,
                 "Spend",
               ];
             }}
