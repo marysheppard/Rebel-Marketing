@@ -14,7 +14,12 @@ export default async function ApprovalsPage() {
   const { supabase, profile, userId } = await getProfile();
   if (!profile || !userId) return null;
 
-  if (!isMarketingRole(profile.role) && !isClientRole(profile.role)) {
+  if (
+    !isMarketingRole(profile.role) &&
+    !isClientRole(profile.role) &&
+    profile.role !== "account_manager" &&
+    profile.role !== "agency_manager"
+  ) {
     redirect("/app");
   }
 

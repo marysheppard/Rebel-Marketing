@@ -2,11 +2,22 @@ import Link from "next/link";
 import { CreateContractForm } from "@/components/forms";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { money } from "@/lib/format";
-import { canManageContracts, getProfile, isClientRole } from "@/lib/page-auth";
+import {
+  canManageContracts,
+  isClientRole,
+  requireRoles,
+} from "@/lib/page-auth";
+import { getManagedClientIds } from "@/lib/portfolio";
 
 export default async function ContractsPage() {
-  const { supabase, profile } = await getProfile();
-  if (!profile) return null;
+  const { supabase, profile, userId } = await requireRoles([
+    "agency_manager",
+    "account_manager",
+    "billing",
+    "client",
+  ]);
+
+  const scope = await getManagedClientIds(supabase, userId, profile.role);
 
   const [{ data: contracts }, { data: clients }] = await Promise.all([
     supabase
@@ -16,7 +27,11 @@ export default async function ContractsPage() {
     supabase.from("clients").select("id, client_name").order("client_name"),
   ]);
 
-  const list = contracts ?? [];
+  let list = contracts ?? [];
+  if (profile.role === "account_manager" && scope !== "all") {
+    const set = new Set(scope);
+    list = list.filter((c) => set.has(c.client_id));
+  }
   const showForm = canManageContracts(profile.role) && !isClientRole(profile.role);
 
   return (

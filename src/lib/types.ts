@@ -18,11 +18,12 @@ export type Profile = {
 export type TaskStatus =
   | "Not Started"
   | "In Progress"
+  | "Completed"
   | "Submitted"
   | "Approved"
   | "Needs Revision";
 
-export type TaskPriority = "Low" | "Medium" | "High";
+export type TaskPriority = "Low" | "Medium" | "High" | "Urgent";
 
 export type RetainerBucket = "Included" | "Overage" | "Not Applicable";
 
@@ -36,6 +37,10 @@ export type Task = {
   due_date: string | null;
   status: TaskStatus;
   priority: TaskPriority;
+  estimated_hours?: number;
+  actual_hours?: number;
+  assigned_date?: string;
+  notes?: string;
   deliverable_notes: string;
   deliverable_url: string;
   submitted_at: string | null;
@@ -43,9 +48,9 @@ export type Task = {
   created_at: string;
   campaigns?: {
     campaign_name: string;
-    description: string;
+    description?: string;
     client_id: string;
-    contract_id: string;
+    contract_id?: string;
     clients?: { client_name: string } | null;
     contracts?: {
       contract_name: string;
@@ -54,6 +59,7 @@ export type Task = {
       included_hours_monthly: number;
     } | null;
   } | null;
+  profiles?: { full_name: string } | null;
 };
 
 export type CampaignAssignment = {
@@ -163,6 +169,60 @@ export type Contract = {
   created_at: string;
   updated_at?: string;
   clients?: { client_name: string; customer_id?: string } | null;
+};
+
+export type ControlExceptionStatus = "Open" | "Under Review" | "Resolved";
+
+export type ControlException = {
+  id: string;
+  fingerprint: string;
+  exception_type: string;
+  client_id: string | null;
+  severity: "info" | "warning" | "error";
+  description: string;
+  detected_at: string;
+  status: ControlExceptionStatus;
+  assigned_reviewer_id: string | null;
+  href?: string | null;
+  updated_at: string;
+  clients?: { client_name: string } | null;
+  profiles?: { full_name: string } | null;
+};
+
+export type CampaignMetric = {
+  id: string;
+  campaign_id: string;
+  metric_date: string;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  spend: number;
+  created_at: string;
+};
+
+export type TimeEntry = {
+  id: string;
+  employee_id: string;
+  task_id: string;
+  work_entry_id: string | null;
+  work_date: string;
+  start_time: string;
+  end_time: string;
+  break_minutes: number;
+  total_hours: number;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  tasks?: {
+    id: string;
+    title: string;
+    campaign_id: string;
+    status: TaskStatus;
+    campaigns?: {
+      campaign_name: string;
+      clients?: { client_name: string } | null;
+    } | null;
+  } | null;
 };
 
 export type Campaign = {
@@ -328,7 +388,7 @@ export const DEMO_ACCOUNTS = [
   },
 ] as const;
 
-/** Demo employee IDs → auth credentials (password is DemoPass123!) */
+/** Demo employee IDs ? auth credentials (password is DemoPass123!) */
 export const EMPLOYEE_LOGIN_IDS: Record<
   string,
   { email: string; password: string; label: string }
@@ -355,7 +415,7 @@ export const EMPLOYEE_LOGIN_IDS: Record<
   },
 };
 
-/** Demo customer IDs → auth credentials (access code is DemoPass123!) */
+/** Demo customer IDs ? auth credentials (access code is DemoPass123!) */
 export const CUSTOMER_LOGIN_IDS: Record<
   string,
   { email: string; accessCode: string; label: string }

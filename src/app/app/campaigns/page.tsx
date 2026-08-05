@@ -13,7 +13,11 @@ export default async function CampaignsPage() {
   const { supabase, profile } = await getProfile();
   if (!profile) return null;
 
-  if (!isMarketingRole(profile.role) && !isClientRole(profile.role)) {
+  if (
+    !isMarketingRole(profile.role) &&
+    !isClientRole(profile.role) &&
+    !canManageCampaigns(profile.role)
+  ) {
     redirect("/app");
   }
 
