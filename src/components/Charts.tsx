@@ -11,6 +11,9 @@ import {
   CartesianGrid,
   LineChart,
   Line,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
 
 export function ChartCard({
@@ -158,6 +161,48 @@ export function MarginChart({
           <Tooltip />
           <Bar dataKey="margin" fill="#a78bfa" />
         </BarChart>
+      </ResponsiveContainer>
+    </ChartCard>
+  );
+}
+
+const APPROVAL_STATUS_COLORS: Record<string, string> = {
+  Pending: "#eab308",
+  "Changes Requested": "#f97316",
+  Approved: "#22c55e",
+  Rejected: "#ef4444",
+};
+
+export function ApprovalStatusPieChart({
+  data,
+}: {
+  data: { name: string; value: number }[];
+}) {
+  const chartData = data.filter((d) => d.value > 0);
+
+  return (
+    <ChartCard title="Approvals by status" empty={!chartData.length}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={chartData}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            outerRadius={90}
+            label={({ name, value }) => `${name}: ${value}`}
+          >
+            {chartData.map((entry) => (
+              <Cell
+                key={entry.name}
+                fill={APPROVAL_STATUS_COLORS[entry.name] ?? "#94a3b8"}
+              />
+            ))}
+          </Pie>
+          <Tooltip />
+          <Legend />
+        </PieChart>
       </ResponsiveContainer>
     </ChartCard>
   );
