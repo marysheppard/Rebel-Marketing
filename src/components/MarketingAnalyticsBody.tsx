@@ -6,6 +6,7 @@ import {
   MarketingMediaTrendChart,
 } from "@/components/Charts";
 import { ClientAnalyticsPicker } from "@/components/ClientAnalyticsPicker";
+import { CampaignBreakdownTable } from "@/components/CampaignBreakdownTable";
 import { ClientGrowthSection } from "@/components/ClientGrowthSection";
 import type { StrategyRow } from "@/components/ClientGrowthSection";
 import {
@@ -236,50 +237,10 @@ export function MarketingAnalyticsBody(props: MarketingAnalyticsBodyProps) {
       case "campaign_breakdown":
         if (!props.hasCampaigns || !props.hasMetrics) return null;
         return (
-          <section>
-            <h3 className="mb-1 text-lg font-bold">Campaign breakdown</h3>
-            <p className="mb-3 text-xs opacity-60">{periodHint}</p>
-            <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Campaign</th>
-                    <th className="text-right">Impressions</th>
-                    <th className="text-right">Clicks</th>
-                    <th className="text-right">CTR</th>
-                    <th className="text-right">Conversions</th>
-                    <th className="text-right">Spend</th>
-                    <th className="text-right">CPC</th>
-                    <th className="text-right">CPA</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {props.tableRows.map((r) => (
-                    <tr key={r.id}>
-                      <td className="font-medium">{r.name}</td>
-                      <td className="text-right">
-                        {r.impressions.toLocaleString()}
-                      </td>
-                      <td className="text-right">
-                        {r.clicks.toLocaleString()}
-                      </td>
-                      <td className="text-right">{r.ctr}%</td>
-                      <td className="text-right">
-                        {r.conversions.toLocaleString()}
-                      </td>
-                      <td className="text-right">{money(r.spend)}</td>
-                      <td className="text-right">
-                        {r.clicks > 0 ? moneyExact(r.cpc) : "—"}
-                      </td>
-                      <td className="text-right">
-                        {r.conversions > 0 ? moneyExact(r.cpa) : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <CampaignBreakdownTable
+            rows={props.tableRows}
+            periodLabel={periodHint}
+          />
         );
       default:
         return null;
