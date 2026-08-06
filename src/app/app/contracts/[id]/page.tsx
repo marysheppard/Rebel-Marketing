@@ -107,15 +107,6 @@ export default async function ContractDetailPage({
               contract={{ ...(contract as Contract), contract_status: status }}
               hasCampaign={(campaigns ?? []).length > 0}
             />
-            <Link href={`/app/clients/${contract.client_id}`} className="btn btn-ghost btn-sm">
-              Client profile
-            </Link>
-            <Link
-              href={`/app/contracts/builder?clientId=${contract.client_id}`}
-              className="btn btn-outline btn-sm"
-            >
-              New contract (same client)
-            </Link>
             <Link href="/app/contracts" className="btn btn-ghost btn-sm">
               ← All contracts
             </Link>
