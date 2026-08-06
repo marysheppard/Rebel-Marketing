@@ -104,9 +104,6 @@ export function BillingHomeDashboardClient({
   }, [periodInvoices]);
 
   const attention = [
-    drafts.length
-      ? { label: `${drafts.length} draft invoice(s)`, href: "/app/billing" }
-      : null,
     source.unbilled.length
       ? {
           label: `${source.unbilled.length} unbilled work entr${source.unbilled.length === 1 ? "y" : "ies"}`,

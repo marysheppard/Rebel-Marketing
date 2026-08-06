@@ -20,12 +20,14 @@ export type CalendarTaskEvent = {
   title: string;
   date: string;
   overdue?: boolean;
+  clientId?: string;
 };
 
 export type CalendarCampaignEvent = {
   id: string;
   title: string;
   date: string;
+  clientId?: string;
 };
 
 export type CalendarPersonalEvent = {
