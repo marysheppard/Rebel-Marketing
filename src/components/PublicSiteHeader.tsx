@@ -12,12 +12,21 @@ export function PublicSiteHeader() {
           <RebelLogo priority className="h-9 w-auto sm:h-11" />
         </Link>
 
-        <nav className="hidden items-center gap-8 text-sm font-semibold text-[#1e3a5f] md:flex">
+        <nav className="hidden items-center gap-6 text-sm font-semibold text-[#1e3a5f] lg:flex xl:gap-8">
           <a href="#services" className="transition hover:text-[#0b1f3a]">
             Services
           </a>
-          <a href="#approach" className="transition hover:text-[#0b1f3a]">
-            Approach
+          <a href="#industries" className="transition hover:text-[#0b1f3a]">
+            Industries
+          </a>
+          <a href="#about" className="transition hover:text-[#0b1f3a]">
+            About
+          </a>
+          <a href="#testimonials" className="transition hover:text-[#0b1f3a]">
+            Stories
+          </a>
+          <a href="#preview" className="transition hover:text-[#0b1f3a]">
+            Preview
           </a>
           <a href="#contact" className="transition hover:text-[#0b1f3a]">
             Contact
