@@ -93,7 +93,7 @@ function LoginForm() {
     } = await supabase.auth.getUser();
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, must_change_password, password_change_deferred")
       .eq("id", user!.id)
       .single();
 
@@ -115,7 +115,15 @@ function LoginForm() {
     }
 
     setLoading(false);
-    router.push("/app");
+    if (
+      isClient &&
+      profile?.must_change_password &&
+      !profile?.password_change_deferred
+    ) {
+      router.push("/app/account/change-password");
+    } else {
+      router.push("/app");
+    }
     router.refresh();
   }
 
@@ -137,7 +145,7 @@ function LoginForm() {
       return;
     }
     const { resolveClientLoginEmailAction } = await import(
-      "@/app/actions/dashboard-activation"
+      "@/app/actions/client-login"
     );
     const resolved = await resolveClientLoginEmailAction(customerId);
     if (!resolved.ok) {

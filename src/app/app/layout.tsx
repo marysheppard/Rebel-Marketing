@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import {
+  clientNeedsForcedPasswordChange,
   isClientPortalHome,
   isClientRole,
 } from "@/lib/access";
@@ -31,6 +32,13 @@ export default async function AppLayout({
   const typed = profile as Profile;
   const headerList = await headers();
   const pathname = headerList.get("x-pathname") ?? "/app";
+  const onChangePassword =
+    pathname === "/app/account/change-password" ||
+    pathname.startsWith("/app/account/change-password/");
+
+  if (clientNeedsForcedPasswordChange(typed) && !onChangePassword) {
+    redirect("/app/account/change-password");
+  }
 
   if (isClientRole(typed.role) && !isClientPortalHome(pathname)) {
     redirect("/app?denied=1");

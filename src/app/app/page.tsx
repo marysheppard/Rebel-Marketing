@@ -3,6 +3,7 @@ import { EmployeeDashboardBody } from "@/components/EmployeeDashboardBody";
 import {
   AccountManagerDashboard,
   AgencyExecutiveDashboard,
+  BillingStaffDashboard,
 } from "@/components/dashboards/RoleDashboards";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { paidAmount, remainingBalance } from "@/lib/finance";
@@ -65,6 +66,16 @@ export default async function DashboardPage() {
     );
   }
 
+  if (profile.role === "billing") {
+    return (
+      <BillingStaffDashboard
+        userId={userId}
+        profile={profile}
+        supabase={supabase}
+      />
+    );
+  }
+
   if (!isMarketingRole(profile.role)) {
     return (
       <div>
@@ -74,7 +85,7 @@ export default async function DashboardPage() {
         />
         <EmptyState
           title="Staff dashboard coming soon"
-          description="This branch delivers the Marketing employee experience (EMP-1003). Billing and other role dashboards are owned by other workstreams."
+          description="This branch delivers the Marketing employee experience (EMP-1003). Other role dashboards are owned by other workstreams."
         />
       </div>
     );

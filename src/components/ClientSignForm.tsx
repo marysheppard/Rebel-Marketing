@@ -2,19 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { notifyAfterClientSignatureForContract } from "@/app/actions/dashboard-activation";
 import {
-  declineContractViaInviteAction,
-  signContractViaInviteAction,
-} from "@/app/actions/signing-invite";
-import { declineAsClient, signAsClient } from "@/lib/contract-execution";
+  declineAsClient,
+  notifyAgencyAfterClientSignature,
+  signAsClient,
+} from "@/lib/contract-execution";
 
 type Props = {
   contractId: string;
   defaultName: string;
   defaultTitle?: string;
   agencyMessage?: string;
-  mode?: "auth" | "invite";
   successHref?: string;
 };
 
@@ -23,7 +21,6 @@ export function ClientSignForm({
   defaultName,
   defaultTitle = "",
   agencyMessage = "",
-  mode = "auth",
   successHref,
 }: Props) {
   const router = useRouter();
@@ -35,67 +32,33 @@ export function ClientSignForm({
   const [formMode, setFormMode] = useState<"sign" | "decline">("sign");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activationPreview, setActivationPreview] = useState<{
-    subject: string;
-    text: string;
-    activationCode?: string;
-  } | null>(null);
 
-  const doneHref =
-    successHref || (mode === "invite" ? "/sign/access?done=1" : "/app/contracts/documents");
+  const doneHref = successHref || "/app/contracts/documents";
 
   async function submitSign(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const result =
-      mode === "invite"
-        ? await signContractViaInviteAction({
-            signerName: name,
-            signerTitle: title,
-            signatureData: signature,
-            authorizationConfirmed: authorized,
-          })
-        : await signAsClient({
-            contractId,
-            signerName: name,
-            signerTitle: title,
-            signatureData: signature,
-            authorizationConfirmed: authorized,
-          });
+    const result = await signAsClient({
+      contractId,
+      signerName: name,
+      signerTitle: title,
+      signatureData: signature,
+      authorizationConfirmed: authorized,
+    });
     if (!result.ok) {
       setLoading(false);
       setError(result.error);
       return;
     }
 
-    if (mode === "auth") {
-      try {
-        await notifyAfterClientSignatureForContract(contractId);
-      } catch {
-        // Signature remains valid even if welcome email fails.
-      }
+    try {
+      await notifyAgencyAfterClientSignature(contractId);
+    } catch {
+      // Signature remains valid even if agency notification fails.
     }
 
     setLoading(false);
-    const welcome =
-      mode === "invite" && "postSignWelcome" in result
-        ? (result.postSignWelcome as {
-            ok?: boolean;
-            simulatedPreview?: {
-              subject: string;
-              text: string;
-              activationCode?: string;
-            } | null;
-          } | null)
-        : null;
-    if (
-      welcome?.ok &&
-      welcome.simulatedPreview
-    ) {
-      setActivationPreview(welcome.simulatedPreview);
-      return;
-    }
     router.push(doneHref);
     router.refresh();
   }
@@ -104,13 +67,10 @@ export function ClientSignForm({
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const result =
-      mode === "invite"
-        ? await declineContractViaInviteAction({ reason: declineReason })
-        : await declineAsClient({
-            contractId,
-            reason: declineReason,
-          });
+    const result = await declineAsClient({
+      contractId,
+      reason: declineReason,
+    });
     setLoading(false);
     if (!result.ok) {
       setError(result.error);
@@ -122,40 +82,6 @@ export function ClientSignForm({
 
   return (
     <div className="rounded-box border border-base-300 bg-base-100 p-4">
-      {activationPreview ? (
-        <div className="rounded-box border border-success/40 bg-success/10 p-4">
-          <h3 className="font-semibold">Agreement signed successfully</h3>
-          <p className="mt-1 text-sm">
-            Development email delivery is simulated. This welcome email preview
-            is shown once.
-          </p>
-          <p className="mt-3 text-sm">
-            Subject: <strong>{activationPreview.subject}</strong>
-          </p>
-          {activationPreview.activationCode ? (
-            <p className="mt-2 text-sm">
-              Dashboard activation code:{" "}
-              <code className="font-mono font-semibold">
-                {activationPreview.activationCode}
-              </code>
-            </p>
-          ) : null}
-          <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs opacity-80">
-            {activationPreview.text}
-          </pre>
-          <button
-            type="button"
-            className="btn btn-primary mt-4"
-            onClick={() => {
-              router.push(doneHref);
-              router.refresh();
-            }}
-          >
-            Continue
-          </button>
-        </div>
-      ) : (
-        <>
       {agencyMessage ? (
         <p className="mb-4 rounded-box bg-base-200 p-3 text-sm">
           <span className="font-medium">Message from Rebel Marketing:</span> {agencyMessage}
@@ -241,8 +167,6 @@ export function ClientSignForm({
             {loading ? "Declining…" : "Decline agreement"}
           </button>
         </form>
-      )}
-        </>
       )}
     </div>
   );

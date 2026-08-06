@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ClientPortalAccessCard } from "@/components/ClientPortalAccessCard";
 import { PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import {
   formatAddress,
@@ -10,7 +11,7 @@ import {
 } from "@/lib/contact-format";
 import { money, num } from "@/lib/format";
 import { remainingBalance } from "@/lib/finance";
-import { getProfile } from "@/lib/page-auth";
+import { canManageClients, getProfile } from "@/lib/page-auth";
 
 export default async function ClientDetailPage({
   params,
@@ -18,33 +19,37 @@ export default async function ClientDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { supabase } = await getProfile();
+  const { supabase, profile } = await getProfile();
 
   const { data: client } = await supabase.from("clients").select("*").eq("id", id).single();
   if (!client) notFound();
 
-  const [{ data: contracts }, { data: campaigns }, { data: invoices }] = await Promise.all([
-    supabase
-      .from("contracts")
-      .select("*")
-      .eq("client_id", id)
-      .order("start_date", { ascending: false }),
-    supabase
-      .from("campaigns")
-      .select("*")
-      .eq("client_id", id)
-      .order("start_date", { ascending: false }),
-    supabase
-      .from("invoices")
-      .select("*, payments(amount)")
-      .eq("client_id", id)
-      .order("invoice_date", { ascending: false }),
-  ]);
+  const [{ data: contracts }, { data: campaigns }, { data: invoices }, { data: portalLinks }] =
+    await Promise.all([
+      supabase
+        .from("contracts")
+        .select("*")
+        .eq("client_id", id)
+        .order("start_date", { ascending: false }),
+      supabase
+        .from("campaigns")
+        .select("*")
+        .eq("client_id", id)
+        .order("start_date", { ascending: false }),
+      supabase
+        .from("invoices")
+        .select("*, payments(amount)")
+        .eq("client_id", id)
+        .order("invoice_date", { ascending: false }),
+      supabase.from("client_user_links").select("user_id").eq("client_id", id).limit(1),
+    ]);
 
   const outstanding = (invoices ?? []).reduce((s, i) => s + remainingBalance(i), 0);
   const revenue = (invoices ?? [])
     .filter((i) => !["Draft", "Canceled"].includes(i.status))
     .reduce((s, i) => s + num(i.total_amount), 0);
+  const canManage = !!profile && canManageClients(profile.role);
+  const hasPortalLink = (portalLinks ?? []).length > 0;
 
   return (
     <div>
@@ -94,6 +99,14 @@ export default async function ClientDetailPage({
           </span>
         ) : null}
       </div>
+
+      <ClientPortalAccessCard
+        clientId={client.id}
+        customerId={String(client.customer_id || "")}
+        contactEmail={String(client.contact_email || "")}
+        hasPortalLink={hasPortalLink}
+        canManage={canManage}
+      />
 
       <div className="mb-6 grid gap-4 rounded-box border border-base-300 bg-base-100 p-4 text-sm lg:grid-cols-2">
         <div>

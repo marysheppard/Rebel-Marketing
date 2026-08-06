@@ -89,18 +89,11 @@ export default async function ContractDetailPage({
                     ? {
                         id: String(request.id),
                         status: String(request.status),
-                        recipient_email: request.recipient_email as string | null,
-                        email_delivery_status: request.email_delivery_status as
-                          | string
-                          | null,
-                        invite_expires_at: request.invite_expires_at as string | null,
+                        signer_user_id: request.signer_user_id as string | null,
+                        due_at: request.due_at as string | null,
+                        sent_at: request.sent_at as string | null,
                       }
                     : null
-                }
-                showResendActivation={
-                  !!contract.client_signed_at &&
-                  status !== "Draft" &&
-                  status !== "Finalized"
                 }
               />
             ) : null}
@@ -170,20 +163,17 @@ export default async function ContractDetailPage({
             <p className="text-error">
               Declined: {request.decline_reason}
             </p>
-          ) : request?.recipient_email &&
+          ) : request &&
             ["Sent", "Viewed"].includes(String(request.status)) ? (
             <p className="opacity-70">
-              Signing invitation{" "}
-              {request.email_delivery_status === "sent"
-                ? "emailed"
-                : request.email_delivery_status === "failed"
-                  ? "failed to send"
-                  : "recorded (simulated)"}{" "}
-              to <strong>{String(request.recipient_email)}</strong>
-              {request.invite_expires_at
-                ? ` · code expires ${new Date(String(request.invite_expires_at)).toLocaleString()}`
+              Sent to the client portal for signature
+              {request.sent_at
+                ? ` on ${new Date(String(request.sent_at)).toLocaleString()}`
                 : ""}
-              . Access code is not shown here after send.
+              {request.due_at
+                ? ` · due ${new Date(String(request.due_at)).toLocaleDateString()}`
+                : ""}
+              . The assigned client user will see it under Contracts &amp; Documents after login.
             </p>
           ) : status === "Fully Executed" || status === "Active" ? (
             <p className="opacity-70">

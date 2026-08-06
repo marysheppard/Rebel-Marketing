@@ -1,8 +1,13 @@
 import { Suspense } from "react";
+import { BillingHomeDashboardClient } from "@/components/dashboards/BillingHomeDashboard";
 import {
   PortfolioDashboardClient,
   type PortfolioDashboardSource,
 } from "@/components/dashboards/PortfolioDashboardClient";
+import {
+  mapBillingHomeInvoices,
+  mapUnbilledWork,
+} from "@/lib/billing-home-map";
 import { loadFinanceBundle } from "@/lib/finance-data";
 import type { Profile } from "@/lib/types";
 import type { getProfile } from "@/lib/page-auth";
@@ -188,6 +193,47 @@ export async function AgencyExecutiveDashboard({
         variant="agency"
         userId={userId}
       />
+    </Suspense>
+  );
+}
+
+export async function BillingStaffDashboard({
+  userId,
+  profile,
+  supabase,
+}: {
+  userId: string;
+  profile: Profile;
+  supabase: Sb;
+}) {
+  void userId;
+  const [{ data: invoicesRaw }, { data: unbilledWork }] = await Promise.all([
+    supabase
+      .from("invoices")
+      .select(
+        "*, clients(client_name), payments(amount), campaigns(campaign_name)",
+      )
+      .order("invoice_date", { ascending: false }),
+    supabase
+      .from("work_entries")
+      .select(
+        "id, campaign_id, hours, work_date, work_type, description, campaigns(campaign_name, client_id, clients(client_name))",
+      )
+      .eq("billable", true)
+      .eq("billed", false)
+      .eq("approval_status", "Approved")
+      .order("work_date", { ascending: false }),
+  ]);
+
+  const source = {
+    fullName: profile.full_name,
+    invoices: mapBillingHomeInvoices(invoicesRaw ?? []),
+    unbilled: mapUnbilledWork(unbilledWork ?? []),
+  };
+
+  return (
+    <Suspense fallback={<DashboardFallback />}>
+      <BillingHomeDashboardClient source={source} />
     </Suspense>
   );
 }

@@ -234,7 +234,22 @@ export async function sendForSignature(input: {
   if (!link) {
     return {
       ok: false as const,
-      error: "Signer must be a linked client user for this organization.",
+      error:
+        "This client does not have an active portal account. Create or activate a client user before sending the agreement.",
+    };
+  }
+
+  const { data: signerProfile } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("id", input.signerUserId)
+    .maybeSingle();
+
+  if (!signerProfile || signerProfile.role !== "client") {
+    return {
+      ok: false as const,
+      error:
+        "This client does not have an active portal account. Create or activate a client user before sending the agreement.",
     };
   }
 
@@ -253,18 +268,6 @@ export async function sendForSignature(input: {
   const due = new Date(now);
   due.setDate(due.getDate() + (input.dueInDays ?? 7));
   const nowIso = now.toISOString();
-
-  const { data: openForInvalidate } = await supabase
-    .from("signature_requests")
-    .select("id")
-    .eq("contract_id", input.contractId)
-    .in("status", ["Sent", "Viewed"]);
-  for (const row of openForInvalidate ?? []) {
-    await supabase.rpc("invalidate_signing_invite_codes", {
-      p_signature_request_id: row.id,
-      p_status: "invalidated",
-    });
-  }
 
   await supabase
     .from("signature_requests")
@@ -386,6 +389,35 @@ export async function signAsClient(input: {
       error: result.error || "Could not sign agreement.",
     };
   }
+  return { ok: true as const };
+}
+
+/** In-app alert for agency managers after the assigned client signs. */
+export async function notifyAgencyAfterClientSignature(contractId: string) {
+  const supabase = createClient();
+  const { data: contract } = await supabase
+    .from("contracts")
+    .select("id, contract_name, contract_number")
+    .eq("id", contractId)
+    .single();
+  if (!contract) return { ok: false as const };
+
+  const { data: managers } = await supabase
+    .from("profiles")
+    .select("id")
+    .in("role", ["agency_manager", "account_manager"]);
+
+  const rows = (managers ?? []).map((m) => ({
+    user_id: m.id,
+    title: "Client signature received",
+    body: `${contract.contract_name} (${contract.contract_number}) is ready for agency countersignature.`,
+    href: `/app/contracts/${contractId}`,
+  }));
+
+  if (rows.length > 0) {
+    await supabase.from("notifications").insert(rows);
+  }
+
   return { ok: true as const };
 }
 
@@ -588,9 +620,11 @@ export async function reviseAfterDecline(contractId: string) {
   }
 
   const now = new Date().toISOString();
-  await supabase.rpc("invalidate_signing_invites_for_contract", {
-    p_contract_id: contractId,
-  });
+  await supabase
+    .from("signature_requests")
+    .update({ status: "Superseded", updated_at: now })
+    .eq("contract_id", contractId)
+    .in("status", ["Sent", "Viewed", "Declined"]);
   await supabase
     .from("contracts")
     .update({

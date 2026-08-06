@@ -160,7 +160,7 @@ export function ClientIntakeForm({
     }
 
     setSuccess(
-      `Client successfully created. CustomerID ${data.customer_id}. Use Contracts & Documents after linking a client login for in-app signing.`,
+      `Client successfully created. CustomerID ${data.customer_id}. Link a client login, then use Contracts & Documents for in-app signing.`,
     );
     setDuplicateWarning(null);
     setDuplicateMatches([]);
