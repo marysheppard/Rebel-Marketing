@@ -481,8 +481,8 @@ function PayAccountButton({
       }
       const successText =
         result.accountRemaining <= 0
-          ? `Account payment of ${money(result.amountApplied)} received. You're all caught up!`
-          : `Account payment of ${money(result.amountApplied)} applied across ${result.invoicesPaid} invoice${result.invoicesPaid === 1 ? "" : "s"}. Remaining ${money(result.accountRemaining)}.`;
+          ? `Account payment of ${money(result.amountApplied)} received. Invoices updated to Paid. You're all caught up!`
+          : `Account payment of ${money(result.amountApplied)} applied across ${result.invoicesPaid} invoice${result.invoicesPaid === 1 ? "" : "s"} (statuses set to Paid or Partially Paid). Remaining ${money(result.accountRemaining)}.`;
       onResult({ type: "success", text: successText });
       router.refresh();
       setOpen(false);
@@ -643,8 +643,8 @@ function PayInvoiceButton({
       }
       const successText =
         result.newStatus === "Paid"
-          ? `Payment received for ${invoice.invoice_number}. Invoice is paid in full. Thank you!`
-          : `Partial payment of ${money(amount)} applied to ${invoice.invoice_number}. Remaining ${money(result.remaining)}.`;
+          ? `Payment received for ${invoice.invoice_number}. Status: Paid. Thank you!`
+          : `Partial payment of ${money(amount)} applied to ${invoice.invoice_number}. Status: Partially Paid. Remaining ${money(result.remaining)}.`;
       setDialogSuccess(successText);
       onResult({ type: "success", text: successText });
       router.refresh();
