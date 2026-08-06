@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ListExportButton } from "@/components/exports/ListExportButton";
-import { TaskPriorityBarChart, TaskStatusPieChart } from "@/components/Charts";
+import {
+  TaskPriorityBarChart,
+  TaskStatusPieChart,
+  buildTaskDonutSlices,
+} from "@/components/Charts";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 
 export type TaskBoardItem = {
@@ -79,6 +83,9 @@ export function TasksBoard({
   submittedCount: number;
 }) {
   const [tab, setTab] = useState<"attention" | "progress" | "all">("attention");
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+
+  const statusSlices = useMemo(() => buildTaskDonutSlices(items), [items]);
 
   const weekEnd = useMemo(() => {
     const d = new Date(`${todayStr}T12:00:00`);
@@ -86,28 +93,39 @@ export function TasksBoard({
     return d.toISOString().slice(0, 10);
   }, [todayStr]);
 
-  const needsAttention = items.filter(
-    (t) =>
-      !isClosed(t.status) &&
-      t.due_date != null &&
-      (t.overdue || (t.due_date >= todayStr && t.due_date <= weekEnd)),
-  );
+  const needsAttention = useMemo(() => {
+    const list = items.filter(
+      (t) =>
+        !isClosed(t.status) &&
+        t.due_date != null &&
+        (t.overdue || (t.due_date >= todayStr && t.due_date <= weekEnd)),
+    );
+    if (!statusFilter) return list;
+    return list.filter((t) => t.status === statusFilter);
+  }, [items, statusFilter, todayStr, weekEnd]);
 
-  const inProgress = items.filter(
-    (t) =>
-      t.status === "In Progress" ||
-      t.status === "Not Started" ||
-      t.status === "Needs Revision",
-  );
+  const inProgress = useMemo(() => {
+    const list = items.filter(
+      (t) =>
+        t.status === "In Progress" ||
+        t.status === "Not Started" ||
+        t.status === "Needs Revision",
+    );
+    if (!statusFilter) return list;
+    return list.filter((t) => t.status === statusFilter);
+  }, [items, statusFilter]);
 
   const allSorted = useMemo(() => {
-    return [...items].sort((a, b) => {
+    const list = statusFilter
+      ? items.filter((t) => t.status === statusFilter)
+      : items;
+    return [...list].sort((a, b) => {
       if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
       const ad = a.due_date ?? "9999-99-99";
       const bd = b.due_date ?? "9999-99-99";
       return ad.localeCompare(bd);
     });
-  }, [items]);
+  }, [items, statusFilter]);
 
   return (
     <div>
@@ -189,9 +207,19 @@ export function TasksBoard({
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <TaskStatusPieChart data={statusPie} />
-            <TaskPriorityBarChart data={priorityBars} />
+          <div className="space-y-4">
+            <TaskStatusPieChart
+              slices={statusSlices}
+              selectedKey={statusFilter}
+              onSelectKey={(key) => {
+                setStatusFilter(key);
+                setTab("all");
+              }}
+              onClearSelection={() => setStatusFilter(null)}
+            />
+            <div className="grid gap-4 lg:grid-cols-2">
+              <TaskPriorityBarChart data={priorityBars} />
+            </div>
           </div>
 
           <div role="tablist" className="tabs tabs-boxed w-fit bg-base-200">
@@ -217,7 +245,7 @@ export function TasksBoard({
               className={`tab ${tab === "all" ? "tab-active" : ""}`}
               onClick={() => setTab("all")}
             >
-              All ({items.length})
+              All ({statusFilter ? allSorted.length : items.length})
             </button>
           </div>
 

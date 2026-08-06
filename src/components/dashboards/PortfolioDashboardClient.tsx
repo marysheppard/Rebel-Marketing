@@ -7,6 +7,7 @@ import {
   EmployeeBudgetChart,
   EmployeeTrackChart,
   MonthlySeriesChart,
+  type DonutBreakdownSlice,
 } from "@/components/Charts";
 import {
   CustomizeLayoutButton,
@@ -33,6 +34,27 @@ import {
 } from "@/lib/portfolio-dashboard-layout";
 import { useDashboardLayout } from "@/lib/use-dashboard-layout";
 import { usePeriodParam } from "@/lib/use-period-param";
+
+function mostCommonAssignee(
+  tasks: { assignee_id: string | null }[],
+  profiles: { id: string; full_name: string }[],
+): string | null {
+  const counts = new Map<string, number>();
+  for (const t of tasks) {
+    if (!t.assignee_id) continue;
+    counts.set(t.assignee_id, (counts.get(t.assignee_id) ?? 0) + 1);
+  }
+  let bestId: string | null = null;
+  let best = 0;
+  for (const [id, count] of counts) {
+    if (count > best) {
+      best = count;
+      bestId = id;
+    }
+  }
+  if (!bestId) return null;
+  return profiles.find((p) => p.id === bestId)?.full_name ?? null;
+}
 
 export type PortfolioDashboardSource = {
   fullName: string;
@@ -266,16 +288,12 @@ export function PortfolioDashboardClient({
     return map;
   }, [periodCosts]);
 
-  let campsUnder = 0;
-  let campsNear = 0;
   let campsOver = 0;
   for (const camp of source.campaigns) {
     const budget = num(camp.campaign_budget);
     if (budget <= 0) continue;
     const health = budgetHealth(budget, costsByCamp.get(camp.id) ?? 0);
     if (health === "over") campsOver++;
-    else if (health === "near") campsNear++;
-    else campsUnder++;
   }
 
   const staff = source.profiles.filter(
@@ -296,7 +314,6 @@ export function PortfolioDashboardClient({
     return map;
   }, [source.tasks]);
 
-  let tasksOnTrack = 0;
   let tasksAtRisk = 0;
   const capacityRows: {
     id: string;
@@ -316,8 +333,6 @@ export function PortfolioDashboardClient({
       if (late) {
         overdue++;
         tasksAtRisk++;
-      } else {
-        tasksOnTrack++;
       }
     }
     if (open > 0 || !isAm) {
@@ -331,16 +346,119 @@ export function PortfolioDashboardClient({
   }
   capacityRows.sort((a, b) => b.overdue - a.overdue || b.open - a.open);
 
-  const onTrackData = [
-    { name: "On track", value: tasksOnTrack, fill: "#22c55e" },
-    { name: "At risk / overdue", value: tasksAtRisk, fill: "#f43f5e" },
-  ].filter((d) => d.value > 0);
+  const onTrackSlices = useMemo((): DonutBreakdownSlice[] => {
+    const onTrackTasks = source.tasks.filter((t) => {
+      if (t.status === "Completed") return false;
+      return !(t.due_date != null && t.due_date < today);
+    });
+    const atRiskTasks = source.tasks.filter((t) => {
+      if (t.status === "Completed") return false;
+      return t.due_date != null && t.due_date < today;
+    });
+    const topOnTrack = mostCommonAssignee(onTrackTasks, source.profiles);
+    const topAtRisk = mostCommonAssignee(atRiskTasks, source.profiles);
+    const total = onTrackTasks.length + atRiskTasks.length;
+    const slices: DonutBreakdownSlice[] = [];
+    if (onTrackTasks.length > 0) {
+      slices.push({
+        key: "On track",
+        name: "On track",
+        value: onTrackTasks.length,
+        count: onTrackTasks.length,
+        share: total > 0 ? (onTrackTasks.length / total) * 100 : null,
+        color: "#22c55e",
+        insights: [
+          { label: "Open tasks", value: String(onTrackTasks.length) },
+          { label: "Top assignee", value: topOnTrack ?? "Not available" },
+        ],
+      });
+    }
+    if (atRiskTasks.length > 0) {
+      slices.push({
+        key: "At risk / overdue",
+        name: "At risk / overdue",
+        value: atRiskTasks.length,
+        count: atRiskTasks.length,
+        share: total > 0 ? (atRiskTasks.length / total) * 100 : null,
+        color: "#f43f5e",
+        insights: [
+          { label: "Overdue tasks", value: String(atRiskTasks.length) },
+          { label: "Top assignee", value: topAtRisk ?? "Not available" },
+        ],
+      });
+    }
+    return slices;
+  }, [source.tasks, source.profiles, today]);
 
-  const onBudgetData = [
-    { name: "Under budget", value: campsUnder, fill: "#22c55e" },
-    { name: "Near limit", value: campsNear, fill: "#eab308" },
-    { name: "Over budget", value: campsOver, fill: "#f43f5e" },
-  ].filter((d) => d.value > 0);
+  const onBudgetSlices = useMemo((): DonutBreakdownSlice[] => {
+    type CampRow = {
+      name: string;
+      budget: number;
+      spent: number;
+      health: "under" | "near" | "over";
+    };
+    const rows: CampRow[] = [];
+    for (const camp of source.campaigns) {
+      const budget = num(camp.campaign_budget);
+      if (budget <= 0) continue;
+      const spent = costsByCamp.get(camp.id) ?? 0;
+      const health = budgetHealth(budget, spent);
+      if (health === "unknown") continue;
+      rows.push({
+        name: camp.campaign_name,
+        budget,
+        spent,
+        health,
+      });
+    }
+    const buckets: {
+      key: string;
+      color: string;
+      health: CampRow["health"];
+    }[] = [
+      { key: "Under budget", color: "#22c55e", health: "under" },
+      { key: "Near limit", color: "#eab308", health: "near" },
+      { key: "Over budget", color: "#f43f5e", health: "over" },
+    ];
+    const total = rows.length;
+    return buckets
+      .map((b) => {
+        const list = rows.filter((r) => r.health === b.health);
+        if (list.length === 0) return null;
+        const budgetSum = list.reduce((s, r) => s + r.budget, 0);
+        const spentSum = list.reduce((s, r) => s + r.spent, 0);
+        const largest = [...list].sort((a, c) => c.spent - a.spent)[0];
+        return {
+          key: b.key,
+          name: b.key,
+          value: list.length,
+          count: list.length,
+          share: total > 0 ? (list.length / total) * 100 : null,
+          color: b.color,
+          insights: [
+            { label: "Total Budget", value: money(budgetSum) },
+            { label: "Total Spent", value: money(spentSum) },
+            {
+              label: "Largest by Spend",
+              value: largest?.name ?? "Not available",
+            },
+          ],
+        } satisfies DonutBreakdownSlice;
+      })
+      .filter((s): s is DonutBreakdownSlice => s != null);
+  }, [source.campaigns, costsByCamp]);
+
+  const trackTotal = onTrackSlices.reduce((s, d) => s + d.value, 0);
+  const onTrackCount =
+    onTrackSlices.find((s) => s.key === "On track")?.value ?? 0;
+  const trackHealthy =
+    trackTotal > 0 ? Math.round((onTrackCount / trackTotal) * 100) : 0;
+  const budgetTotal = onBudgetSlices.reduce((s, d) => s + d.value, 0);
+  const budgetHealthyCount = onBudgetSlices
+    .filter((s) => s.key === "Under budget" || s.key === "Near limit")
+    .reduce((s, d) => s + d.value, 0);
+  const budgetHealthy =
+    budgetTotal > 0 ? Math.round((budgetHealthyCount / budgetTotal) * 100) : 0;
 
   const attention = (
     isAm
@@ -524,14 +642,22 @@ export function PortfolioDashboardClient({
         );
       case "health_charts":
         return (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <EmployeeTrackChart data={onTrackData} />
-            <Link
-              href={p("/app/campaigns")}
-              className="block min-w-0 transition hover:opacity-95"
-            >
-              <EmployeeBudgetChart data={onBudgetData} />
-            </Link>
+          <div className="space-y-4">
+            <EmployeeTrackChart
+              slices={onTrackSlices}
+              subtitle={trackTotal > 0 ? `${trackHealthy}% on track` : undefined}
+            />
+            <EmployeeBudgetChart
+              slices={onBudgetSlices}
+              subtitle={
+                budgetTotal > 0 ? `${budgetHealthy}% healthy` : undefined
+              }
+            />
+            <div className="text-right">
+              <Link href={p("/app/campaigns")} className="link link-primary text-sm">
+                View campaigns
+              </Link>
+            </div>
           </div>
         );
       case "team_capacity":
@@ -683,12 +809,19 @@ export function PortfolioDashboardClient({
         );
       case "budget_chart":
         return (
-          <Link
-            href={p("/app/campaigns")}
-            className="block min-w-0 max-w-xl transition hover:opacity-95"
-          >
-            <EmployeeBudgetChart data={onBudgetData} />
-          </Link>
+          <div className="space-y-2">
+            <EmployeeBudgetChart
+              slices={onBudgetSlices}
+              subtitle={
+                budgetTotal > 0 ? `${budgetHealthy}% healthy` : undefined
+              }
+            />
+            <div className="text-right">
+              <Link href={p("/app/campaigns")} className="link link-primary text-sm">
+                View campaigns
+              </Link>
+            </div>
+          </div>
         );
       case "my_clients":
         return (

@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import {
   CampaignBudgetHealthChart,
   CampaignStatusPieChart,
+  buildCampaignDonutSlices,
 } from "@/components/Charts";
 import { CreateCampaignForm } from "@/components/forms";
 import { CampaignExportButton } from "@/components/campaigns/CampaignExportButton";
@@ -218,6 +219,9 @@ export function CampaignsBoard({
     clientFilter !== "all" ||
     healthFilter !== "all";
 
+  const statusSlices = useMemo(() => buildCampaignDonutSlices(items), [items]);
+  const pieSelectedKey = statusFilter === "all" ? null : statusFilter;
+
   return (
     <div>
       <PageHeader
@@ -274,9 +278,19 @@ export function CampaignsBoard({
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <CampaignStatusPieChart data={statusPie} />
-            <CampaignBudgetHealthChart data={budgetHealthBars} />
+          <div className="space-y-4">
+            <CampaignStatusPieChart
+              slices={statusSlices}
+              selectedKey={pieSelectedKey}
+              onSelectKey={(key) => {
+                setStatusFilter(key);
+                setTab("all");
+              }}
+              onClearSelection={() => setStatusFilter("all")}
+            />
+            <div className="grid gap-4 lg:grid-cols-2">
+              <CampaignBudgetHealthChart data={budgetHealthBars} />
+            </div>
           </div>
 
           <div className="grid gap-3 rounded-box border border-base-300 bg-base-100 p-4 sm:grid-cols-2 lg:grid-cols-5">
