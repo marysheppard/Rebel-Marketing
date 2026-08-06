@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { applyPayment } from "@/lib/billing/apply-payment";
 import { money, num } from "@/lib/format";
 import {
   overageAmount,
@@ -1625,27 +1626,22 @@ export function RecordPaymentForm({
     }
 
     const supabase = createClient();
-    const { error: payError } = await supabase.from("payments").insert({
-      invoice_id: inv.id,
-      client_id: inv.client_id,
-      payment_date: String(fd.get("payment_date")),
+    const result = await applyPayment(supabase, {
+      invoiceId: inv.id,
+      clientId: inv.client_id,
       amount,
-      payment_method: String(fd.get("payment_method")),
+      paymentDate: String(fd.get("payment_date")),
+      paymentMethod: String(fd.get("payment_method")),
       reference: String(fd.get("reference") ?? "").trim(),
       notes: String(fd.get("notes") ?? "").trim(),
+      remainingBefore: inv.remaining,
     });
 
-    if (payError) {
+    if (!result.ok) {
       setLoading(false);
-      setError("Could not record payment.");
+      setError(result.error);
       return;
     }
-
-    const newRemaining = inv.remaining - amount;
-    let newStatus = "Partially Paid";
-    if (newRemaining <= 0) newStatus = "Paid";
-
-    await supabase.from("invoices").update({ status: newStatus }).eq("id", inv.id);
 
     setLoading(false);
     (e.target as HTMLFormElement).reset();

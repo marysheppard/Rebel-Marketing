@@ -26,6 +26,7 @@ import {
   Bell,
   Activity,
   ScrollText,
+  MessageSquarePlus,
 } from "lucide-react";
 import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { NotificationsBell } from "@/components/NotificationsBell";
@@ -197,6 +198,12 @@ const NAV: {
     href: "/app/contracts/documents",
     label: "Contracts & Documents",
     icon: FolderOpen,
+    roles: ["client"],
+  },
+  {
+    href: "/app/change-requests",
+    label: "Request a change",
+    icon: MessageSquarePlus,
     roles: ["client"],
   },
   {

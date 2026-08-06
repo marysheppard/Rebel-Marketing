@@ -347,8 +347,8 @@ export default function HomePage() {
               Your client portal at a glance
             </h2>
             <p className="mt-3 max-w-xl text-[#1e3a5f]/90">
-              Preview how partners see campaigns, approvals, and invoices—then
-              sign in to the real client workspace.
+              Preview how partners see campaigns, balances, deliverables, and
+              contracts—then sign in to the real client workspace.
             </p>
             <PublicRolePreview />
           </div>

@@ -98,8 +98,8 @@ export default async function ApprovalsPage() {
         title="Approval Center"
         subtitle={
           profile.role === "account_manager"
-            ? "Sign-off analytics for your client book"
-            : "Client sign-off on creative, budget, and launch decisions"
+            ? "Sign-off analytics for your client book — including client change requests"
+            : "Client sign-off and client-initiated change requests"
         }
         actions={
           <ListExportButton
