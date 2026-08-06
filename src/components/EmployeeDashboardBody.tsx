@@ -44,6 +44,7 @@ export type EmployeeDashboardTaskRow = {
   due_date: string | null;
   priority: string;
   status: string;
+  client_id?: string | null;
 };
 
 export type EmployeeDashboardMapMarker = {
@@ -53,6 +54,23 @@ export type EmployeeDashboardMapMarker = {
   lng: number;
   city?: string;
   state?: string;
+  openCount?: number;
+  overdueCount?: number;
+  activeCampaignCount?: number;
+  nextDueDate?: string;
+  campaignNames?: string[];
+  health?: "risk" | "attention" | "ok";
+};
+
+export type EmployeeDashboardMapClient = {
+  id: string;
+  name: string;
+  city?: string;
+  state?: string;
+  hasCoords: boolean;
+  openCount: number;
+  overdueCount: number;
+  health: "risk" | "attention" | "ok";
 };
 
 type EmployeeDashboardBodyProps = {
@@ -66,8 +84,9 @@ type EmployeeDashboardBodyProps = {
   overdueTaskCount: number;
   tasks: EmployeeDashboardTaskRow[];
   mapMarkers: EmployeeDashboardMapMarker[];
+  mapClients: EmployeeDashboardMapClient[];
   missingMapCount: number;
-  clicksByCampaign: { name: string; clicks: number }[];
+  clicksByCampaign: { name: string; clicks: number; clientId?: string }[];
   calendarTasks: CalendarTaskEvent[];
   calendarCampaigns: CalendarCampaignEvent[];
   calendarEvents: CalendarPersonalEvent[];
@@ -75,7 +94,7 @@ type EmployeeDashboardBodyProps = {
   taskPriority: { priority: string; count: number }[];
   weeklyHours: { day: string; hours: number }[];
   metricsTrend: { date: string; impressions: number; clicks: number }[];
-  ctrByCampaign: { name: string; ctr: number }[];
+  ctrByCampaign: { name: string; ctr: number; clientId?: string }[];
 };
 
 /**
@@ -88,6 +107,7 @@ export function EmployeeDashboardBody(props: EmployeeDashboardBodyProps) {
   );
   const [ready, setReady] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   useEffect(() => {
     setPrefs(readLayoutPrefs(props.userId));
@@ -108,6 +128,39 @@ export function EmployeeDashboardBody(props: EmployeeDashboardBodyProps) {
     () => (ready ? visibleOrderedSections(prefs) : visibleOrderedSections(DEFAULT_EMPLOYEE_DASHBOARD_LAYOUT)),
     [prefs, ready],
   );
+
+  const selectedClientName = useMemo(() => {
+    if (!selectedClientId) return null;
+    return (
+      props.mapClients.find((c) => c.id === selectedClientId)?.name ??
+      props.mapMarkers.find((c) => c.id === selectedClientId)?.name ??
+      null
+    );
+  }, [selectedClientId, props.mapClients, props.mapMarkers]);
+
+  const filteredTasks = useMemo(() => {
+    if (!selectedClientId) return props.tasks;
+    return props.tasks.filter((t) => t.client_id === selectedClientId);
+  }, [props.tasks, selectedClientId]);
+
+  const filteredCalendarTasks = useMemo(() => {
+    if (!selectedClientId) return props.calendarTasks;
+    return props.calendarTasks.filter((t) => t.clientId === selectedClientId);
+  }, [props.calendarTasks, selectedClientId]);
+
+  const filteredCalendarCampaigns = useMemo(() => {
+    if (!selectedClientId) return props.calendarCampaigns;
+    return props.calendarCampaigns.filter(
+      (c) => c.clientId === selectedClientId,
+    );
+  }, [props.calendarCampaigns, selectedClientId]);
+
+  const filteredClicks = useMemo(() => {
+    if (!selectedClientId) return props.clicksByCampaign;
+    return props.clicksByCampaign.filter(
+      (r) => r.clientId === selectedClientId,
+    );
+  }, [props.clicksByCampaign, selectedClientId]);
 
   function toggleHidden(id: EmployeeDashboardSectionId) {
     const hidden = prefs.hidden.includes(id)
@@ -156,6 +209,16 @@ export function EmployeeDashboardBody(props: EmployeeDashboardBodyProps) {
     return out;
   }, [visible]);
 
+  const sectionProps: SectionCardProps = {
+    ...props,
+    selectedClientId,
+    onSelectClient: setSelectedClientId,
+    filteredTasks,
+    filteredCalendarTasks,
+    filteredCalendarCampaigns,
+    filteredClicks,
+  };
+
   return (
     <div>
       <PageHeader
@@ -173,21 +236,47 @@ export function EmployeeDashboardBody(props: EmployeeDashboardBodyProps) {
         }
       />
 
-      {(props.overdueCount > 0 || props.awaitingApprovalCount > 0) && (
-        <div className="mb-4 flex flex-wrap gap-2">
+      {(props.overdueCount > 0 || props.awaitingApprovalCount > 0) ? (
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-base-300 pb-4 text-sm">
+          <span className="font-medium opacity-70">Needs attention</span>
           {props.overdueCount > 0 ? (
-            <span className="badge badge-error badge-outline">
+            <Link
+              href="/app/tasks"
+              className="link link-hover text-error/90"
+            >
               {props.overdueCount} overdue task
               {props.overdueCount === 1 ? "" : "s"}
-            </span>
+            </Link>
           ) : null}
           {props.awaitingApprovalCount > 0 ? (
-            <span className="badge badge-warning badge-outline">
+            <Link
+              href="/app/tasks"
+              className="link link-hover text-error/90"
+            >
               {props.awaitingApprovalCount} awaiting approval
-            </span>
+            </Link>
           ) : null}
         </div>
+      ) : (
+        <p className="mb-4 border-b border-base-300 pb-4 text-sm opacity-60">
+          Nothing urgent right now.
+        </p>
       )}
+
+      {selectedClientId && selectedClientName ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="badge badge-primary badge-outline gap-1">
+            Showing: {selectedClientName}
+          </span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={() => setSelectedClientId(null)}
+          >
+            Clear filter
+          </button>
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard
@@ -229,14 +318,14 @@ export function EmployeeDashboardBody(props: EmployeeDashboardBodyProps) {
                 key={`pair-${block.left}-${block.right}-${idx}`}
                 className="mt-8 grid gap-4 lg:grid-cols-2"
               >
-                <SectionCard id={block.left} props={props} />
-                <SectionCard id={block.right} props={props} />
+                <SectionCard id={block.left} props={sectionProps} />
+                <SectionCard id={block.right} props={sectionProps} />
               </section>
             );
           }
           return (
             <section key={`${block.id}-${idx}`} className="mt-8">
-              <SectionCard id={block.id} props={props} />
+              <SectionCard id={block.id} props={sectionProps} />
             </section>
           );
         })
@@ -255,32 +344,46 @@ export function EmployeeDashboardBody(props: EmployeeDashboardBodyProps) {
   );
 }
 
+type SectionCardProps = EmployeeDashboardBodyProps & {
+  selectedClientId: string | null;
+  onSelectClient: (clientId: string | null) => void;
+  filteredTasks: EmployeeDashboardTaskRow[];
+  filteredCalendarTasks: CalendarTaskEvent[];
+  filteredCalendarCampaigns: CalendarCampaignEvent[];
+  filteredClicks: { name: string; clicks: number; clientId?: string }[];
+};
+
 function SectionCard({
   id,
   props,
 }: {
   id: EmployeeDashboardSectionId;
-  props: EmployeeDashboardBodyProps;
+  props: SectionCardProps;
 }) {
   switch (id) {
     case "tasks":
-      return <TasksSection tasks={props.tasks} todayStr={props.todayStr} />;
+      return (
+        <TasksSection tasks={props.filteredTasks} todayStr={props.todayStr} />
+      );
     case "map":
       return (
         <ClientMapDynamic
           markers={props.mapMarkers}
+          clients={props.mapClients}
           missingCount={props.missingMapCount}
+          selectedClientId={props.selectedClientId}
+          onSelectClient={props.onSelectClient}
         />
       );
     case "performance":
       return (
-        <PerformanceSection clicksByCampaign={props.clicksByCampaign} />
+        <PerformanceSection clicksByCampaign={props.filteredClicks} />
       );
     case "schedule":
       return (
         <ScheduleSection
-          tasks={props.calendarTasks}
-          campaigns={props.calendarCampaigns}
+          tasks={props.filteredCalendarTasks}
+          campaigns={props.filteredCalendarCampaigns}
           events={props.calendarEvents}
           todayStr={props.todayStr}
         />
@@ -450,7 +553,7 @@ function TasksSection({
 function PerformanceSection({
   clicksByCampaign,
 }: {
-  clicksByCampaign: { name: string; clicks: number }[];
+  clicksByCampaign: { name: string; clicks: number; clientId?: string }[];
 }) {
   return (
     <div>
