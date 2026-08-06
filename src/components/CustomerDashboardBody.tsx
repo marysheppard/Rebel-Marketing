@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { payAccountBalance, payInvoiceBalance } from "@/app/actions/pay-invoice-balance";
 import {
   CustomizeLayoutButton,
@@ -43,6 +43,97 @@ export type CustomerInvoiceRow = {
   dueSoon: boolean;
   disputed: boolean;
 };
+
+type InvoiceSearchCriteria = {
+  invoice_number: string;
+  due_date: string;
+  status: string;
+  total: string;
+  paid: string;
+  remaining: string;
+};
+
+const EMPTY_INVOICE_SEARCH: InvoiceSearchCriteria = {
+  invoice_number: "",
+  due_date: "",
+  status: "",
+  total: "",
+  paid: "",
+  remaining: "",
+};
+
+const INVOICE_SEARCH_FIELDS: {
+  key: keyof InvoiceSearchCriteria;
+  label: string;
+  placeholder: string;
+}[] = [
+  {
+    key: "invoice_number",
+    label: "Invoice number",
+    placeholder: "e.g. INV-1002",
+  },
+  { key: "due_date", label: "Due date", placeholder: "e.g. 2026-08-01" },
+  { key: "status", label: "Status", placeholder: "e.g. Partially Paid" },
+  { key: "total", label: "Total", placeholder: "e.g. 14500" },
+  { key: "paid", label: "Paid", placeholder: "e.g. 5000" },
+  { key: "remaining", label: "Remaining", placeholder: "e.g. 14500" },
+];
+
+function normalizeMoneyQuery(q: string) {
+  return q.replace(/[$,\s]/g, "").toLowerCase();
+}
+
+function moneyFieldMatches(value: number, query: string) {
+  const q = normalizeMoneyQuery(query);
+  if (!q) return true;
+  const raw = String(value);
+  const fixed = value.toFixed(2);
+  const display = money(value);
+  return (
+    raw.toLowerCase().includes(q) ||
+    fixed.toLowerCase().includes(q) ||
+    normalizeMoneyQuery(display).includes(q)
+  );
+}
+
+function textFieldMatches(value: string, query: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return value.toLowerCase().includes(q);
+}
+
+function statusFieldMatches(row: CustomerInvoiceRow, query: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const haystack = [
+    row.status,
+    row.disputed ? "disputed" : "",
+    row.overdue ? "overdue" : "",
+    row.dueSoon ? "due soon" : "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
+/** All non-empty criteria must match (AND). */
+function invoiceMatchesCriteria(
+  row: CustomerInvoiceRow,
+  criteria: InvoiceSearchCriteria,
+) {
+  return (
+    textFieldMatches(row.invoice_number, criteria.invoice_number) &&
+    textFieldMatches(row.due_date, criteria.due_date) &&
+    statusFieldMatches(row, criteria.status) &&
+    moneyFieldMatches(row.total, criteria.total) &&
+    moneyFieldMatches(row.paid, criteria.paid) &&
+    moneyFieldMatches(row.remaining, criteria.remaining)
+  );
+}
+
+function hasActiveInvoiceSearch(criteria: InvoiceSearchCriteria) {
+  return INVOICE_SEARCH_FIELDS.some((f) => criteria[f.key].trim().length > 0);
+}
 
 export type CustomerApprovalRow = {
   id: string;
@@ -310,6 +401,22 @@ function BalanceSection({
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [criteria, setCriteria] =
+    useState<InvoiceSearchCriteria>(EMPTY_INVOICE_SEARCH);
+
+  const isSearching = hasActiveInvoiceSearch(criteria);
+
+  const visibleInvoices = useMemo(() => {
+    const matched = openInvoices.filter((row) =>
+      invoiceMatchesCriteria(row, criteria),
+    );
+    if (isSearching) return matched;
+    return matched.slice(0, 8);
+  }, [openInvoices, criteria, isSearching]);
+
+  function setCriterion(key: keyof InvoiceSearchCriteria, value: string) {
+    setCriteria((prev) => ({ ...prev, [key]: value }));
+  }
 
   return (
     <div className="rounded-box border border-base-300 bg-base-100 p-5">
@@ -364,55 +471,96 @@ function BalanceSection({
         </div>
       ) : null}
       {balance > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>Invoice</th>
-                <th>Due</th>
-                <th>Status</th>
-                <th className="text-right">Total</th>
-                <th className="text-right">Paid</th>
-                <th className="text-right">Remaining</th>
-                <th className="text-right">Pay</th>
-              </tr>
-            </thead>
-            <tbody>
-              {openInvoices.slice(0, 8).map((i) => (
-                <tr key={i.id}>
-                  <td className="font-medium">{i.invoice_number}</td>
-                  <td className="whitespace-nowrap">
-                    <div>{i.due_date}</div>
-                    {i.overdue ? (
-                      <span className="badge badge-error badge-sm mt-1">
-                        Overdue
-                      </span>
-                    ) : i.dueSoon ? (
-                      <span className="badge badge-warning badge-sm mt-1">
-                        Due soon
-                      </span>
-                    ) : null}
-                  </td>
-                  <td>
-                    <StatusBadge status={i.status} />
-                    {i.disputed ? (
-                      <span className="badge badge-warning badge-sm mt-1 block w-fit">
-                        Disputed
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="text-right">{money(i.total)}</td>
-                  <td className="text-right">{money(i.paid)}</td>
-                  <td className="text-right font-medium">
-                    {money(i.remaining)}
-                  </td>
-                  <td className="text-right">
-                    <PayInvoiceButton invoice={i} onResult={setMessage} />
-                  </td>
-                </tr>
+        <div>
+          <div className="mb-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-medium opacity-70">
+                Search invoices (combine any fields)
+              </p>
+              {isSearching ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs"
+                  onClick={() => setCriteria(EMPTY_INVOICE_SEARCH)}
+                >
+                  Clear all
+                </button>
+              ) : null}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {INVOICE_SEARCH_FIELDS.map((field) => (
+                <label key={field.key} className="form-control w-full">
+                  <span className="mb-1 text-xs font-medium opacity-70">
+                    {field.label}
+                  </span>
+                  <input
+                    type="search"
+                    className="input input-bordered input-sm w-full"
+                    value={criteria[field.key]}
+                    placeholder={field.placeholder}
+                    onChange={(e) => setCriterion(field.key, e.target.value)}
+                    aria-label={`Filter by ${field.label}`}
+                  />
+                </label>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </div>
+          {visibleInvoices.length === 0 ? (
+            <p className="mb-2 text-sm opacity-60">
+              No invoices match your search.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="table table-sm">
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Due</th>
+                    <th>Status</th>
+                    <th className="text-right">Total</th>
+                    <th className="text-right">Paid</th>
+                    <th className="text-right">Remaining</th>
+                    <th className="text-right">Pay</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleInvoices.map((i) => (
+                    <tr key={i.id}>
+                      <td className="font-medium">{i.invoice_number}</td>
+                      <td className="whitespace-nowrap">
+                        <div>{i.due_date}</div>
+                        {i.overdue ? (
+                          <span className="badge badge-error badge-sm mt-1">
+                            Overdue
+                          </span>
+                        ) : i.dueSoon ? (
+                          <span className="badge badge-warning badge-sm mt-1">
+                            Due soon
+                          </span>
+                        ) : null}
+                      </td>
+                      <td>
+                        <StatusBadge status={i.status} />
+                        {i.disputed ? (
+                          <span className="badge badge-warning badge-sm mt-1 block w-fit">
+                            Disputed
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="text-right">{money(i.total)}</td>
+                      <td className="text-right">{money(i.paid)}</td>
+                      <td className="text-right font-medium">
+                        {money(i.remaining)}
+                      </td>
+                      <td className="text-right">
+                        <PayInvoiceButton invoice={i} onResult={setMessage} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <p className="mt-2 text-xs opacity-60">
             Use Pay at the top for your full account balance, or pay a single
             invoice. Demo only — no real card charge.
