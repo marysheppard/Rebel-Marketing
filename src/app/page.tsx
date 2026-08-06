@@ -5,6 +5,7 @@ import { PublicRolePreview } from "@/components/PublicRolePreview";
 import { PublicSiteHeader } from "@/components/PublicSiteHeader";
 import { RebelLogo } from "@/components/RebelLogo";
 import { SUPPORT_CONTACT } from "@/data/supportContact";
+import { TEAM_MEMBERS } from "@/data/team";
 
 export default function HomePage() {
   return (
@@ -261,16 +262,7 @@ export default function HomePage() {
               Our team
             </h3>
             <ul className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                { name: "HP Hazelwood", role: "Creative Director" },
-                { name: "Hunter Thomas", role: "Account Manager" },
-                { name: "Jackson Thomas", role: "Brand Strategist" },
-                { name: "Joshua Harvel", role: "Paid Media Lead" },
-                { name: "Mary Kate Sheppard", role: "Managing Partner" },
-                { name: "McKane Everett", role: "Content Lead" },
-                { name: "Sydney Himmelbaum", role: "Social Media Manager" },
-                { name: "Will Watson", role: "Analytics Lead" },
-              ].map((member) => (
+              {TEAM_MEMBERS.map((member) => (
                 <li
                   key={member.name}
                   className="rounded-xl border border-[#0b1f3a12] bg-[#f7f9fc] px-4 py-4"
@@ -286,7 +278,7 @@ export default function HomePage() {
                     {member.name}
                   </h4>
                   <p className="mt-1 text-xs font-medium text-[#1e3a5f]/75">
-                    {member.role}
+                    {member.title}
                   </p>
                 </li>
               ))}

@@ -22,15 +22,15 @@ Rebel Marketing is a compact agency based in Oxford, Mississippi, for brands tha
 Location: Oxford, MS.
 Three pillars: Strategy (scopes and channel choices), Creative (campaigns and brand work), Partnership (approvals, updates, and client portals).
 
-Team:
-- HP Hazelwood — Creative Director
-- Hunter Thomas — Account Manager
-- Jackson Thomas — Brand Strategist
-- Joshua Harvel — Paid Media Lead
-- Mary Kate Sheppard — Managing Partner
-- McKane Everett — Content Lead
-- Sydney Himmelbaum — Social Media Manager
-- Will Watson — Analytics Lead
+Team (see also src/data/team.ts):
+- HP Hazelwood — Creative Director (Creative)
+- Hunter Thomas — Account Manager (Account Management)
+- Jackson Thomas — Brand Strategist (Strategy)
+- Joshua Harvel — Paid Media Lead (Media)
+- Mary Kate Sheppard — Managing Partner (Leadership)
+- McKane Everett — Content Lead (Content)
+- Sydney Himmelbaum — Social Media Manager (Social)
+- Will Watson — Analytics Lead (Analytics)
 
 ## Services (What we deliver)
 1. Brand & campaigns — Positioning, integrated campaigns, and creative across channels.
