@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   DEFAULT_BILL_RATE_USD,
+  buildInvoiceSuggestion,
   buildLineItemsFromEntries,
   defaultDueDate,
   encodeWorkEntryMeta,
@@ -41,6 +42,12 @@ type ContractOption = {
   label: string;
   client_id: string;
   monthly_retainer: number;
+  billing_method?: string;
+  project_fee?: number;
+  deposit_amount?: number;
+  included_agency_hours?: number;
+  overage_hourly_rate?: number;
+  pass_through_markup_pct?: number;
 };
 
 export function InvoiceComposer({
@@ -51,6 +58,8 @@ export function InvoiceComposer({
   clientName,
   canManage,
   retainerPaidHint,
+  defaultContractId = null,
+  hasPriorSentInvoice = false,
 }: {
   mode: "create" | "edit";
   entries: UnbilledEntry[];
@@ -58,17 +67,54 @@ export function InvoiceComposer({
   contracts: ContractOption[];
   clientName: string;
   canManage: boolean;
-  /** Rough retainer remaining when available */
   retainerPaidHint?: number | null;
+  defaultContractId?: string | null;
+  hasPriorSentInvoice?: boolean;
 }) {
   const router = useRouter();
   const clientId = existing?.client_id ?? entries[0]?.client_id ?? "";
-  const workIds = useMemo(
-    () => entries.map((e) => e.id),
-    [entries],
-  );
+  const workIds = useMemo(() => entries.map((e) => e.id), [entries]);
 
-  const [invoiceType, setInvoiceType] = useState<InvoiceType>("hourly");
+  const initialContractId =
+    existing?.contract_id ||
+    defaultContractId ||
+    entries.find((e) => e.contract_id)?.contract_id ||
+    "";
+
+  const initialSuggestion = useMemo(() => {
+    if (mode === "edit" && existing && !entries.length) return null;
+    const contract =
+      contracts.find((c) => c.id === initialContractId) ??
+      contracts.find((c) => c.client_id === clientId);
+    return buildInvoiceSuggestion({
+      contract: contract
+        ? {
+            id: contract.id,
+            billing_method: contract.billing_method,
+            monthly_retainer: contract.monthly_retainer,
+            project_fee: contract.project_fee,
+            deposit_amount: contract.deposit_amount,
+            included_agency_hours: contract.included_agency_hours,
+            overage_hourly_rate: contract.overage_hourly_rate,
+            pass_through_markup_pct: contract.pass_through_markup_pct,
+          }
+        : null,
+      entries,
+      hasPriorSentInvoice,
+    });
+  }, [
+    mode,
+    existing,
+    entries,
+    contracts,
+    initialContractId,
+    clientId,
+    hasPriorSentInvoice,
+  ]);
+
+  const [invoiceType, setInvoiceType] = useState<InvoiceType>(
+    initialSuggestion?.invoiceType ?? "hourly",
+  );
   const [groupBy, setGroupBy] = useState<"campaign" | "work_type">("campaign");
   const [invoiceNumber, setInvoiceNumber] = useState(
     existing?.invoice_number ?? generateInvoiceNumber(),
@@ -79,8 +125,9 @@ export function InvoiceComposer({
   const [dueDate, setDueDate] = useState(
     existing?.due_date ?? defaultDueDate(),
   );
-  const [contractId, setContractId] = useState(existing?.contract_id ?? "");
+  const [contractId, setContractId] = useState(String(initialContractId || ""));
   const [items, setItems] = useState<LineItem[]>(() => {
+    if (initialSuggestion?.lineItems.length) return initialSuggestion.lineItems;
     if (entries.length) return buildLineItemsFromEntries(entries, "campaign");
     if (existing) {
       return [
@@ -100,15 +147,27 @@ export function InvoiceComposer({
     num(existing?.pass_through_amount ?? 0),
   );
   const [tax, setTax] = useState(num(existing?.tax_amount ?? 0));
-  const [markupPct, setMarkupPct] = useState(15);
+  const [markupPct, setMarkupPct] = useState(
+    initialSuggestion?.markupPct && initialSuggestion.markupPct > 0
+      ? initialSuggestion.markupPct
+      : 15,
+  );
   const [notes, setNotes] = useState(
     stripWorkEntryMeta(existing?.notes ?? ""),
+  );
+  const [suggestionNote, setSuggestionNote] = useState(
+    initialSuggestion?.summary ?? "",
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const clientContracts = contracts.filter((c) => c.client_id === clientId);
   const selectedContract = clientContracts.find((c) => c.id === contractId);
+  const billRate =
+    selectedContract?.overage_hourly_rate &&
+    selectedContract.overage_hourly_rate > 0
+      ? selectedContract.overage_hourly_rate
+      : entries[0]?.estimated_rate || DEFAULT_BILL_RATE_USD;
   const subtotal = lineItemsSubtotal(items);
   const markupAmount =
     invoiceType === "media"
@@ -117,8 +176,56 @@ export function InvoiceComposer({
   const total =
     Math.round((subtotal + passThrough + markupAmount + tax) * 100) / 100;
 
+  function applyContractSuggestion(nextContractId: string) {
+    setContractId(nextContractId);
+    const contract = clientContracts.find((c) => c.id === nextContractId);
+    if (!contract || (!entries.length && mode === "edit")) return;
+    const suggestion = buildInvoiceSuggestion({
+      contract: {
+        id: contract.id,
+        billing_method: contract.billing_method,
+        monthly_retainer: contract.monthly_retainer,
+        project_fee: contract.project_fee,
+        deposit_amount: contract.deposit_amount,
+        included_agency_hours: contract.included_agency_hours,
+        overage_hourly_rate: contract.overage_hourly_rate,
+        pass_through_markup_pct: contract.pass_through_markup_pct,
+      },
+      entries,
+      passThrough,
+      groupBy,
+      hasPriorSentInvoice,
+    });
+    setInvoiceType(suggestion.invoiceType);
+    setItems(suggestion.lineItems);
+    if (suggestion.markupPct > 0) setMarkupPct(suggestion.markupPct);
+    setSuggestionNote(suggestion.summary);
+  }
+
   function rebuildLines(nextGroup: "campaign" | "work_type") {
     setGroupBy(nextGroup);
+    if (selectedContract && entries.length) {
+      const suggestion = buildInvoiceSuggestion({
+        contract: {
+          id: selectedContract.id,
+          billing_method: selectedContract.billing_method,
+          monthly_retainer: selectedContract.monthly_retainer,
+          project_fee: selectedContract.project_fee,
+          deposit_amount: selectedContract.deposit_amount,
+          included_agency_hours: selectedContract.included_agency_hours,
+          overage_hourly_rate: selectedContract.overage_hourly_rate,
+          pass_through_markup_pct: selectedContract.pass_through_markup_pct,
+        },
+        entries,
+        passThrough,
+        groupBy: nextGroup,
+        hasPriorSentInvoice,
+      });
+      setInvoiceType(suggestion.invoiceType);
+      setItems(suggestion.lineItems);
+      setSuggestionNote(suggestion.summary);
+      return;
+    }
     if (entries.length) {
       setItems(buildLineItemsFromEntries(entries, nextGroup));
     }
@@ -147,8 +254,26 @@ export function InvoiceComposer({
     setLoading(true);
     setError(null);
     const supabase = createClient();
-    const campaign_id =
-      existing?.campaign_id ?? primaryCampaignId(entries);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      setError("Not authenticated.");
+      return;
+    }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    if (!profile || profile.role !== "billing") {
+      setLoading(false);
+      setError("Only the billing role can create or send invoices.");
+      return;
+    }
+
+    const campaign_id = existing?.campaign_id ?? primaryCampaignId(entries);
     const fullNotes = encodeWorkEntryMeta(
       workIds.length ? workIds : parseWorkEntryIdsFromNotes(existing?.notes),
       notes,
@@ -170,8 +295,6 @@ export function InvoiceComposer({
       notes: fullNotes,
     };
 
-    let invoiceId = existing?.id;
-
     if (mode === "edit" && existing?.id) {
       const { error: updErr } = await supabase
         .from("invoices")
@@ -190,13 +313,12 @@ export function InvoiceComposer({
         .single();
       if (insErr || !inv) {
         setLoading(false);
-        setError("Could not create invoice. Check required fields and permissions.");
+        setError(
+          "Could not create invoice. Check required fields and permissions.",
+        );
         return;
       }
-      invoiceId = inv.id as string;
     }
-
-    void invoiceId;
 
     if (status === "Sent") {
       const ids =
@@ -219,7 +341,9 @@ export function InvoiceComposer({
 
   if (!canManage && mode === "create") {
     return (
-      <p className="text-sm opacity-70">You do not have permission to create invoices.</p>
+      <p className="text-sm opacity-70">
+        You do not have permission to create invoices.
+      </p>
     );
   }
 
@@ -233,9 +357,12 @@ export function InvoiceComposer({
           <h1 className="text-2xl font-bold tracking-tight">{clientName}</h1>
           <p className="text-sm opacity-70">
             {entries.length
-              ? `${entries.length} work entries · default rate ${money(DEFAULT_BILL_RATE_USD)}/hr`
+              ? `${entries.length} work entries · bill rate ${money(billRate)}/hr`
               : "Review amounts and send when ready"}
           </p>
+          {suggestionNote ? (
+            <p className="mt-1 text-xs opacity-60">Suggested: {suggestionNote}</p>
+          ) : null}
         </div>
         <Link href="/app/billing" className="btn btn-ghost btn-sm">
           Back to Billing
@@ -245,12 +372,24 @@ export function InvoiceComposer({
       {selectedContract && selectedContract.monthly_retainer > 0 ? (
         <div className="rounded-box border border-info/30 bg-info/10 px-4 py-3 text-sm">
           Contract retainer: {money(selectedContract.monthly_retainer)}/mo
+          {selectedContract.billing_method ? (
+            <span className="opacity-80">
+              {" "}
+              · {selectedContract.billing_method}
+            </span>
+          ) : null}
           {retainerPaidHint != null ? (
             <span className="opacity-80">
               {" "}
               · Invoiced on this contract (approx): {money(retainerPaidHint)}
             </span>
           ) : null}
+        </div>
+      ) : null}
+
+      {!canManage ? (
+        <div className="rounded-box border border-info/30 bg-info/10 px-4 py-3 text-sm">
+          Read-only — waiting for Billing to create or send this invoice.
         </div>
       ) : null}
 
@@ -325,7 +464,7 @@ export function InvoiceComposer({
           <select
             className="select select-bordered"
             value={contractId}
-            onChange={(e) => setContractId(e.target.value)}
+            onChange={(e) => applyContractSuggestion(e.target.value)}
             disabled={!canManage}
           >
             <option value="">None</option>
@@ -356,7 +495,9 @@ export function InvoiceComposer({
                     className="input input-bordered input-sm w-full max-w-xs"
                     value={it.label}
                     disabled={!canManage}
-                    onChange={(e) => updateItem(it.id, { label: e.target.value })}
+                    onChange={(e) =>
+                      updateItem(it.id, { label: e.target.value })
+                    }
                   />
                 </td>
                 <td className="text-right">

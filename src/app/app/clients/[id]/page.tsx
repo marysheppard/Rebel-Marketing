@@ -11,7 +11,11 @@ import {
 } from "@/lib/contact-format";
 import { money, num } from "@/lib/format";
 import { remainingBalance } from "@/lib/finance";
-import { canManageClients, getProfile } from "@/lib/page-auth";
+import {
+  canManageClients,
+  canManageContracts,
+  getProfile,
+} from "@/lib/page-auth";
 
 export default async function ClientDetailPage({
   params,
@@ -49,6 +53,7 @@ export default async function ClientDetailPage({
     .filter((i) => !["Draft", "Canceled"].includes(i.status))
     .reduce((s, i) => s + num(i.total_amount), 0);
   const canManage = !!profile && canManageClients(profile.role);
+  const canCreateContract = !!profile && canManageContracts(profile.role);
   const hasPortalLink = (portalLinks ?? []).length > 0;
 
   return (
@@ -60,12 +65,14 @@ export default async function ClientDetailPage({
           .join(" · ") || "Client account"}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/app/contracts/builder?clientId=${client.id}`}
-              className="btn btn-primary btn-sm"
-            >
-              New contract
-            </Link>
+            {canCreateContract ? (
+              <Link
+                href={`/app/contracts/builder?clientId=${client.id}`}
+                className="btn btn-primary btn-sm"
+              >
+                New contract
+              </Link>
+            ) : null}
             <Link href="/app/clients" className="btn btn-ghost btn-sm">
               ← All clients
             </Link>
@@ -105,7 +112,7 @@ export default async function ClientDetailPage({
         customerId={String(client.customer_id || "")}
         contactEmail={String(client.contact_email || "")}
         hasPortalLink={hasPortalLink}
-        canManage={canManage}
+        canManage={canCreateContract}
       />
 
       <div className="mb-6 grid gap-4 rounded-box border border-base-300 bg-base-100 p-4 text-sm lg:grid-cols-2">
@@ -200,12 +207,14 @@ export default async function ClientDetailPage({
               One client can have many contracts over time (renewals and new engagements).
             </p>
           </div>
-          <Link
-            href={`/app/contracts/builder?clientId=${client.id}`}
-            className="btn btn-outline btn-sm"
-          >
-            New contract
-          </Link>
+          {canCreateContract ? (
+            <Link
+              href={`/app/contracts/builder?clientId=${client.id}`}
+              className="btn btn-outline btn-sm"
+            >
+              New contract
+            </Link>
+          ) : null}
         </div>
         <div className="overflow-x-auto rounded-box border border-base-300">
           <table className="table">
@@ -239,14 +248,21 @@ export default async function ClientDetailPage({
               {!contracts?.length ? (
                 <tr>
                   <td colSpan={5} className="text-center opacity-60">
-                    No contracts yet.{" "}
-                    <Link
-                      href={`/app/contracts/builder?clientId=${client.id}`}
-                      className="link"
-                    >
-                      Create the first contract
-                    </Link>{" "}
-                    for this client.
+                    No contracts yet.
+                    {canCreateContract ? (
+                      <>
+                        {" "}
+                        <Link
+                          href={`/app/contracts/builder?clientId=${client.id}`}
+                          className="link"
+                        >
+                          Create the first contract
+                        </Link>{" "}
+                        for this client.
+                      </>
+                    ) : (
+                      " An account manager can create the first contract."
+                    )}
                   </td>
                 </tr>
               ) : null}

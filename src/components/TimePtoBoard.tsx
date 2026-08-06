@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CreateWorkForm, PtoRequestForm } from "@/components/forms";
+import { CreateWorkForm, PtoRequestForm, UpdateWorkEntryApprovalForm } from "@/components/forms";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { TimePtoExportButton } from "@/components/work/TimePtoExportButton";
 import { num } from "@/lib/format";
@@ -12,16 +12,19 @@ export type TimeEntryItem = {
   work_date: string;
   campaign_id: string;
   campaign_name: string;
+  client_name: string;
   task_id: string | null;
   task_title: string | null;
   work_type: string;
   description: string;
   hours: number;
   billable: boolean;
+  billed: boolean;
   retainer_bucket: string | null;
   out_of_scope: boolean;
   approval_status: string;
   logged_by: string;
+  estimated_amount: number;
 };
 
 export type PtoItem = {
@@ -84,6 +87,7 @@ function FlagBadges({
 
 export function TimePtoBoard({
   isEmployee,
+  canApproveWork = false,
   userId,
   entries,
   pto,
@@ -99,6 +103,7 @@ export function TimePtoBoard({
   pendingPto,
 }: {
   isEmployee: boolean;
+  canApproveWork?: boolean;
   userId: string;
   entries: TimeEntryItem[];
   pto: PtoItem[];
@@ -276,6 +281,7 @@ export function TimePtoBoard({
                   <th>Flags</th>
                   <th>Approval</th>
                   <th>Logged by</th>
+                  {canApproveWork ? <th>Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -316,6 +322,20 @@ export function TimePtoBoard({
                       <StatusBadge status={w.approval_status} />
                     </td>
                     <td>{w.logged_by}</td>
+                    {canApproveWork ? (
+                      <td>
+                        <UpdateWorkEntryApprovalForm
+                          workEntryId={w.id}
+                          currentStatus={w.approval_status}
+                          billable={w.billable}
+                          billed={w.billed}
+                          hours={w.hours}
+                          campaignName={w.campaign_name}
+                          clientName={w.client_name}
+                          estimatedAmount={w.estimated_amount}
+                        />
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

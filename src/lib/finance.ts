@@ -71,6 +71,14 @@ export function overageAmount(
   return overageHours(includedHours, loggedHours) * num(overageHourlyRate);
 }
 
+/** Effective client bill rate from MSA (fallback used by billing queue). */
+export function contractBillRate(contract: {
+  overage_hourly_rate?: number | string | null;
+}, fallback = 150) {
+  const rate = num(contract.overage_hourly_rate);
+  return rate > 0 ? rate : fallback;
+}
+
 /** Suggest invoice subtotal from retainer / project fee terms. */
 export function suggestedInvoiceSubtotal(contract: {
   billing_method?: string | null;

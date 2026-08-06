@@ -85,10 +85,10 @@ async function requireStaff() {
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["agency_manager", "account_manager"].includes(profile.role)) {
+  if (!profile || profile.role !== "account_manager") {
     return {
       ok: false as const,
-      error: "Only agency managers can create client portal accounts.",
+      error: "Only an account manager can create or reset client portal accounts.",
       supabase,
     };
   }

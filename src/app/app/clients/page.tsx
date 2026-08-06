@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ClientsExplorer } from "@/components/ClientsExplorer";
-import { canManageClients, getProfile } from "@/lib/page-auth";
+import { canManageClients, canManageContracts, getProfile } from "@/lib/page-auth";
 
 export default async function ClientsPage() {
   const { supabase, profile } = await getProfile();
@@ -18,11 +18,13 @@ export default async function ClientsPage() {
 
   const list = clients ?? [];
   const showForm = canManageClients(profile.role);
+  const canCreateContract = canManageContracts(profile.role);
 
   return (
     <div>
       <ClientsExplorer
         canManage={showForm}
+        canCreateContract={canCreateContract}
         source={{
           clients: list.map((c) => ({
             id: c.id,

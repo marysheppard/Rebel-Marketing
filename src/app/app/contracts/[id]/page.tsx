@@ -64,6 +64,7 @@ export default async function ContractDetailPage({
     !!profile && canManageContracts(profile.role) && !isClientRole(profile.role);
   const canSignAgency =
     !!profile && canCountersign(profile.role) && !isClientRole(profile.role);
+  const showExecutionPanel = canManage || canSignAgency;
   const status = normalizeContractStatus(contract.contract_status);
   const html =
     contract.signed_agreement_html || contract.agreement_html || "";
@@ -77,7 +78,7 @@ export default async function ContractDetailPage({
         }`}
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {canManage ? (
+            {showExecutionPanel ? (
               <ContractExecutionPanel
                 contract={contract as Contract}
                 canManage={canManage}
@@ -110,12 +111,14 @@ export default async function ContractDetailPage({
             <Link href={`/app/clients/${contract.client_id}`} className="btn btn-ghost btn-sm">
               Client profile
             </Link>
-            <Link
-              href={`/app/contracts/builder?clientId=${contract.client_id}`}
-              className="btn btn-outline btn-sm"
-            >
-              New contract (same client)
-            </Link>
+            {canManage ? (
+              <Link
+                href={`/app/contracts/builder?clientId=${contract.client_id}`}
+                className="btn btn-outline btn-sm"
+              >
+                New contract (same client)
+              </Link>
+            ) : null}
             <Link href="/app/contracts" className="btn btn-ghost btn-sm">
               ← All contracts
             </Link>
@@ -162,6 +165,12 @@ export default async function ContractDetailPage({
           {request?.decline_reason ? (
             <p className="text-error">
               Declined: {request.decline_reason}
+            </p>
+          ) : status === "Awaiting Agency Signature" ? (
+            <p className="opacity-70">
+              {canSignAgency
+                ? "Client has signed. Review the agreement and complete Agency Countersign."
+                : "Client has signed. Waiting for an agency manager to countersign."}
             </p>
           ) : request &&
             ["Sent", "Viewed"].includes(String(request.status)) ? (

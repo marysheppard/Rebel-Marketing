@@ -1,7 +1,14 @@
 import { num } from "@/lib/format";
-import { remainingBalance, type InvoiceLike } from "@/lib/finance";
+import {
+  contractBillRate,
+  overageAmount,
+  overageHours,
+  remainingBalance,
+  suggestedInvoiceSubtotal,
+  type InvoiceLike,
+} from "@/lib/finance";
 
-/** Default bill rate until per-client / per-role rates exist. */
+/** Default bill rate when contract overage_hourly_rate is unset. */
 export const DEFAULT_BILL_RATE_USD = 150;
 
 export const INVOICE_STATUS_BADGE_MAP: Record<string, string> = {
@@ -27,6 +34,28 @@ export type UnbilledEntry = {
   client_name: string;
   estimated_rate: number;
   estimated_amount: number;
+  contract_id?: string | null;
+};
+
+export type ContractBillingTerms = {
+  id: string;
+  billing_method?: string | null;
+  monthly_retainer?: number | string | null;
+  project_fee?: number | string | null;
+  deposit_amount?: number | string | null;
+  included_agency_hours?: number | string | null;
+  overage_hourly_rate?: number | string | null;
+  pass_through_markup_pct?: number | string | null;
+};
+
+export type InvoiceSuggestion = {
+  invoiceType: InvoiceType;
+  lineItems: LineItem[];
+  subtotal: number;
+  passThrough: number;
+  markupPct: number;
+  rate: number;
+  summary: string;
 };
 
 export type BillingInvoiceRow = {
@@ -140,7 +169,10 @@ export function buildLineItemsFromEntries(
   groupBy: "campaign" | "work_type",
   rate = DEFAULT_BILL_RATE_USD,
 ): LineItem[] {
-  const buckets = new Map<string, { label: string; hours: number }>();
+  const buckets = new Map<
+    string,
+    { label: string; hours: number; amount: number }
+  >();
 
   for (const e of entries) {
     const key = groupBy === "campaign" ? e.campaign_id : e.work_type || "Other";
@@ -148,22 +180,168 @@ export function buildLineItemsFromEntries(
       groupBy === "campaign"
         ? e.campaign_name || "Campaign"
         : e.work_type || "Other";
-    const prev = buckets.get(key) ?? { label, hours: 0 };
+    const prev = buckets.get(key) ?? { label, hours: 0, amount: 0 };
     prev.hours += num(e.hours);
+    prev.amount +=
+      num(e.estimated_amount) ||
+      estimateEntryAmount(e.hours, e.estimated_rate || rate);
     buckets.set(key, prev);
   }
 
   return Array.from(buckets.entries()).map(([key, b]) => {
     const hours = Math.round(b.hours * 10) / 10;
+    const amount = Math.round(b.amount * 100) / 100;
+    const lineRate =
+      hours > 0 ? Math.round((amount / hours) * 100) / 100 : rate;
     return {
       id: key,
       label: b.label,
       qty: hours,
-      rate,
-      amount: estimateEntryAmount(hours, rate),
+      rate: lineRate,
+      amount,
       kind: "labor" as const,
     };
   });
+}
+
+/**
+ * Build suggested invoice lines from MSA terms + approved unbilled hours.
+ * Pass-through costs are optional inputs from the composer.
+ */
+export function buildInvoiceSuggestion(input: {
+  contract: ContractBillingTerms | null | undefined;
+  entries: UnbilledEntry[];
+  passThrough?: number;
+  groupBy?: "campaign" | "work_type";
+  hasPriorSentInvoice?: boolean;
+}): InvoiceSuggestion {
+  const contract = input.contract;
+  const entries = input.entries;
+  const groupBy = input.groupBy ?? "campaign";
+  const passThrough = num(input.passThrough);
+  const method = contract?.billing_method ?? "";
+  const rate = contract
+    ? contractBillRate(contract, DEFAULT_BILL_RATE_USD)
+    : entries[0]?.estimated_rate || DEFAULT_BILL_RATE_USD;
+  const markupPct = num(contract?.pass_through_markup_pct) || 0;
+  const totalHours = entries.reduce((s, e) => s + num(e.hours), 0);
+  const included = num(contract?.included_agency_hours);
+  const retainer = num(contract?.monthly_retainer);
+  const project = num(contract?.project_fee);
+
+  const laborItems = buildLineItemsFromEntries(
+    entries.map((e) => ({
+      ...e,
+      estimated_rate: e.estimated_rate || rate,
+      estimated_amount:
+        e.estimated_amount || estimateEntryAmount(e.hours, e.estimated_rate || rate),
+    })),
+    groupBy,
+    rate,
+  );
+
+  const lineItems: LineItem[] = [];
+  let invoiceType: InvoiceType = "hourly";
+  let summary = "Hourly / time and materials from approved work";
+
+  if (
+    ["Monthly Retainer", "Hybrid", "Mixed"].includes(method) &&
+    retainer > 0
+  ) {
+    invoiceType = method === "Monthly Retainer" ? "retainer" : "mixed";
+    lineItems.push({
+      id: "retainer",
+      label: "Monthly retainer",
+      qty: 1,
+      rate: retainer,
+      amount: retainer,
+      kind: "retainer",
+    });
+    const overHrs = overageHours(included, totalHours);
+    if (overHrs > 0 && rate > 0) {
+      const overAmt = overageAmount(included, totalHours, rate);
+      lineItems.push({
+        id: "overage",
+        label: `Overage hours (${overHrs.toFixed(1)}h)`,
+        qty: Math.round(overHrs * 10) / 10,
+        rate,
+        amount: Math.round(overAmt * 100) / 100,
+        kind: "labor",
+      });
+    }
+    summary =
+      overHrs > 0
+        ? `Retainer ${retainer.toFixed(2)} + overage hours`
+        : `Monthly retainer from contract`;
+  } else if (
+    ["Project Fee", "Campaign Billing"].includes(method) &&
+    project > 0 &&
+    !input.hasPriorSentInvoice
+  ) {
+    invoiceType = "fixed";
+    lineItems.push({
+      id: "project",
+      label: method === "Campaign Billing" ? "Campaign fee" : "Project fee",
+      qty: 1,
+      rate: project,
+      amount: project,
+      kind: "fixed",
+    });
+    summary = `${method} from contract`;
+  } else if (["Hybrid", "Mixed"].includes(method) && project > 0 && retainer <= 0) {
+    invoiceType = "mixed";
+    lineItems.push({
+      id: "project",
+      label: "Project fee",
+      qty: 1,
+      rate: project,
+      amount: project,
+      kind: "fixed",
+    });
+    lineItems.push(...laborItems);
+    summary = "Hybrid fee + approved labor";
+  } else if (method === "Pass-Through" || passThrough > 0) {
+    invoiceType = passThrough > 0 ? "media" : "hourly";
+    lineItems.push(...laborItems);
+    summary =
+      passThrough > 0
+        ? "Labor plus pass-through / media"
+        : "Approved billable hours";
+  } else {
+    // Hourly / T&M or fallback
+    invoiceType = "hourly";
+    lineItems.push(...laborItems);
+    if (!lineItems.length && suggestedInvoiceSubtotal(contract ?? {}) > 0) {
+      const base = suggestedInvoiceSubtotal(contract ?? {});
+      lineItems.push({
+        id: "contract",
+        label: "Contract suggested amount",
+        qty: 1,
+        rate: base,
+        amount: base,
+        kind: "other",
+      });
+      invoiceType = retainer > 0 ? "retainer" : "fixed";
+      summary = "Contract suggested amount";
+    }
+  }
+
+  // If retainer path produced no overage and no entries, keep retainer-only.
+  // If hourly path empty but we have entries mapped incorrectly, ensure labor.
+  if (!lineItems.length && laborItems.length) {
+    lineItems.push(...laborItems);
+  }
+
+  const subtotal = lineItemsSubtotal(lineItems);
+  return {
+    invoiceType,
+    lineItems,
+    subtotal,
+    passThrough,
+    markupPct,
+    rate,
+    summary,
+  };
 }
 
 export function lineItemsSubtotal(items: LineItem[]) {
