@@ -1,15 +1,60 @@
-import Link from "next/link";
-import { AlertList, PageHeader } from "@/components/ui";
-import { daysBetween, money, num, pct } from "@/lib/format";
+import { daysBetween, money, num } from "@/lib/format";
 import { buildControlAlerts } from "@/lib/controls";
 import {
   budgetHealth,
   budgetVariance,
   profitMargin,
   remainingBalance,
-  sumCosts,
 } from "@/lib/finance";
 import { getProfile } from "@/lib/page-auth";
+import { ReportsDashboard } from "@/components/reports/ReportsDashboard";
+import type {
+  ApprovalPerf,
+  BillingPerf,
+  BudgetRow,
+  ProfitRow,
+  UnbilledRow,
+} from "@/components/reports/types";
+
+function buildPulse({
+  critical,
+  agencyMargin,
+  agencyProfit,
+  overdue,
+  overBudget,
+  unbilledHours,
+}: {
+  critical: number;
+  agencyMargin: number | null;
+  agencyProfit: number;
+  overdue: number;
+  overBudget: number;
+  unbilledHours: number;
+}) {
+  const bits: string[] = [];
+  if (critical > 0) {
+    bits.push(
+      `${critical} critical control${critical === 1 ? "" : "s"} need review`,
+    );
+  } else {
+    bits.push("No critical controls open");
+  }
+  if (agencyMargin != null) {
+    bits.push(
+      `agency margin ${agencyMargin.toFixed(1)}% (${money(agencyProfit)} net)`,
+    );
+  }
+  if (overdue > 0) bits.push(`${money(overdue)} overdue AR`);
+  if (overBudget > 0) {
+    bits.push(
+      `${overBudget} campaign${overBudget === 1 ? "" : "s"} over budget`,
+    );
+  }
+  if (unbilledHours > 0) {
+    bits.push(`${unbilledHours.toFixed(1)} approved hours ready to invoice`);
+  }
+  return `${bits.join(" · ")}.`;
+}
 
 export default async function ReportsPage() {
   const { supabase } = await getProfile();
@@ -116,55 +161,65 @@ export default async function ReportsPage() {
     }
   }
 
-  const clientProfit = (clients ?? []).map((cl) => {
-    const campIds = new Set(
-      (campaigns ?? []).filter((c) => c.client_id === cl.id).map((c) => c.id),
-    );
-    const clientCosts = (costs ?? [])
-      .filter((c) => c.campaign_id && campIds.has(c.campaign_id))
-      .reduce((s, c) => s + num(c.amount), 0);
-    const revenue = revByClient.get(cl.id) ?? 0;
-    const profit = revenue - clientCosts;
-    return {
-      id: cl.id,
-      name: cl.client_name,
-      revenue,
-      costs: clientCosts,
-      profit,
-      margin: profitMargin(revenue, clientCosts),
-    };
-  }).filter((r) => r.revenue > 0 || r.costs > 0);
+  const clientProfit: ProfitRow[] = (clients ?? [])
+    .map((cl) => {
+      const campIds = new Set(
+        (campaigns ?? []).filter((c) => c.client_id === cl.id).map((c) => c.id),
+      );
+      const clientCosts = (costs ?? [])
+        .filter((c) => c.campaign_id && campIds.has(c.campaign_id))
+        .reduce((s, c) => s + num(c.amount), 0);
+      const revenue = revByClient.get(cl.id) ?? 0;
+      const profit = revenue - clientCosts;
+      return {
+        id: cl.id,
+        name: cl.client_name,
+        revenue,
+        costs: clientCosts,
+        profit,
+        margin: profitMargin(revenue, clientCosts),
+      };
+    })
+    .filter((r) => r.revenue > 0 || r.costs > 0);
 
-  const campaignProfit = (campaigns ?? []).map((c) => {
-    const revenue = revByCampaign.get(c.id) ?? 0;
-    const campCosts = costsByCampaign.get(c.id) ?? 0;
-    const profit = revenue - campCosts;
-    return {
-      id: c.id,
-      name: c.campaign_name,
-      client: (c as { clients?: { client_name: string } }).clients?.client_name ?? "—",
-      revenue,
-      costs: campCosts,
-      profit,
-      margin: profitMargin(revenue, campCosts),
-    };
-  }).filter((r) => r.revenue > 0 || r.costs > 0);
+  const campaignProfit: ProfitRow[] = (campaigns ?? [])
+    .map((c) => {
+      const revenue = revByCampaign.get(c.id) ?? 0;
+      const campCosts = costsByCampaign.get(c.id) ?? 0;
+      const profit = revenue - campCosts;
+      return {
+        id: c.id,
+        name: c.campaign_name,
+        client:
+          (c as { clients?: { client_name: string } }).clients?.client_name ?? "—",
+        revenue,
+        costs: campCosts,
+        profit,
+        margin: profitMargin(revenue, campCosts),
+      };
+    })
+    .filter((r) => r.revenue > 0 || r.costs > 0);
 
-  const budgetPerf = (campaigns ?? []).map((c) => {
-    const budget = num(c.campaign_budget);
-    const spent = costsByCampaign.get(c.id) ?? 0;
-    const health = budgetHealth(budget, spent);
-    return {
-      id: c.id,
-      name: c.campaign_name,
-      budget,
-      spent,
-      variance: budgetVariance(budget, spent),
-      health,
-    };
-  }).filter((r) => r.budget > 0);
+  const budgetPerf: BudgetRow[] = (campaigns ?? [])
+    .map((c) => {
+      const budget = num(c.campaign_budget);
+      const spent = costsByCampaign.get(c.id) ?? 0;
+      const healthRaw = budgetHealth(budget, spent);
+      const health: BudgetRow["health"] =
+        healthRaw === "unknown" ? "na" : healthRaw;
+      return {
+        id: c.id,
+        name: c.campaign_name,
+        budget,
+        spent,
+        variance: budgetVariance(budget, spent),
+        health,
+        pctUsed: budget > 0 ? (spent / budget) * 100 : 0,
+      };
+    })
+    .filter((r) => r.budget > 0);
 
-  const billingPerf = (invoices ?? []).reduce(
+  const billingPerf: BillingPerf = (invoices ?? []).reduce(
     (acc, i) => {
       acc.total += num(i.total_amount);
       acc.collected += num(i.total_amount) - remainingBalance(i);
@@ -178,7 +233,7 @@ export default async function ReportsPage() {
     { total: 0, collected: 0, outstanding: 0, overdue: 0, disputed: 0 },
   );
 
-  const approvalPerf = (approvals ?? []).reduce(
+  const approvalAgg = (approvals ?? []).reduce(
     (acc, a) => {
       acc.total++;
       if (a.approval_status === "Pending") {
@@ -202,10 +257,18 @@ export default async function ReportsPage() {
       pendingCount: 0,
     },
   );
-  const avgWait =
-    approvalPerf.pendingCount > 0
-      ? approvalPerf.totalWaitDays / approvalPerf.pendingCount
-      : null;
+
+  const approvalPerf: ApprovalPerf = {
+    total: approvalAgg.total,
+    pending: approvalAgg.pending,
+    approved: approvalAgg.approved,
+    rejected: approvalAgg.rejected,
+    changes: approvalAgg.changes,
+    avgWaitDays:
+      approvalAgg.pendingCount > 0
+        ? approvalAgg.totalWaitDays / approvalAgg.pendingCount
+        : null,
+  };
 
   const unbilledWork = (work ?? []).filter(
     (w) => w.billable && !w.billed && w.approval_status === "Approved",
@@ -218,265 +281,46 @@ export default async function ReportsPage() {
     unbilledByCampaign.set(w.campaign_id, cur);
   }
 
+  const unbilled: UnbilledRow[] = [...unbilledByCampaign.entries()]
+    .map(([campaignId, data]) => {
+      const camp = (campaigns ?? []).find((c) => c.id === campaignId);
+      return {
+        campaignId,
+        campaignName: camp?.campaign_name ?? campaignId,
+        entries: data.entries,
+        hours: data.hours,
+      };
+    })
+    .sort((a, b) => b.hours - a.hours);
+
+  const agencyRevenue = clientProfit.reduce((s, r) => s + r.revenue, 0);
+  const agencyCosts = clientProfit.reduce((s, r) => s + r.costs, 0);
+  const agencyProfit = agencyRevenue - agencyCosts;
+  const agencyMargin =
+    agencyRevenue > 0 ? (agencyProfit / agencyRevenue) * 100 : null;
+  const unbilledHours = unbilled.reduce((s, r) => s + r.hours, 0);
+  const overBudget = budgetPerf.filter((r) => r.health === "over").length;
+  const critical = controlAlerts.filter((a) => a.severity === "error").length;
+
+  const pulse = buildPulse({
+    critical,
+    agencyMargin,
+    agencyProfit,
+    overdue: billingPerf.overdue,
+    overBudget,
+    unbilledHours,
+  });
+
   return (
-    <div>
-      <PageHeader
-        title="Reports"
-        subtitle="Live profitability, budget, billing, and operational performance"
-      />
-
-      <section className="mt-2 mb-8">
-        <h2 className="mb-3 text-xl font-bold">Management controls</h2>
-        <p className="mb-3 text-sm opacity-70">
-          Includes MSA advertising budgets, approval thresholds, and operational risk flags.
-        </p>
-        <AlertList alerts={controlAlerts} />
-      </section>
-
-      <section className="mt-2">
-        <h2 className="mb-3 text-xl font-bold">Client profitability</h2>
-        <div className="overflow-x-auto rounded-box border border-base-300">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>Client</th>
-                <th className="text-right">Revenue</th>
-                <th className="text-right">Costs</th>
-                <th className="text-right">Profit</th>
-                <th className="text-right">Margin</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clientProfit.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <Link href={`/app/clients/${r.id}`} className="link link-hover">
-                      {r.name}
-                    </Link>
-                  </td>
-                  <td className="text-right">{money(r.revenue)}</td>
-                  <td className="text-right">{money(r.costs)}</td>
-                  <td className={`text-right ${r.profit >= 0 ? "text-success" : "text-error"}`}>
-                    {money(r.profit)}
-                  </td>
-                  <td className="text-right">{pct(r.margin)}</td>
-                </tr>
-              ))}
-              {!clientProfit.length ? (
-                <tr>
-                  <td colSpan={5} className="text-center opacity-60">
-                    No client profitability data yet.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-xl font-bold">Campaign profitability</h2>
-        <div className="overflow-x-auto rounded-box border border-base-300">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>Campaign</th>
-                <th>Client</th>
-                <th className="text-right">Revenue</th>
-                <th className="text-right">Costs</th>
-                <th className="text-right">Profit</th>
-                <th className="text-right">Margin</th>
-              </tr>
-            </thead>
-            <tbody>
-              {campaignProfit.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <Link href={`/app/campaigns/${r.id}`} className="link link-hover">
-                      {r.name}
-                    </Link>
-                  </td>
-                  <td>{r.client}</td>
-                  <td className="text-right">{money(r.revenue)}</td>
-                  <td className="text-right">{money(r.costs)}</td>
-                  <td className={`text-right ${r.profit >= 0 ? "text-success" : "text-error"}`}>
-                    {money(r.profit)}
-                  </td>
-                  <td className="text-right">{pct(r.margin)}</td>
-                </tr>
-              ))}
-              {!campaignProfit.length ? (
-                <tr>
-                  <td colSpan={6} className="text-center opacity-60">
-                    No campaign profitability data yet.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-xl font-bold">Budget performance</h2>
-        <div className="overflow-x-auto rounded-box border border-base-300">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>Campaign</th>
-                <th className="text-right">Budget</th>
-                <th className="text-right">Spent</th>
-                <th className="text-right">Variance</th>
-                <th>Health</th>
-              </tr>
-            </thead>
-            <tbody>
-              {budgetPerf.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <Link href={`/app/campaigns/${r.id}`} className="link link-hover">
-                      {r.name}
-                    </Link>
-                  </td>
-                  <td className="text-right">{money(r.budget)}</td>
-                  <td className="text-right">{money(r.spent)}</td>
-                  <td className={`text-right ${r.variance < 0 ? "text-error" : "text-success"}`}>
-                    {money(r.variance)}
-                  </td>
-                  <td>
-                    <span
-                      className={`badge badge-sm ${
-                        r.health === "over"
-                          ? "badge-error"
-                          : r.health === "near"
-                            ? "badge-warning"
-                            : "badge-success"
-                      }`}
-                    >
-                      {r.health === "over"
-                        ? "Over"
-                        : r.health === "near"
-                          ? "Near"
-                          : "Under"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {!budgetPerf.length ? (
-                <tr>
-                  <td colSpan={5} className="text-center opacity-60">
-                    No budgeted campaigns yet.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-xl font-bold">Billing performance</h2>
-        <div className="overflow-x-auto rounded-box border border-base-300">
-          <table className="table table-sm">
-            <tbody>
-              <tr>
-                <td className="font-medium">Total invoiced</td>
-                <td className="text-right">{money(billingPerf.total)}</td>
-              </tr>
-              <tr>
-                <td className="font-medium">Collected</td>
-                <td className="text-right text-success">{money(billingPerf.collected)}</td>
-              </tr>
-              <tr>
-                <td className="font-medium">Outstanding</td>
-                <td className="text-right text-warning">{money(billingPerf.outstanding)}</td>
-              </tr>
-              <tr>
-                <td className="font-medium">Overdue</td>
-                <td className="text-right text-error">{money(billingPerf.overdue)}</td>
-              </tr>
-              <tr>
-                <td className="font-medium">Disputed invoices</td>
-                <td className="text-right">{billingPerf.disputed}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-xl font-bold">Approval performance</h2>
-        <div className="overflow-x-auto rounded-box border border-base-300">
-          <table className="table table-sm">
-            <tbody>
-              <tr>
-                <td className="font-medium">Total requests</td>
-                <td className="text-right">{approvalPerf.total}</td>
-              </tr>
-              <tr>
-                <td className="font-medium">Pending</td>
-                <td className="text-right text-warning">{approvalPerf.pending}</td>
-              </tr>
-              <tr>
-                <td className="font-medium">Approved</td>
-                <td className="text-right text-success">{approvalPerf.approved}</td>
-              </tr>
-              <tr>
-                <td className="font-medium">Rejected</td>
-                <td className="text-right text-error">{approvalPerf.rejected}</td>
-              </tr>
-              <tr>
-                <td className="font-medium">Changes requested</td>
-                <td className="text-right">{approvalPerf.changes}</td>
-              </tr>
-              <tr>
-                <td className="font-medium">Avg. days waiting (pending)</td>
-                <td className="text-right">
-                  {avgWait != null ? `${avgWait.toFixed(1)} days` : "—"}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-xl font-bold">Work not yet billed</h2>
-        <div className="overflow-x-auto rounded-box border border-base-300">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>Campaign</th>
-                <th className="text-right">Entries</th>
-                <th className="text-right">Hours</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...unbilledByCampaign.entries()].map(([campId, data]) => {
-                const camp = (campaigns ?? []).find((c) => c.id === campId);
-                return (
-                  <tr key={campId}>
-                    <td>
-                      <Link href={`/app/campaigns/${campId}`} className="link link-hover">
-                        {camp?.campaign_name ?? campId}
-                      </Link>
-                    </td>
-                    <td className="text-right">{data.entries}</td>
-                    <td className="text-right">{data.hours.toFixed(1)}</td>
-                  </tr>
-                );
-              })}
-              {!unbilledByCampaign.size ? (
-                <tr>
-                  <td colSpan={3} className="text-center opacity-60">
-                    All approved billable work has been invoiced.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
+    <ReportsDashboard
+      alerts={controlAlerts}
+      clientProfit={clientProfit}
+      campaignProfit={campaignProfit}
+      budgetPerf={budgetPerf}
+      billingPerf={billingPerf}
+      approvalPerf={approvalPerf}
+      unbilled={unbilled}
+      pulse={pulse}
+    />
   );
 }

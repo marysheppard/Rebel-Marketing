@@ -425,12 +425,37 @@ const APPROVAL_STATUS_COLORS: Record<string, string> = {
   Rejected: "#ef4444",
 };
 
+function ApprovalStatusTooltip({
+  active,
+  payload,
+  total,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: { name: string; value: number } }>;
+  total: number;
+}) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+  const pct = total > 0 ? (row.value / total) * 100 : 0;
+  return (
+    <div className="rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm shadow-md">
+      <div className="font-semibold">{row.name}</div>
+      <div className="mt-0.5 opacity-70">
+        {row.value} approval{row.value === 1 ? "" : "s"}
+      </div>
+      <div className="mt-0.5 tabular-nums">{pct.toFixed(1)}% of total</div>
+    </div>
+  );
+}
+
 export function ApprovalStatusPieChart({
   data,
 }: {
   data: { name: string; value: number }[];
 }) {
   const filtered = data.filter((d) => d.value > 0);
+  const total = filtered.reduce((s, d) => s + d.value, 0);
   return (
     <ChartCard title="Approvals by status" empty={!filtered.length}>
       <ResponsiveContainer width="100%" height="100%">
@@ -452,7 +477,10 @@ export function ApprovalStatusPieChart({
               />
             ))}
           </Pie>
-          <Tooltip />
+          <Tooltip
+            content={<ApprovalStatusTooltip total={total} />}
+            cursor={{ fill: "transparent" }}
+          />
           <Legend />
         </PieChart>
       </ResponsiveContainer>
