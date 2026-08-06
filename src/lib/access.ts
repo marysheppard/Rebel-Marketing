@@ -23,6 +23,12 @@ export function isClientPortalHome(pathname: string) {
   ) {
     return true;
   }
+  if (
+    pathname === "/app/change-requests" ||
+    pathname.startsWith("/app/change-requests/")
+  ) {
+    return true;
+  }
   // /app/contracts/:id/sign
   if (/^\/app\/contracts\/[^/]+\/sign\/?$/.test(pathname)) return true;
   // /app/contracts/:id (detail view) — not the agency list at /app/contracts
