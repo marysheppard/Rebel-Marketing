@@ -117,7 +117,7 @@ export async function getOpenSignatureRequestsByContractForClientUser(
     .select("client_id")
     .eq("user_id", userId);
   const linkedClientIds = new Set(
-    (links ?? []).map((l) => String(l.client_id)),
+    (links ?? []).map((l: { client_id: string }) => String(l.client_id)),
   );
   if (linkedClientIds.size === 0) return result;
 
