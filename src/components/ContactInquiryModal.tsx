@@ -160,7 +160,7 @@ export function ContactInquiryButton({
                       autoComplete="name"
                       required
                       className="input input-bordered w-full border-[#0b1f3a]/20 bg-white"
-                      placeholder="Alex Rivera"
+                      placeholder="Mary Kate Sheppard"
                     />
                   </label>
 
