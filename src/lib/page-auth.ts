@@ -87,6 +87,7 @@ export function canLogWork(role: UserRole) {
   return (
     role === "agency_manager" ||
     role === "account_manager" ||
+    role === "billing" ||
     isMarketingRole(role)
   );
 }

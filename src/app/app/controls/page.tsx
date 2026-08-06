@@ -1,8 +1,6 @@
-import Link from "next/link";
-import { ExceptionStatusForm } from "@/components/dashboards/ExceptionStatusForm";
-import { SeverityBadge } from "@/components/dashboards/AlertPanel";
+import { ControlsExceptionsTable } from "@/components/dashboards/ControlsExceptionsTable";
 import { ListExportButton } from "@/components/exports/ListExportButton";
-import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { buildControlAlerts, SEVERITY_LABELS } from "@/lib/controls";
 import { loadFinanceBundle } from "@/lib/finance-data";
 import {
@@ -90,9 +88,9 @@ export default async function ControlsPage() {
     .order("detected_at", { ascending: false });
 
   const exceptions = (rows ?? []) as ControlException[];
-  const reviewers = profiles.filter((p) =>
-    ["agency_manager", "account_manager"].includes(p.role),
-  );
+  const reviewers = profiles
+    .filter((p) => ["agency_manager", "account_manager"].includes(p.role))
+    .map((r) => ({ id: r.id, full_name: r.full_name }));
 
   return (
     <div className="space-y-6">
@@ -150,66 +148,10 @@ export default async function ControlsPage() {
           description="Control checks did not find open issues."
         />
       ) : (
-        <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Client</th>
-                <th>Detected</th>
-                <th>Severity</th>
-                <th>Description</th>
-                <th>Status</th>
-                <th>Reviewer</th>
-                <th>Update</th>
-              </tr>
-            </thead>
-            <tbody>
-              {exceptions.map((ex) => (
-                <tr key={ex.id}>
-                  <td className="font-medium whitespace-nowrap">
-                    {ex.exception_type}
-                    {ex.href ? (
-                      <div>
-                        <Link href={ex.href} className="link link-primary text-xs">
-                          Open
-                        </Link>
-                      </div>
-                    ) : null}
-                  </td>
-                  <td>
-                    {(ex.clients as { client_name?: string } | null)
-                      ?.client_name ?? "—"}
-                  </td>
-                  <td className="whitespace-nowrap text-xs">
-                    {new Date(ex.detected_at).toLocaleDateString()}
-                  </td>
-                  <td>
-                    <SeverityBadge severity={ex.severity} />
-                  </td>
-                  <td className="max-w-xs text-sm">{ex.description}</td>
-                  <td>
-                    <StatusBadge status={ex.status} />
-                  </td>
-                  <td>
-                    {(ex.profiles as { full_name?: string } | null)?.full_name ??
-                      "—"}
-                  </td>
-                  <td>
-                    <ExceptionStatusForm
-                      exceptionId={ex.id}
-                      currentStatus={ex.status}
-                      reviewers={reviewers.map((r) => ({
-                        id: r.id,
-                        full_name: r.full_name,
-                      }))}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ControlsExceptionsTable
+          exceptions={exceptions}
+          reviewers={reviewers}
+        />
       )}
 
       <p className="text-xs opacity-60">
