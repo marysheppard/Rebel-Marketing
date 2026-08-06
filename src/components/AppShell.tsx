@@ -27,7 +27,7 @@ import {
   Activity,
   ScrollText,
 } from "lucide-react";
-import { NotificationBell } from "@/components/NotificationBell";
+import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { RebelLogo } from "@/components/RebelLogo";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -74,6 +74,32 @@ const AM_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
   {
     label: "Delivery",
     hrefs: ["/app/approvals", "/app/tasks", "/app/work", "/app/costs"],
+  },
+];
+
+const MARKETING_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
+  {
+    label: "Portfolio",
+    hrefs: ["/app/campaigns", "/app/analytics", "/app/calendar"],
+  },
+  {
+    label: "Delivery",
+    hrefs: ["/app/approvals", "/app/tasks", "/app/costs", "/app/work"],
+  },
+];
+
+const BILLING_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
+  {
+    label: "Portfolio",
+    hrefs: ["/app/clients", "/app/contracts"],
+  },
+  {
+    label: "Finance",
+    hrefs: ["/app/billing", "/app/ar", "/app/reports"],
+  },
+  {
+    label: "People",
+    hrefs: ["/app/work"],
   },
 ];
 
@@ -239,6 +265,8 @@ function dashboardTitle(role: UserRole) {
   if (role === "client") return "Customer Dashboard";
   if (role === "agency_manager") return "Agency Portal";
   if (role === "account_manager") return "Account Manager Portal";
+  if (role === "marketing") return "Marketing Portal";
+  if (role === "billing") return "Billing Portal";
   return "Employee Dashboard";
 }
 
@@ -289,7 +317,11 @@ export function AppShell({
     ? AGENCY_NAV_GROUPS
     : isAm
       ? AM_NAV_GROUPS
-      : null;
+      : profile.role === "marketing"
+        ? MARKETING_NAV_GROUPS
+        : profile.role === "billing"
+          ? BILLING_NAV_GROUPS
+          : null;
 
   const navSections: { label: string | null; items: NavItem[] }[] = groups
     ? (() => {
@@ -359,19 +391,12 @@ export function AppShell({
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden text-right sm:block">
               <div className="text-sm font-medium">{profile.full_name}</div>
-              <div className="badge badge-primary badge-sm">
-                {ROLE_LABELS[profile.role]}
-              </div>
+              <DemoRoleSwitcher profile={profile} />
             </div>
-            <span className="badge badge-primary badge-sm sm:hidden">
-              {ROLE_LABELS[profile.role]}
-            </span>
-            {profile.role === "marketing" ? <NotificationBell /> : null}
-            {profile.role === "client" ||
-            profile.role === "agency_manager" ||
-            profile.role === "account_manager" ? (
-              <NotificationsBell />
-            ) : null}
+            <div className="sm:hidden">
+              <DemoRoleSwitcher profile={profile} />
+            </div>
+            <NotificationsBell />
             <button className="btn btn-ghost btn-sm" onClick={logout}>
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Log out</span>

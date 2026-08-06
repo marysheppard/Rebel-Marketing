@@ -2,6 +2,11 @@ import { ApprovalsBoard } from "@/components/ApprovalsBoard";
 import { CreateApprovalForm } from "@/components/forms";
 import { ListExportButton } from "@/components/exports/ListExportButton";
 import { PageHeader } from "@/components/ui";
+import {
+  buildAgingBars,
+  buildApprovalKpis,
+  buildStatusPie,
+} from "@/lib/approvals-metrics";
 import { daysBetween, joinOne, num } from "@/lib/format";
 import {
   canCreateApprovals,
@@ -9,6 +14,7 @@ import {
   isClientRole,
   isMarketingRole,
 } from "@/lib/page-auth";
+import { getManagedClientIds } from "@/lib/portfolio";
 import { redirect } from "next/navigation";
 
 export default async function ApprovalsPage() {
@@ -24,6 +30,14 @@ export default async function ApprovalsPage() {
     redirect("/app");
   }
 
+  const scope = await getManagedClientIds(supabase, userId, profile.role);
+  const isClient = isClientRole(profile.role);
+  const showCreateForm = canCreateApprovals(profile.role) && !isClient;
+  const variant =
+    profile.role === "account_manager" || profile.role === "agency_manager"
+      ? "advanced"
+      : "simple";
+
   const [{ data: approvals }, { data: campaigns }] = await Promise.all([
     supabase
       .from("approvals")
@@ -38,9 +52,14 @@ export default async function ApprovalsPage() {
       .order("campaign_name"),
   ]);
 
-  const list = approvals ?? [];
-  const isClient = isClientRole(profile.role);
-  const showCreateForm = canCreateApprovals(profile.role) && !isClient;
+  let list = approvals ?? [];
+  let campaignList = campaigns ?? [];
+  // Scope Account Manager to their book only (other staff keep prior firm-wide view).
+  if (profile.role === "account_manager" && scope !== "all") {
+    const set = new Set(scope);
+    list = list.filter((a) => set.has(String(a.client_id)));
+    campaignList = campaignList.filter((c) => set.has(String(c.client_id)));
+  }
 
   const items = list.map((a) => {
     const clients = a.clients as
@@ -63,72 +82,25 @@ export default async function ApprovalsPage() {
       description: String(a.description ?? ""),
       requested_date: String(a.requested_date),
       approval_status: String(a.approval_status),
-      client_name: clientObj?.client_name ?? "—",
-      campaign_name: campObj?.campaign_name ?? "—",
+      client_name: clientObj?.client_name ?? "-",
+      campaign_name: campObj?.campaign_name ?? "-",
       waitingDays,
     };
   });
 
-  const pending = items.filter((a) => a.approval_status === "Pending");
-  const pendingCount = pending.length;
-  const overdueCount = pending.filter(
-    (a) => a.waitingDays != null && a.waitingDays >= 7,
-  ).length;
-  const avgWaitDays =
-    pendingCount === 0
-      ? null
-      : Math.round(
-          pending.reduce((sum, a) => sum + (a.waitingDays ?? 0), 0) /
-            pendingCount,
-        );
-
-  const statusPie = [
-    {
-      name: "Pending",
-      value: items.filter((a) => a.approval_status === "Pending").length,
-    },
-    {
-      name: "Changes Requested",
-      value: items.filter((a) => a.approval_status === "Changes Requested")
-        .length,
-    },
-    {
-      name: "Approved",
-      value: items.filter((a) => a.approval_status === "Approved").length,
-    },
-    {
-      name: "Rejected",
-      value: items.filter((a) => a.approval_status === "Rejected").length,
-    },
-  ];
-
-  const agingBars = [
-    {
-      bucket: "0–2d",
-      count: pending.filter(
-        (a) => a.waitingDays != null && a.waitingDays <= 2,
-      ).length,
-    },
-    {
-      bucket: "3–6d",
-      count: pending.filter(
-        (a) =>
-          a.waitingDays != null && a.waitingDays >= 3 && a.waitingDays <= 6,
-      ).length,
-    },
-    {
-      bucket: "7d+",
-      count: pending.filter(
-        (a) => a.waitingDays != null && a.waitingDays >= 7,
-      ).length,
-    },
-  ];
+  const kpis = buildApprovalKpis(items);
+  const statusPie = buildStatusPie(items);
+  const agingBars = buildAgingBars(items);
 
   return (
     <div>
       <PageHeader
         title="Approval Center"
-        subtitle="Client sign-off on creative, budget, and launch decisions"
+        subtitle={
+          profile.role === "account_manager"
+            ? "Sign-off analytics for your client book"
+            : "Client sign-off on creative, budget, and launch decisions"
+        }
         actions={
           <ListExportButton
             title="Export approvals"
@@ -185,11 +157,12 @@ export default async function ApprovalsPage() {
       <ApprovalsBoard
         items={items}
         isClient={isClient}
+        variant={variant}
         statusPie={statusPie}
         agingBars={agingBars}
-        pendingCount={pendingCount}
-        overdueCount={overdueCount}
-        avgWaitDays={avgWaitDays}
+        pendingCount={kpis.pendingCount}
+        overdueCount={kpis.overdueCount}
+        avgWaitDays={kpis.avgWaitDays}
       />
 
       {showCreateForm ? (
@@ -197,7 +170,7 @@ export default async function ApprovalsPage() {
           <h2 className="mb-4 text-xl font-bold">Request approval</h2>
           <CreateApprovalForm
             userId={userId}
-            campaigns={(campaigns ?? []).map((c) => {
+            campaigns={campaignList.map((c) => {
               const contract = joinOne(
                 (
                   c as {

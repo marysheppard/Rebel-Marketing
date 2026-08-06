@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -16,9 +23,14 @@ import {
   PieChart,
   Pie,
   Cell,
+  Sector,
   ReferenceLine,
 } from "recharts";
-import { money } from "@/lib/format";
+import { money, pct } from "@/lib/format";
+import type {
+  PendingWaitRow,
+  StatusCompositionSlice,
+} from "@/lib/approvals-metrics";
 
 function formatAxisMoney(value: number) {
   const n = Number(value);
@@ -419,10 +431,10 @@ export function CtrByCampaignChart({
 }
 
 const APPROVAL_STATUS_COLORS: Record<string, string> = {
-  Pending: "#f59e0b",
-  "Changes Requested": "#f97316",
-  Approved: "#22c55e",
-  Rejected: "#ef4444",
+  Pending: "oklch(70% 0.12 55)",
+  "Changes Requested": "oklch(72% 0.1 300)",
+  Approved: "oklch(68% 0.12 160)",
+  Rejected: "oklch(62% 0.18 25)",
 };
 
 function ApprovalStatusTooltip({
@@ -488,10 +500,394 @@ export function ApprovalStatusPieChart({
   );
 }
 
+const STATUS_DONUT_OUTER = 88;
+const STATUS_DONUT_INNER = 52;
+
+function StatusDetailsCard({
+  slice,
+  className = "",
+}: {
+  slice: StatusCompositionSlice;
+  className?: string;
+}) {
+  const color = APPROVAL_STATUS_COLORS[slice.name] ?? "#94a3b8";
+  return (
+    <div
+      className={`min-w-[220px] rounded-2xl border border-base-300 bg-base-300 px-5 py-4 text-sm text-base-content shadow-xl ${className}`}
+    >
+      <div className="mb-3 flex items-center gap-2">
+        <span
+          className="h-3 w-3 rounded-full"
+          style={{ backgroundColor: color }}
+          aria-hidden
+        />
+        <span className="font-semibold">{slice.name}</span>
+      </div>
+      <dl className="space-y-2 text-xs">
+        <div className="flex justify-between gap-6">
+          <dt className="opacity-70">Requests</dt>
+          <dd className="text-base font-bold tabular-nums">{slice.value}</dd>
+        </div>
+        <div className="flex justify-between gap-6">
+          <dt className="opacity-70">Share of book</dt>
+          <dd className="font-semibold tabular-nums">{pct(slice.share)}</dd>
+        </div>
+        {slice.byType.length > 0 ? (
+          <div className="border-t border-base-content/10 pt-2">
+            <dt className="mb-1.5 opacity-70">By type</dt>
+            <dd>
+              <ul className="space-y-1">
+                {slice.byType.map((t) => (
+                  <li
+                    key={t.name}
+                    className="flex justify-between gap-4 font-semibold"
+                  >
+                    <span className="truncate opacity-80">{t.name}</span>
+                    <span className="tabular-nums">{t.value}</span>
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+    </div>
+  );
+}
+
+type StatusSectorProps = {
+  index?: number;
+  cx?: number;
+  cy?: number;
+  innerRadius?: number;
+  outerRadius?: number;
+  startAngle?: number;
+  endAngle?: number;
+  fill?: string;
+  payload?: StatusCompositionSlice;
+};
+
+const StatusDonut = memo(function StatusDonut({
+  slices,
+  focusIndex,
+  animate,
+  total,
+  onActivate,
+  onDeactivate,
+  onSelect,
+}: {
+  slices: StatusCompositionSlice[];
+  focusIndex: number | null;
+  animate: boolean;
+  total: number;
+  onActivate: (index: number) => void;
+  onDeactivate: () => void;
+  onSelect: (status: string) => void;
+}) {
+  const renderShape = useCallback(
+    (props: StatusSectorProps) => {
+      const idx = props.index ?? 0;
+      const slice = props.payload ?? slices[idx];
+      const isActive = focusIndex === idx;
+      const faded = focusIndex != null && focusIndex !== idx;
+      const r = props.outerRadius ?? STATUS_DONUT_OUTER;
+      const cx = props.cx ?? 0;
+      const cy = props.cy ?? 0;
+      const label = slice
+        ? `${slice.name}: ${slice.value} requests, ${pct(slice.share)}`
+        : "Status slice";
+
+      const onKeyDown = (e: KeyboardEvent<SVGGElement>) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          if (slice) onSelect(slice.name);
+        }
+      };
+
+      return (
+        <g
+          tabIndex={0}
+          role="button"
+          aria-label={`${label}. Press Enter to filter by this status.`}
+          style={{
+            cursor: "pointer",
+            outline: "none",
+            opacity: faded ? 0.35 : 1,
+            transform: isActive ? "scale(1.09)" : "scale(1)",
+            transformOrigin: `${cx}px ${cy}px`,
+            transition: "transform 220ms ease, opacity 220ms ease",
+          }}
+          onFocus={() => onActivate(idx)}
+          onBlur={onDeactivate}
+          onKeyDown={onKeyDown}
+        >
+          <Sector
+            cx={props.cx}
+            cy={props.cy}
+            innerRadius={props.innerRadius}
+            outerRadius={r}
+            startAngle={props.startAngle}
+            endAngle={props.endAngle}
+            fill={props.fill}
+          />
+          {isActive ? (
+            <Sector
+              cx={props.cx}
+              cy={props.cy}
+              innerRadius={r}
+              outerRadius={r * 1.03}
+              startAngle={props.startAngle}
+              endAngle={props.endAngle}
+              fill={props.fill}
+              opacity={0.35}
+            />
+          ) : null}
+        </g>
+      );
+    },
+    [focusIndex, onActivate, onDeactivate, onSelect, slices],
+  );
+
+  return (
+    <div
+      className="mx-auto h-[260px] w-full max-w-[320px]"
+      role="img"
+      aria-label={`Approvals by status donut. Total ${total} requests.`}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={slices}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            innerRadius={STATUS_DONUT_INNER}
+            outerRadius={STATUS_DONUT_OUTER}
+            paddingAngle={2}
+            label={false}
+            isAnimationActive={animate}
+            animationDuration={250}
+            animationEasing="ease-out"
+            onMouseEnter={(_, index) => onActivate(index)}
+            onClick={(_, index) => {
+              const row = slices[index];
+              if (row) onSelect(row.name);
+            }}
+            style={{ cursor: "pointer", outline: "none" }}
+            shape={renderShape}
+          >
+            {slices.map((d) => (
+              <Cell
+                key={d.name}
+                fill={APPROVAL_STATUS_COLORS[d.name] ?? "#94a3b8"}
+                stroke="transparent"
+              />
+            ))}
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+
+/** Costs-tab style interactive status donut with legend + details. */
+export function ApprovalStatusDetailChart({
+  slices,
+  total,
+  selectedStatus,
+  onSelectStatus,
+  onClearStatus,
+}: {
+  slices: StatusCompositionSlice[];
+  total: number;
+  selectedStatus: string;
+  onSelectStatus: (status: string) => void;
+  onClearStatus: () => void;
+}) {
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [animate, setAnimate] = useState(true);
+
+  const visible = useMemo(() => slices.filter((s) => s.value > 0), [slices]);
+
+  const slicesSignature = useMemo(
+    () => visible.map((s) => `${s.name}:${s.value}`).join("|"),
+    [visible],
+  );
+
+  useEffect(() => {
+    setAnimate(true);
+    const t = setTimeout(() => setAnimate(false), 280);
+    return () => clearTimeout(t);
+  }, [slicesSignature]);
+
+  const selectedSlice =
+    selectedStatus !== "all"
+      ? (visible.find((s) => s.name === selectedStatus) ?? null)
+      : null;
+  const hoveredSlice =
+    hoverIndex != null && visible[hoverIndex] ? visible[hoverIndex] : null;
+  const detailsSlice = hoveredSlice ?? selectedSlice;
+
+  const clearHover = useCallback(() => setHoverIndex(null), []);
+  const activate = useCallback((index: number) => {
+    setHoverIndex((prev) => (prev === index ? prev : index));
+  }, []);
+
+  const handleSelect = useCallback(
+    (status: string) => {
+      setHoverIndex(null);
+      if (selectedStatus === status) onClearStatus();
+      else onSelectStatus(status);
+    },
+    [onClearStatus, onSelectStatus, selectedStatus],
+  );
+
+  return (
+    <section className="rounded-box border border-base-300 bg-base-100 p-4 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="font-semibold">Approvals by status</h3>
+          <p className="mt-0.5 text-xs opacity-70">
+            Click a slice or row to filter.
+          </p>
+        </div>
+        {selectedStatus !== "all" ? (
+          <div className="flex flex-wrap items-center gap-1.5 rounded-box border border-base-300 bg-base-200/50 px-2 py-1 text-xs">
+            <span className="opacity-70">Viewing</span>
+            <span
+              className="font-semibold"
+              style={{
+                color: APPROVAL_STATUS_COLORS[selectedStatus] ?? undefined,
+              }}
+            >
+              {selectedStatus}
+            </span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={onClearStatus}
+            >
+              Clear
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {!visible.length ? (
+        <div className="flex h-56 items-center justify-center text-sm opacity-60">
+          Not enough data yet for this chart.
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3" onMouseLeave={clearHover}>
+          <div className="relative mx-auto w-full max-w-[320px] shrink-0">
+            <StatusDonut
+              slices={visible}
+              focusIndex={hoverIndex}
+              animate={animate}
+              total={total}
+              onActivate={activate}
+              onDeactivate={clearHover}
+              onSelect={handleSelect}
+            />
+            <div
+              className="pointer-events-none absolute inset-0 flex items-center justify-center"
+              aria-live="polite"
+            >
+              <div className="max-w-[120px] text-center transition-opacity duration-300">
+                {selectedSlice ? (
+                  <>
+                    <div className="text-[10px] font-medium leading-tight opacity-70">
+                      {selectedSlice.name}
+                    </div>
+                    <div className="mt-0.5 text-lg font-bold tracking-tight tabular-nums">
+                      {selectedSlice.value}
+                    </div>
+                    <div className="text-xs opacity-70">
+                      {pct(selectedSlice.share)}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-[10px] font-medium uppercase tracking-wide opacity-60">
+                      Total
+                    </div>
+                    <div className="mt-0.5 text-lg font-bold tracking-tight tabular-nums">
+                      {total}
+                    </div>
+                    <div className="text-xs opacity-70">
+                      {total === 1 ? "1 request" : `${total} requests`}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-2">
+            <ul className="space-y-0.5" role="list">
+              {visible.map((slice, index) => {
+                const hovered = hoverIndex === index;
+                const selected = selectedStatus === slice.name;
+                return (
+                  <li key={slice.name}>
+                    <button
+                      type="button"
+                      className={`grid w-full grid-cols-[auto_1fr_auto_auto] items-center gap-2 rounded-box px-2 py-1.5 text-left text-xs transition ${
+                        hovered || selected
+                          ? "bg-base-200"
+                          : "hover:bg-base-200/60"
+                      }`}
+                      style={{
+                        borderLeft: `3px solid ${APPROVAL_STATUS_COLORS[slice.name] ?? "#94a3b8"}`,
+                      }}
+                      aria-pressed={selected}
+                      onMouseEnter={() => activate(index)}
+                      onFocus={() => activate(index)}
+                      onBlur={clearHover}
+                      onClick={() => handleSelect(slice.name)}
+                    >
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{
+                          backgroundColor:
+                            APPROVAL_STATUS_COLORS[slice.name] ?? "#94a3b8",
+                        }}
+                        aria-hidden
+                      />
+                      <span className="min-w-0 truncate font-medium">
+                        {slice.name}
+                      </span>
+                      <span className="text-right font-semibold tabular-nums">
+                        {slice.value}
+                      </span>
+                      <span className="w-12 text-right tabular-nums opacity-70">
+                        {pct(slice.share)}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            {detailsSlice ? (
+              <div aria-live="polite">
+                <StatusDetailsCard
+                  slice={detailsSlice}
+                  className="w-full !px-3 !py-3 !shadow-md"
+                />
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function ApprovalAgingBarChart({
   data,
 }: {
-  data: { bucket: string; count: number }[];
+  data: { bucket: string; count: number; fill?: string }[];
 }) {
   const hasAny = data.some((d) => d.count > 0);
   return (
@@ -499,13 +895,180 @@ export function ApprovalAgingBarChart({
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data}>
           <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-          <XAxis dataKey="bucket" />
-          <YAxis allowDecimals={false} />
+          <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
+          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={36} />
           <Tooltip />
-          <Bar dataKey="count" fill="#f59e0b" name="Pending" />
+          <Bar dataKey="count" name="Pending" radius={[4, 4, 0, 0]}>
+            {data.map((entry) => (
+              <Cell key={entry.bucket} fill={entry.fill ?? "#f59e0b"} />
+            ))}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>
+  );
+}
+
+function PendingWaitTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: {
+    payload: PendingWaitRow;
+  }[];
+}) {
+  if (!active || !payload?.[0]) return null;
+  const row = payload[0].payload;
+  const bucketLabel =
+    row.bucket === "overdue"
+      ? "Overdue (7d+)"
+      : row.bucket === "aging"
+        ? "Aging (3-6d)"
+        : "Fresh (0-2d)";
+  return (
+    <div className="max-w-xs rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm shadow-lg">
+      <div className="font-semibold">{row.clientName}</div>
+      <div className="text-xs opacity-70">{row.campaignName}</div>
+      <div className="mt-1 tabular-nums font-medium">
+        Waiting {row.waitingDays}d
+      </div>
+      <div className="text-xs opacity-80">{row.approvalType}</div>
+      <div className="mt-1 text-xs font-medium" style={{ color: row.fill }}>
+        {bucketLabel}
+      </div>
+    </div>
+  );
+}
+
+/** Pending approvals by days waiting (bar length = wait time). */
+export function ApprovalClientWorkloadChart({
+  rows,
+  pendingTotal,
+  overdueCount,
+  selectedClientId,
+  onSelectClient,
+  onClearClient,
+}: {
+  rows: PendingWaitRow[];
+  pendingTotal: number;
+  overdueCount: number;
+  selectedClientId: string;
+  onSelectClient: (clientId: string) => void;
+  onClearClient: () => void;
+}) {
+  const chartHeight = Math.max(220, rows.length * 36 + 28);
+
+  return (
+    <section className="rounded-box border border-base-300 bg-base-100 p-4 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="font-semibold">Pending wait time</h3>
+          <p className="mt-0.5 text-xs opacity-70">
+            Bar length is days waiting — click to filter by client.
+          </p>
+        </div>
+        {selectedClientId !== "all" ? (
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={onClearClient}
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+
+      {!rows.length ? (
+        <div className="flex h-56 items-center justify-center text-sm opacity-60">
+          No pending approvals in this filter.
+        </div>
+      ) : (
+        <>
+          <div className="h-72 w-full overflow-y-auto">
+            <div style={{ height: chartHeight, minHeight: "100%" }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={rows}
+                  layout="vertical"
+                  margin={{ left: 4, right: 16, top: 4, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis
+                    type="number"
+                    allowDecimals={false}
+                    tick={{ fontSize: 11 }}
+                    unit="d"
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={118}
+                    tick={{ fontSize: 10 }}
+                  />
+                  <Tooltip content={<PendingWaitTooltip />} />
+                  <Bar
+                    dataKey="waitingDays"
+                    name="Days waiting"
+                    radius={[0, 4, 4, 0]}
+                    cursor="pointer"
+                    onClick={(entry) => {
+                      const raw = entry as unknown as {
+                        payload?: PendingWaitRow;
+                        clientId?: string;
+                      };
+                      const id = raw.payload?.clientId ?? raw.clientId;
+                      if (!id) return;
+                      if (selectedClientId === id) onClearClient();
+                      else onSelectClient(id);
+                    }}
+                  >
+                    {rows.map((row) => (
+                      <Cell
+                        key={row.id}
+                        fill={row.fill}
+                        opacity={
+                          selectedClientId === "all" ||
+                          selectedClientId === row.clientId
+                            ? 1
+                            : 0.35
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-3 text-xs opacity-70">
+            <span className="flex items-center gap-1.5">
+              <span
+                className="h-2.5 w-2.5 rounded-sm"
+                style={{ background: "#22c55e" }}
+              />
+              Fresh 0-2d
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span
+                className="h-2.5 w-2.5 rounded-sm"
+                style={{ background: "#f59e0b" }}
+              />
+              Aging 3-6d
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span
+                className="h-2.5 w-2.5 rounded-sm"
+                style={{ background: "#ef4444" }}
+              />
+              Overdue 7d+
+            </span>
+            <span className="ml-auto tabular-nums">
+              {pendingTotal} pending · {overdueCount} overdue
+            </span>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
