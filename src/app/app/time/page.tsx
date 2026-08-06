@@ -19,6 +19,8 @@ export default async function TimePage() {
   const { supabase, profile, userId } = await getProfile();
   if (!profile || !userId) return null;
   if (isClientRole(profile.role)) redirect("/app");
+  // Account managers use Time & PTO instead of this Time Entry board.
+  if (profile.role === "account_manager") redirect("/app/work");
 
   const today = new Date();
   const todayStr = toDateStr(today);

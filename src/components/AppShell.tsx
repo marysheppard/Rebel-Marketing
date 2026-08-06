@@ -50,7 +50,7 @@ const AGENCY_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
   },
   {
     label: "People",
-    hrefs: ["/app/employees"],
+    hrefs: ["/app/employees", "/app/work"],
   },
   {
     label: "Risk",
@@ -72,7 +72,7 @@ const AM_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
   },
   {
     label: "Delivery",
-    hrefs: ["/app/approvals", "/app/tasks", "/app/time", "/app/costs"],
+    hrefs: ["/app/approvals", "/app/tasks", "/app/work", "/app/costs"],
   },
 ];
 
@@ -227,16 +227,10 @@ const NAV: {
     roles: ["marketing", "account_manager"],
   },
   {
-    href: "/app/time",
-    label: "Time Entry",
-    icon: Clock,
-    roles: ["account_manager"],
-  },
-  {
     href: "/app/work",
     label: "Time & PTO",
     icon: Clock,
-    roles: ["marketing"],
+    roles: ["marketing", "account_manager", "agency_manager", "billing"],
   },
 ];
 
