@@ -5,6 +5,7 @@ import {
   DEFAULT_BILL_RATE_USD,
   estimateEntryAmount,
   parseWorkEntryIdsFromNotes,
+  type ReadyMilestone,
   type UnbilledEntry,
 } from "@/lib/billing";
 import { contractBillRate } from "@/lib/finance";
@@ -16,7 +17,11 @@ import {
 } from "@/lib/page-auth";
 import { redirect } from "next/navigation";
 
-type SearchParams = Promise<{ entries?: string; invoice?: string }>;
+type SearchParams = Promise<{
+  entries?: string;
+  invoice?: string;
+  milestones?: string;
+}>;
 
 export default async function BillingReviewPage({
   searchParams,
@@ -82,7 +87,7 @@ export default async function BillingReviewPage({
       const { data: work } = await supabase
         .from("work_entries")
         .select(
-          "id, campaign_id, hours, work_date, work_type, description, campaigns(campaign_name, client_id, contract_id, clients(client_name))",
+          "id, campaign_id, hours, work_date, work_type, description, campaigns(campaign_name, client_id, contract_id, clients(client_name, industry))",
         )
         .in("id", workIds);
 
@@ -146,13 +151,17 @@ export default async function BillingReviewPage({
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  const milestoneIds = (sp.milestones ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-  if (!entryIds.length) {
+  if (!entryIds.length && !milestoneIds.length) {
     return (
       <div>
         <PageHeader
           title="Review invoice"
-          subtitle="Select work from Ready to Invoice first."
+          subtitle="Select work from Ready to Invoice or Approved milestones first."
         />
         <Link href="/app/billing" className="btn btn-primary">
           Back to Billing
@@ -175,24 +184,43 @@ export default async function BillingReviewPage({
     );
   }
 
-  const { data: work } = await supabase
-    .from("work_entries")
-    .select(
-      "id, campaign_id, hours, work_date, work_type, description, billable, billed, approval_status, campaigns(campaign_name, client_id, contract_id, clients(client_name))",
-    )
-    .in("id", entryIds)
-    .eq("billable", true)
-    .eq("billed", false)
-    .eq("approval_status", "Approved");
+  let entries: UnbilledEntry[] = [];
+  let milestoneRows: ReadyMilestone[] = [];
 
-  const entries = (work ?? []).map((w) => mapWorkRow(w, rateByContract));
+  if (entryIds.length) {
+    const { data: work } = await supabase
+      .from("work_entries")
+      .select(
+        "id, campaign_id, hours, work_date, work_type, description, billable, billed, approval_status, campaigns(campaign_name, client_id, contract_id, clients(client_name, industry))",
+      )
+      .in("id", entryIds)
+      .eq("billable", true)
+      .eq("billed", false)
+      .eq("approval_status", "Approved");
 
-  if (!entries.length) {
+    entries = (work ?? []).map((w) => mapWorkRow(w, rateByContract));
+  }
+
+  if (milestoneIds.length) {
+    const { data: ms } = await supabase
+      .from("campaign_milestones")
+      .select(
+        "id, campaign_id, contract_id, sequence, name, recognition_amount, target_date, approved_at, status, billable, billed, campaigns(campaign_name, client_id, clients(client_name))",
+      )
+      .in("id", milestoneIds)
+      .eq("status", "Approved")
+      .eq("billable", true)
+      .eq("billed", false);
+
+    milestoneRows = (ms ?? []).map((m) => mapMilestoneBillingRow(m));
+  }
+
+  if (!entries.length && !milestoneRows.length) {
     return (
       <div>
         <PageHeader
-          title="No work to invoice"
-          subtitle="Those entries may already be billed or are not approved."
+          title="Nothing to invoice"
+          subtitle="Those items may already be billed or are not approved."
         />
         <Link href="/app/billing" className="btn btn-primary">
           Back to Billing
@@ -201,7 +229,10 @@ export default async function BillingReviewPage({
     );
   }
 
-  const clientIds = new Set(entries.map((e) => e.client_id));
+  const clientIds = new Set([
+    ...entries.map((e) => e.client_id),
+    ...milestoneRows.map((m) => m.client_id),
+  ]);
   if (clientIds.size > 1) {
     return (
       <div>
@@ -217,7 +248,9 @@ export default async function BillingReviewPage({
   }
 
   const defaultContractId =
-    entries.find((e) => e.contract_id)?.contract_id ?? null;
+    entries.find((e) => e.contract_id)?.contract_id ??
+    milestoneRows.find((m) => m.contract_id)?.contract_id ??
+    null;
   let hasPriorSentInvoice = false;
   if (defaultContractId) {
     const { data: related } = await supabase
@@ -229,19 +262,63 @@ export default async function BillingReviewPage({
     hasPriorSentInvoice = (related ?? []).length > 0;
   }
 
+  const clientName =
+    entries[0]?.client_name ?? milestoneRows[0]?.client_name ?? "Client";
+
   return (
     <div>
       <InvoiceComposer
         mode="create"
         entries={entries}
+        milestones={milestoneRows}
         contracts={contracts}
-        clientName={entries[0].client_name}
+        clientName={clientName}
         canManage={canManage}
         defaultContractId={defaultContractId}
         hasPriorSentInvoice={hasPriorSentInvoice}
       />
     </div>
   );
+}
+
+function mapMilestoneBillingRow(m: Record<string, unknown>): ReadyMilestone {
+  const camps = m.campaigns as
+    | {
+        campaign_name?: string;
+        client_id?: string;
+        clients?:
+          | { client_name?: string }
+          | { client_name?: string }[]
+          | null;
+      }
+    | {
+        campaign_name?: string;
+        client_id?: string;
+        clients?:
+          | { client_name?: string }
+          | { client_name?: string }[]
+          | null;
+      }[]
+    | null;
+  const camp = Array.isArray(camps) ? camps[0] : camps;
+  const clientsRel = camp?.clients;
+  const clientObj = Array.isArray(clientsRel) ? clientsRel[0] : clientsRel;
+  return {
+    id: String(m.id),
+    campaign_id: String(m.campaign_id),
+    campaign_name: camp?.campaign_name ?? "Campaign",
+    contract_id: m.contract_id ? String(m.contract_id) : null,
+    client_id: String(camp?.client_id ?? ""),
+    client_name: clientObj?.client_name ?? "Client",
+    name: String(m.name ?? ""),
+    sequence: Number(m.sequence ?? 0),
+    recognition_amount: num(m.recognition_amount),
+    target_date: m.target_date ? String(m.target_date) : null,
+    approved_at: m.approved_at ? String(m.approved_at) : null,
+    status: String(m.status ?? "Approved"),
+    billable: Boolean(m.billable ?? true),
+    billed: Boolean(m.billed ?? false),
+  };
 }
 
 function mapWorkRow(
@@ -254,8 +331,8 @@ function mapWorkRow(
         client_id?: string;
         contract_id?: string;
         clients?:
-          | { client_name?: string }
-          | { client_name?: string }[]
+          | { client_name?: string; industry?: string }
+          | { client_name?: string; industry?: string }[]
           | null;
       }
     | {
@@ -263,8 +340,8 @@ function mapWorkRow(
         client_id?: string;
         contract_id?: string;
         clients?:
-          | { client_name?: string }
-          | { client_name?: string }[]
+          | { client_name?: string; industry?: string }
+          | { client_name?: string; industry?: string }[]
           | null;
       }[]
     | null;
@@ -287,6 +364,7 @@ function mapWorkRow(
     campaign_name: camp?.campaign_name ?? "Campaign",
     client_id: String(camp?.client_id ?? ""),
     client_name: clientObj?.client_name ?? "Client",
+    company_type: String(clientObj?.industry ?? "").trim() || "Unspecified",
     estimated_rate: rate,
     estimated_amount: estimateEntryAmount(hours, rate),
     contract_id: contractId,

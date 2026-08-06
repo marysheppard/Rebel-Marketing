@@ -21,33 +21,19 @@ export function ReadyToInvoicePanel({
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [workType, setWorkType] = useState("");
-  const [campaignId, setCampaignId] = useState("");
+  const [companyType, setCompanyType] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const workTypes = useMemo(() => {
-    return Array.from(new Set(entries.map((e) => e.work_type).filter(Boolean))).sort();
-  }, [entries]);
-
-  const campaigns = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const e of entries) map.set(e.campaign_id, e.campaign_name);
-    return Array.from(map.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+  const companyTypes = useMemo(() => {
+    return Array.from(
+      new Set(entries.map((e) => e.company_type).filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b));
   }, [entries]);
 
   const filtered = useMemo(() => {
-    return entries.filter((e) => {
-      if (dateFrom && e.work_date < dateFrom) return false;
-      if (dateTo && e.work_date > dateTo) return false;
-      if (workType && e.work_type !== workType) return false;
-      if (campaignId && e.campaign_id !== campaignId) return false;
-      return true;
-    });
-  }, [entries, dateFrom, dateTo, workType, campaignId]);
+    if (!companyType) return entries;
+    return entries.filter((e) => e.company_type === companyType);
+  }, [entries, companyType]);
 
   const groups = useMemo(() => groupUnbilledByClient(filtered), [filtered]);
   const totals = useMemo(() => summarizeEntries(filtered), [filtered]);
@@ -153,76 +139,32 @@ export function ReadyToInvoicePanel({
       </div>
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
-        <label className="form-control">
+        <label className="form-control min-w-[12rem]">
           <span className="mb-1 text-xs font-semibold uppercase tracking-wide opacity-60">
-            From
-          </span>
-          <input
-            type="date"
-            className="input input-bordered input-sm"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-          />
-        </label>
-        <label className="form-control">
-          <span className="mb-1 text-xs font-semibold uppercase tracking-wide opacity-60">
-            To
-          </span>
-          <input
-            type="date"
-            className="input input-bordered input-sm"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-          />
-        </label>
-        <label className="form-control min-w-[9rem]">
-          <span className="mb-1 text-xs font-semibold uppercase tracking-wide opacity-60">
-            Work type
+            Company type
           </span>
           <select
             className="select select-bordered select-sm"
-            value={workType}
-            onChange={(e) => setWorkType(e.target.value)}
+            value={companyType}
+            onChange={(e) => setCompanyType(e.target.value)}
           >
-            <option value="">All types</option>
-            {workTypes.map((t) => (
+            <option value="">All company types</option>
+            {companyTypes.map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>
             ))}
           </select>
         </label>
-        <label className="form-control min-w-[10rem]">
-          <span className="mb-1 text-xs font-semibold uppercase tracking-wide opacity-60">
-            Campaign
-          </span>
-          <select
-            className="select select-bordered select-sm"
-            value={campaignId}
-            onChange={(e) => setCampaignId(e.target.value)}
-          >
-            <option value="">All campaigns</option>
-            {campaigns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {(dateFrom || dateTo || workType || campaignId) && (
+        {companyType ? (
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={() => {
-              setDateFrom("");
-              setDateTo("");
-              setWorkType("");
-              setCampaignId("");
-            }}
+            onClick={() => setCompanyType("")}
           >
-            Clear filters
+            Clear filter
           </button>
-        )}
+        ) : null}
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-[#0b1f3a]/15 bg-white/80 px-4 py-3 text-sm">
@@ -246,13 +188,14 @@ export function ReadyToInvoicePanel({
 
       <div className="mt-5 space-y-4">
         {groups.length === 0 ? (
-          <p className="text-sm opacity-60">No entries match the current filters.</p>
+          <p className="text-sm opacity-60">No entries match the current filter.</p>
         ) : (
           groups.map((client) => {
             const clientEntryIds = client.campaigns.flatMap((c) =>
               c.entries.map((e) => e.id),
             );
             const clientSelected = clientEntryIds.filter((id) => selected.has(id)).length;
+            const typeLabel = client.campaigns[0]?.entries[0]?.company_type;
 
             return (
               <div
@@ -263,6 +206,7 @@ export function ReadyToInvoicePanel({
                   <div>
                     <h3 className="font-bold">{client.client_name}</h3>
                     <p className="text-xs opacity-60">
+                      {typeLabel ? `${typeLabel} · ` : ""}
                       {clientEntryIds.length} entries
                       {clientSelected ? ` · ${clientSelected} selected` : ""}
                     </p>
@@ -310,7 +254,7 @@ export function ReadyToInvoicePanel({
                               </td>
                               <td className="whitespace-nowrap">{e.work_date}</td>
                               <td>{e.work_type}</td>
-                              <td className="text-right">{num(e.hours)}</td>
+                              <td className="text-right">{numHours(e.hours)}</td>
                               <td className="text-right whitespace-nowrap">
                                 {money(e.estimated_amount)}
                               </td>
@@ -333,6 +277,6 @@ export function ReadyToInvoicePanel({
   );
 }
 
-function num(h: number) {
+function numHours(h: number) {
   return Number(h).toFixed(1);
 }

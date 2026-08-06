@@ -32,6 +32,8 @@ export type UnbilledEntry = {
   campaign_name: string;
   client_id: string;
   client_name: string;
+  /** Client industry / company type from CRM (e.g. Retail, Healthcare). */
+  company_type: string;
   estimated_rate: number;
   estimated_amount: number;
   contract_id?: string | null;
@@ -114,6 +116,24 @@ export type ClientCampaignGroup = {
 };
 
 const META_PREFIX = "meta:work_entry_ids=";
+const MILESTONE_META_PREFIX = "meta:milestone_ids=";
+
+export type ReadyMilestone = {
+  id: string;
+  campaign_id: string;
+  campaign_name: string;
+  contract_id: string | null;
+  client_id: string;
+  client_name: string;
+  name: string;
+  sequence: number;
+  recognition_amount: number;
+  target_date: string | null;
+  approved_at: string | null;
+  status: string;
+  billable: boolean;
+  billed: boolean;
+};
 
 export function estimateEntryAmount(
   hours: number,
@@ -349,9 +369,34 @@ export function lineItemsSubtotal(items: LineItem[]) {
 }
 
 export function encodeWorkEntryMeta(ids: string[], restNotes = "") {
-  const meta = `${META_PREFIX}${ids.join(",")}`;
-  const cleaned = restNotes.replace(new RegExp(`${META_PREFIX}[^\\n]*\\n?`, "g"), "").trim();
+  const meta = ids.length ? `${META_PREFIX}${ids.join(",")}` : "";
+  const cleaned = restNotes
+    .replace(new RegExp(`${META_PREFIX}[^\\n]*\\n?`, "g"), "")
+    .replace(new RegExp(`${MILESTONE_META_PREFIX}[^\\n]*\\n?`, "g"), "")
+    .trim();
+  if (!meta) return cleaned;
   return cleaned ? `${meta}\n${cleaned}` : meta;
+}
+
+export function encodeMilestoneMeta(ids: string[], restNotes = "") {
+  const meta = ids.length ? `${MILESTONE_META_PREFIX}${ids.join(",")}` : "";
+  const cleaned = restNotes
+    .replace(new RegExp(`${MILESTONE_META_PREFIX}[^\\n]*\\n?`, "g"), "")
+    .trim();
+  if (!meta) return cleaned;
+  return cleaned ? `${meta}\n${cleaned}` : meta;
+}
+
+/** Combine work-entry + milestone meta lines into notes. */
+export function encodeBillingMeta(
+  workIds: string[],
+  milestoneIds: string[],
+  restNotes = "",
+) {
+  let notes = stripBillingMeta(restNotes);
+  notes = encodeWorkEntryMeta(workIds, notes);
+  notes = encodeMilestoneMeta(milestoneIds, notes);
+  return notes;
 }
 
 export function parseWorkEntryIdsFromNotes(notes: string | null | undefined) {
@@ -365,13 +410,46 @@ export function parseWorkEntryIdsFromNotes(notes: string | null | undefined) {
     .filter(Boolean);
 }
 
+export function parseMilestoneIdsFromNotes(notes: string | null | undefined) {
+  if (!notes) return [] as string[];
+  const line = notes
+    .split("\n")
+    .find((l) => l.startsWith(MILESTONE_META_PREFIX));
+  if (!line) return [];
+  return line
+    .slice(MILESTONE_META_PREFIX.length)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export function stripWorkEntryMeta(notes: string | null | undefined) {
+  return stripBillingMeta(notes);
+}
+
+export function stripBillingMeta(notes: string | null | undefined) {
   if (!notes) return "";
   return notes
     .split("\n")
-    .filter((l) => !l.startsWith(META_PREFIX))
+    .filter(
+      (l) =>
+        !l.startsWith(META_PREFIX) && !l.startsWith(MILESTONE_META_PREFIX),
+    )
     .join("\n")
     .trim();
+}
+
+export function buildLineItemsFromMilestones(
+  milestones: ReadyMilestone[],
+): LineItem[] {
+  return milestones.map((m) => ({
+    id: m.id,
+    label: `${m.campaign_name} — ${m.name}`,
+    qty: 1,
+    rate: num(m.recognition_amount),
+    amount: num(m.recognition_amount),
+    kind: "fixed" as const,
+  }));
 }
 
 export function partitionInvoices<T extends InvoiceLike & { status: string; disputed?: boolean }>(

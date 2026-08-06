@@ -24,6 +24,7 @@ export default async function ControlsPage() {
     contracts,
     approvals,
     profiles,
+    milestones,
   } = bundle;
 
   const revByClient = revenueByClient(invoices);
@@ -55,6 +56,16 @@ export default async function ControlsPage() {
     invoices,
     clients,
     clientProfit,
+    milestones: (milestones ?? []).map((m) => ({
+      id: m.id,
+      campaign_id: m.campaign_id,
+      name: m.name,
+      status: m.status,
+      billable: m.billable,
+      billed: m.billed,
+      approved_at: m.approved_at,
+      recognition_amount: m.recognition_amount,
+    })),
   });
 
   const { data: existing } = await supabase

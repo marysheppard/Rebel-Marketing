@@ -14,7 +14,7 @@ export default async function AccountingPage() {
   ]);
 
   const bundle = await loadFinanceBundle(supabase, userId, profile.role);
-  const { clients, contracts, invoices, work, campaigns } = bundle;
+  const { clients, contracts, invoices, work, campaigns, milestones } = bundle;
 
   const rows = buildRevenueRecognitionRows({
     clients,
@@ -22,8 +22,10 @@ export default async function AccountingPage() {
     invoices,
     work,
     campaigns,
+    milestones: milestones ?? [],
   });
   const sums = sumRecognition(rows);
+  const milestoneBackedCount = rows.filter((r) => r.milestoneBacked).length;
 
   const clientOptions = [
     ...new Map(rows.map((r) => [r.clientId, r.clientName] as const)).entries(),
@@ -39,7 +41,7 @@ export default async function AccountingPage() {
     <div className="space-y-8">
       <PageHeader
         title="Revenue & Accounting"
-        subtitle="Management / accounting reporting — estimates from contracts, invoices, and work (not GAAP financial statements)"
+        subtitle="Management / accounting reporting — estimates from contracts, invoices, work, and approved campaign milestones (not GAAP financial statements)"
         actions={
           <ListExportButton
             title="Export accounting report"
@@ -88,6 +90,15 @@ export default async function AccountingPage() {
           />
         }
       />
+
+      {milestoneBackedCount > 0 ? (
+        <div className="rounded-box border border-info/30 bg-info/10 px-4 py-3 text-sm">
+          Milestone-backed recognition is active on {milestoneBackedCount}{" "}
+          contract{milestoneBackedCount === 1 ? "" : "s"}: project fee / campaign
+          revenue is recognized when milestones are <strong>Approved</strong> on
+          the campaign, not only by calendar progress.
+        </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Amount billed" value={money(sums.billed)} />
