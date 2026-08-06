@@ -134,7 +134,7 @@ export function buildAuditTrail(input: {
       clientName: clientId ? (maps.clients.get(clientId) ?? null) : null,
       campaignId: w.campaign_id,
       campaignName: camp?.name ?? null,
-      href: "/app/time",
+      href: "/app/work",
     });
   }
 

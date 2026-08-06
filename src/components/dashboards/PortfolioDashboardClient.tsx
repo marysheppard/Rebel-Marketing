@@ -391,8 +391,8 @@ export function PortfolioDashboardClient({
       tone: source.overdueTasksOnBook > 0 ? ("warn" as const) : undefined,
     },
     {
-      label: "Time Entry",
-      href: "/app/time",
+      label: "Time & PTO",
+      href: "/app/work",
       hint: "Log hours",
     },
     {

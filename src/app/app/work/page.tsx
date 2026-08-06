@@ -4,7 +4,7 @@ import {
   canLogWork,
   getProfile,
   isClientRole,
-  isMarketingRole,
+  isEmployeeRole,
 } from "@/lib/page-auth";
 import type { PtoRequest } from "@/lib/types";
 import { redirect } from "next/navigation";
@@ -27,7 +27,7 @@ export default async function WorkPage() {
   const { supabase, profile, userId } = await getProfile();
   if (!profile || !userId) return null;
 
-  if (!isMarketingRole(profile.role) && !isClientRole(profile.role)) {
+  if (!isEmployeeRole(profile.role)) {
     redirect("/app");
   }
 
