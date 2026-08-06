@@ -1,6 +1,10 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import {
   StrategyConversionsBarChart,
   StrategySpendPieChart,
+  buildStrategyDonutSlices,
 } from "@/components/Charts";
 import { money, moneyExact } from "@/lib/format";
 import { StatCard } from "@/components/ui";
@@ -32,7 +36,7 @@ export function ClientGrowthSection({
   conversionsDeltaPct,
   spendDeltaPct,
   cpaDeltaPct,
-  strategySpendPie,
+  strategySpendPie: _strategySpendPie,
   strategyConversionsBars,
   strategyRows,
 }: {
@@ -40,10 +44,27 @@ export function ClientGrowthSection({
   conversionsDeltaPct: number | null;
   spendDeltaPct: number | null;
   cpaDeltaPct: number | null;
-  strategySpendPie: { name: string; value: number }[];
+  strategySpendPie?: { name: string; value: number }[];
   strategyConversionsBars: { name: string; conversions: number }[];
   strategyRows: StrategyRow[];
 }) {
+  const [strategyFilter, setStrategyFilter] = useState<string | null>(null);
+
+  const slices = useMemo(
+    () => buildStrategyDonutSlices(strategyRows),
+    [strategyRows],
+  );
+
+  const filteredRows = useMemo(() => {
+    if (!strategyFilter) return strategyRows;
+    return strategyRows.filter((r) => r.type === strategyFilter);
+  }, [strategyRows, strategyFilter]);
+
+  const filteredBars = useMemo(() => {
+    if (!strategyFilter) return strategyConversionsBars;
+    return strategyConversionsBars.filter((r) => r.name === strategyFilter);
+  }, [strategyConversionsBars, strategyFilter]);
+
   return (
     <section className="mb-8">
       <h3 className="mb-3 text-lg font-bold text-[#0b1f3a]">
@@ -85,9 +106,16 @@ export function ClientGrowthSection({
       <h3 className="mb-3 text-lg font-bold text-[#0b1f3a]">
         By marketing strategy
       </h3>
-      <div className="mb-4 grid gap-4 lg:grid-cols-2">
-        <StrategySpendPieChart data={strategySpendPie} />
-        <StrategyConversionsBarChart data={strategyConversionsBars} />
+      <div className="mb-4 space-y-4">
+        <StrategySpendPieChart
+          slices={slices}
+          selectedKey={strategyFilter}
+          onSelectKey={setStrategyFilter}
+          onClearSelection={() => setStrategyFilter(null)}
+        />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <StrategyConversionsBarChart data={filteredBars} />
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
@@ -104,14 +132,16 @@ export function ClientGrowthSection({
             </tr>
           </thead>
           <tbody>
-            {strategyRows.length === 0 ? (
+            {filteredRows.length === 0 ? (
               <tr>
                 <td colSpan={7} className="text-sm opacity-60">
-                  No strategy metrics in the last 30 days.
+                  {strategyFilter
+                    ? `No rows for “${strategyFilter}”.`
+                    : "No strategy metrics in the last 30 days."}
                 </td>
               </tr>
             ) : (
-              strategyRows.map((r) => (
+              filteredRows.map((r) => (
                 <tr key={r.type}>
                   <td className="font-medium">{r.type}</td>
                   <td className="text-right">{money(r.spend)}</td>

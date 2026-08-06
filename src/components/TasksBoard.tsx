@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ListExportButton } from "@/components/exports/ListExportButton";
-import { TaskPriorityBarChart, TaskStatusPieChart } from "@/components/Charts";
+import {
+  TaskPriorityBarChart,
+  TaskStatusPieChart,
+  buildTaskDonutSlices,
+} from "@/components/Charts";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import type { TaskPriority } from "@/lib/types";
 
@@ -51,7 +55,8 @@ function PriorityMultiSelect({
     };
   }, [open]);
 
-  const allSelected = selected.length === 0 || selected.length === PRIORITIES.length;
+  const allSelected =
+    selected.length === 0 || selected.length === PRIORITIES.length;
   const summary = allSelected
     ? "All priorities"
     : selected.length === 1
@@ -59,7 +64,6 @@ function PriorityMultiSelect({
       : `${selected.length} priorities`;
 
   function toggle(p: TaskPriority) {
-    // Empty selection means "all priorities"
     if (selected.length === 0) {
       onChange(PRIORITIES.filter((x) => x !== p));
       return;
@@ -170,7 +174,7 @@ function TaskCard({ item }: { item: TaskBoardItem }) {
 export function TasksBoard({
   items,
   todayStr,
-  statusPie,
+  statusPie: _statusPie,
   priorityBars,
   openCount,
   overdueCount,
@@ -188,6 +192,9 @@ export function TasksBoard({
 }) {
   const [tab, setTab] = useState<"attention" | "progress" | "all">("attention");
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+
+  const statusSlices = useMemo(() => buildTaskDonutSlices(items), [items]);
 
   const weekEnd = useMemo(() => {
     const d = new Date(`${todayStr}T12:00:00`);
@@ -195,42 +202,40 @@ export function TasksBoard({
     return d.toISOString().slice(0, 10);
   }, [todayStr]);
 
-  const matchesOpenPriority = (t: TaskBoardItem) => {
-    if (isClosed(t.status)) return false;
-    if (
-      priorityFilter.length > 0 &&
-      !priorityFilter.includes(t.priority as TaskPriority)
-    ) {
-      return false;
-    }
-    return true;
-  };
+  const matchesPriority = (t: TaskBoardItem) =>
+    priorityFilter.length === 0 ||
+    priorityFilter.includes(t.priority as TaskPriority);
 
-  const needsAttention = items.filter(
-    (t) =>
-      matchesOpenPriority(t) &&
-      t.due_date != null &&
-      (t.overdue || (t.due_date >= todayStr && t.due_date <= weekEnd)),
-  );
+  const matchesStatus = (t: TaskBoardItem) =>
+    !statusFilter || t.status === statusFilter;
 
-  const inProgress = items.filter(
-    (t) =>
-      matchesOpenPriority(t) &&
-      (t.status === "In Progress" ||
-        t.status === "Not Started" ||
-        t.status === "Needs Revision"),
-  );
+  const needsAttention = useMemo(() => {
+    return items.filter(
+      (t) =>
+        !isClosed(t.status) &&
+        matchesPriority(t) &&
+        matchesStatus(t) &&
+        t.due_date != null &&
+        (t.overdue || (t.due_date >= todayStr && t.due_date <= weekEnd)),
+    );
+  }, [items, priorityFilter, statusFilter, todayStr, weekEnd]);
+
+  const inProgress = useMemo(() => {
+    return items.filter(
+      (t) =>
+        matchesPriority(t) &&
+        matchesStatus(t) &&
+        (t.status === "In Progress" ||
+          t.status === "Not Started" ||
+          t.status === "Needs Revision"),
+    );
+  }, [items, priorityFilter, statusFilter]);
 
   const allSorted = useMemo(() => {
     return items
       .filter((t) => {
-        if (isClosed(t.status)) return false;
-        if (
-          priorityFilter.length > 0 &&
-          !priorityFilter.includes(t.priority as TaskPriority)
-        ) {
-          return false;
-        }
+        if (!matchesPriority(t) || !matchesStatus(t)) return false;
+        if (priorityFilter.length > 0 && isClosed(t.status)) return false;
         return true;
       })
       .sort((a, b) => {
@@ -239,7 +244,7 @@ export function TasksBoard({
         const bd = b.due_date ?? "9999-99-99";
         return ad.localeCompare(bd);
       });
-  }, [items, priorityFilter]);
+  }, [items, priorityFilter, statusFilter]);
 
   const list =
     tab === "attention"
@@ -254,6 +259,9 @@ export function TasksBoard({
       : priorityFilter.length === 1
         ? priorityFilter[0]
         : priorityFilter.join(", ");
+
+  const allTabCount =
+    statusFilter || priorityFilter.length > 0 ? allSorted.length : items.length;
 
   return (
     <div>
@@ -335,9 +343,19 @@ export function TasksBoard({
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <TaskStatusPieChart data={statusPie} />
-            <TaskPriorityBarChart data={priorityBars} />
+          <div className="space-y-4">
+            <TaskStatusPieChart
+              slices={statusSlices}
+              selectedKey={statusFilter}
+              onSelectKey={(key) => {
+                setStatusFilter(key);
+                setTab("all");
+              }}
+              onClearSelection={() => setStatusFilter(null)}
+            />
+            <div className="grid gap-4 lg:grid-cols-2">
+              <TaskPriorityBarChart data={priorityBars} />
+            </div>
           </div>
 
           <div className="flex flex-wrap items-end gap-3">
@@ -369,7 +387,7 @@ export function TasksBoard({
                 className={`tab ${tab === "all" ? "tab-active" : ""}`}
                 onClick={() => setTab("all")}
               >
-                All ({allSorted.length})
+                All ({allTabCount})
               </button>
             </div>
           </div>
@@ -377,8 +395,8 @@ export function TasksBoard({
           {tab === "attention" ? (
             list.length === 0 ? (
               <p className="rounded-box border border-base-300 bg-base-100 p-6 text-sm opacity-60">
-                {priorityEmptyHint
-                  ? `No open tasks with priority ${priorityEmptyHint} need attention.`
+                {priorityEmptyHint || statusFilter
+                  ? `No matching tasks need attention.`
                   : "Nothing urgent. No overdue or near-due tasks."}
               </p>
             ) : (
@@ -393,8 +411,8 @@ export function TasksBoard({
           {tab === "progress" ? (
             list.length === 0 ? (
               <p className="rounded-box border border-base-300 bg-base-100 p-6 text-sm opacity-60">
-                {priorityEmptyHint
-                  ? `No open tasks with priority ${priorityEmptyHint} in progress.`
+                {priorityEmptyHint || statusFilter
+                  ? `No matching tasks in progress.`
                   : "No open tasks in progress right now."}
               </p>
             ) : (
@@ -409,8 +427,8 @@ export function TasksBoard({
           {tab === "all" ? (
             list.length === 0 ? (
               <p className="rounded-box border border-base-300 bg-base-100 p-6 text-sm opacity-60">
-                {priorityEmptyHint
-                  ? `No open tasks with priority ${priorityEmptyHint}.`
+                {priorityEmptyHint || statusFilter
+                  ? "No tasks match the current filters."
                   : "No open tasks."}
               </p>
             ) : (

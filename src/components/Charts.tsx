@@ -31,6 +31,15 @@ import type {
   PendingWaitRow,
   StatusCompositionSlice,
 } from "@/lib/approvals-metrics";
+import {
+  DonutBreakdownViz,
+  buildCountDonutSlices,
+  buildMoneyDonutSlices,
+  type DonutBreakdownSlice,
+} from "@/components/DonutBreakdownViz";
+
+export type { DonutBreakdownSlice };
+export { buildCountDonutSlices, buildMoneyDonutSlices };
 
 function formatAxisMoney(value: number) {
   const n = Number(value);
@@ -437,38 +446,113 @@ const APPROVAL_STATUS_COLORS: Record<string, string> = {
   Rejected: "oklch(62% 0.18 25)",
 };
 
+function mostCommonLabel(labels: string[]): string | null {
+  if (labels.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const label of labels) {
+    if (!label) continue;
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [label, count] of counts) {
+    if (count > bestCount) {
+      best = label;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+export function buildApprovalDonutSlices(
+  items: {
+    approval_status: string;
+    waitingDays: number | null;
+    client_name: string;
+    campaign_name: string;
+  }[],
+): DonutBreakdownSlice[] {
+  const byStatus = new Map<string, typeof items>();
+  for (const item of items) {
+    const key = item.approval_status || "Unknown";
+    const list = byStatus.get(key) ?? [];
+    list.push(item);
+    byStatus.set(key, list);
+  }
+  const total = items.length;
+  return [...byStatus.entries()]
+    .map(([status, rows]) => {
+      const waits = rows
+        .map((r) => r.waitingDays)
+        .filter((d): d is number => d != null);
+      const avgWait =
+        waits.length > 0
+          ? Math.round(waits.reduce((s, d) => s + d, 0) / waits.length)
+          : null;
+      const oldest = waits.length > 0 ? Math.max(...waits) : null;
+      const overdue = waits.filter((d) => d >= 7).length;
+      const topClient = mostCommonLabel(rows.map((r) => r.client_name));
+      const topCampaign = mostCommonLabel(rows.map((r) => r.campaign_name));
+      return {
+        key: status,
+        name: status,
+        value: rows.length,
+        count: rows.length,
+        share: total > 0 ? (rows.length / total) * 100 : null,
+        color: APPROVAL_STATUS_COLORS[status] ?? "#94a3b8",
+        insights: [
+          {
+            label: "Avg Wait",
+            value: avgWait == null ? "Not available" : `${avgWait}d`,
+          },
+          {
+            label: "Oldest Wait",
+            value: oldest == null ? "Not available" : `${oldest}d`,
+          },
+          {
+            label: "Overdue (7+ days)",
+            value: String(overdue),
+          },
+          {
+            label: "Top Client",
+            value: topClient ?? "Not available",
+          },
+          {
+            label: "Top Campaign",
+            value: topCampaign ?? "Not available",
+          },
+        ],
+      } satisfies DonutBreakdownSlice;
+    })
+    .sort((a, b) => b.value - a.value);
+}
+
 export function ApprovalStatusPieChart({
-  data,
+  slices,
+  selectedKey,
+  onSelectKey,
+  onClearSelection,
 }: {
-  data: { name: string; value: number }[];
+  slices: DonutBreakdownSlice[];
+  selectedKey?: string | null;
+  onSelectKey?: (key: string) => void;
+  onClearSelection?: () => void;
 }) {
-  const filtered = data.filter((d) => d.value > 0);
   return (
-    <ChartCard title="Approvals by status" empty={!filtered.length}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={filtered}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            innerRadius={48}
-            outerRadius={80}
-            paddingAngle={2}
-          >
-            {filtered.map((entry) => (
-              <Cell
-                key={entry.name}
-                fill={APPROVAL_STATUS_COLORS[entry.name] ?? "#94a3b8"}
-              />
-            ))}
-          </Pie>
-          <Tooltip />
-          <Legend />
-        </PieChart>
-      </ResponsiveContainer>
-    </ChartCard>
+    <DonutBreakdownViz
+      title="Approvals by status"
+      emptyMessage="No approvals to chart yet."
+      slices={slices}
+      valueFormat="count"
+      centerTotalLabel="Total Approvals"
+      valueColumnLabel="Count"
+      categoryColumnLabel="Status"
+      valueDetailLabel="Count"
+      itemNoun="approvals"
+      selectedKey={selectedKey}
+      onSelectKey={onSelectKey}
+      onClearSelection={onClearSelection}
+    />
   );
 }
 
@@ -1052,52 +1136,91 @@ const CAMPAIGN_STATUS_COLORS: Record<string, string> = {
   Canceled: "#94a3b8",
 };
 
-export function CampaignStatusPieChart({
-  data,
-}: {
-  data: { name: string; value: number }[];
-}) {
-  const filtered = data.filter((d) => d.value > 0);
-  const total = filtered.reduce((sum, d) => sum + d.value, 0);
-  const withPct = filtered.map((d) => ({
-    ...d,
-    pct: total > 0 ? Math.round((d.value / total) * 100) : 0,
-  }));
+export function buildCampaignDonutSlices(
+  items: {
+    campaign_status: string;
+    campaign_name: string;
+    client_name: string;
+    budget: number;
+    spent: number;
+    health: "over" | "near" | "under" | "unknown";
+  }[],
+): DonutBreakdownSlice[] {
+  const byStatus = new Map<string, typeof items>();
+  for (const item of items) {
+    const key = item.campaign_status || "Unknown";
+    const list = byStatus.get(key) ?? [];
+    list.push(item);
+    byStatus.set(key, list);
+  }
+  const total = items.length;
+  return [...byStatus.entries()]
+    .map(([status, rows]) => {
+      const budgetTotal = rows.reduce((s, r) => s + r.budget, 0);
+      const spentTotal = rows.reduce((s, r) => s + r.spent, 0);
+      const overBudget = rows.filter((r) => r.health === "over").length;
+      const largest = [...rows].sort((a, b) => b.spent - a.spent)[0];
+      const clients = new Set(rows.map((r) => r.client_name).filter(Boolean));
+      return {
+        key: status,
+        name: status,
+        value: rows.length,
+        count: rows.length,
+        share: total > 0 ? (rows.length / total) * 100 : null,
+        color: CAMPAIGN_STATUS_COLORS[status] ?? "#94a3b8",
+        insights: [
+          {
+            label: "Total Budget",
+            value: budgetTotal > 0 ? money(budgetTotal) : "Not available",
+          },
+          {
+            label: "Total Spent",
+            value: money(spentTotal),
+          },
+          {
+            label: "Over Budget",
+            value: String(overBudget),
+          },
+          {
+            label: "Largest by Spend",
+            value: largest?.campaign_name ?? "Not available",
+          },
+          {
+            label: "Clients",
+            value: String(clients.size),
+          },
+        ],
+      } satisfies DonutBreakdownSlice;
+    })
+    .sort((a, b) => b.value - a.value);
+}
 
+export function CampaignStatusPieChart({
+  slices,
+  selectedKey,
+  onSelectKey,
+  onClearSelection,
+}: {
+  slices: DonutBreakdownSlice[];
+  selectedKey?: string | null;
+  onSelectKey?: (key: string) => void;
+  onClearSelection?: () => void;
+}) {
   return (
-    <ChartCard title="Campaigns by status" empty={!withPct.length}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={withPct}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            innerRadius={48}
-            outerRadius={80}
-            paddingAngle={2}
-          >
-            {withPct.map((entry) => (
-              <Cell
-                key={entry.name}
-                fill={CAMPAIGN_STATUS_COLORS[entry.name] ?? "#94a3b8"}
-              />
-            ))}
-          </Pie>
-          <Tooltip
-            formatter={(value, _name, item) => {
-              const pct = item?.payload?.pct;
-              return [
-                pct != null ? `${pct}% | ${value}` : String(value),
-                "Campaigns",
-              ];
-            }}
-          />
-          <Legend />
-        </PieChart>
-      </ResponsiveContainer>
-    </ChartCard>
+    <DonutBreakdownViz
+      title="Campaigns by status"
+      emptyMessage="No campaigns to chart yet."
+      slices={slices}
+      valueFormat="count"
+      centerTotalLabel="Total Campaigns"
+      valueColumnLabel="Count"
+      categoryColumnLabel="Status"
+      valueDetailLabel="Count"
+      itemNoun="campaigns"
+      selectedKey={selectedKey}
+      onSelectKey={onSelectKey}
+      onClearSelection={onClearSelection}
+    />
   );
 }
 
@@ -1284,52 +1407,87 @@ const TASK_STATUS_COLORS: Record<string, string> = {
   Approved: "#22c55e",
 };
 
-export function TaskStatusPieChart({
-  data,
-}: {
-  data: { name: string; value: number }[];
-}) {
-  const filtered = data.filter((d) => d.value > 0);
-  const total = filtered.reduce((sum, d) => sum + d.value, 0);
-  const withPct = filtered.map((d) => ({
-    ...d,
-    pct: total > 0 ? Math.round((d.value / total) * 100) : 0,
-  }));
+export function buildTaskDonutSlices(
+  items: {
+    status: string;
+    priority: string;
+    campaign_name: string;
+    client_name: string;
+    overdue: boolean;
+  }[],
+): DonutBreakdownSlice[] {
+  const byStatus = new Map<string, typeof items>();
+  for (const item of items) {
+    const key = item.status || "Unknown";
+    const list = byStatus.get(key) ?? [];
+    list.push(item);
+    byStatus.set(key, list);
+  }
+  const total = items.length;
+  return [...byStatus.entries()]
+    .map(([status, rows]) => {
+      const overdue = rows.filter((r) => r.overdue).length;
+      const highPriority = rows.filter(
+        (r) => r.priority === "Urgent" || r.priority === "High",
+      ).length;
+      const topCampaign = mostCommonLabel(rows.map((r) => r.campaign_name));
+      const topClient = mostCommonLabel(rows.map((r) => r.client_name));
+      return {
+        key: status,
+        name: status,
+        value: rows.length,
+        count: rows.length,
+        share: total > 0 ? (rows.length / total) * 100 : null,
+        color: TASK_STATUS_COLORS[status] ?? "#94a3b8",
+        insights: [
+          {
+            label: "Overdue",
+            value: String(overdue),
+          },
+          {
+            label: "Urgent / High",
+            value: String(highPriority),
+          },
+          {
+            label: "Top Campaign",
+            value: topCampaign ?? "Not available",
+          },
+          {
+            label: "Top Client",
+            value: topClient ?? "Not available",
+          },
+        ],
+      } satisfies DonutBreakdownSlice;
+    })
+    .sort((a, b) => b.value - a.value);
+}
 
+export function TaskStatusPieChart({
+  slices,
+  selectedKey,
+  onSelectKey,
+  onClearSelection,
+}: {
+  slices: DonutBreakdownSlice[];
+  selectedKey?: string | null;
+  onSelectKey?: (key: string) => void;
+  onClearSelection?: () => void;
+}) {
   return (
-    <ChartCard title="Tasks by status" empty={!withPct.length}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={withPct}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            innerRadius={48}
-            outerRadius={80}
-            paddingAngle={2}
-          >
-            {withPct.map((entry) => (
-              <Cell
-                key={entry.name}
-                fill={TASK_STATUS_COLORS[entry.name] ?? "#94a3b8"}
-              />
-            ))}
-          </Pie>
-          <Tooltip
-            formatter={(value, _name, item) => {
-              const pct = item?.payload?.pct;
-              return [
-                pct != null ? `${pct}% | ${value}` : String(value),
-                "Tasks",
-              ];
-            }}
-          />
-          <Legend />
-        </PieChart>
-      </ResponsiveContainer>
-    </ChartCard>
+    <DonutBreakdownViz
+      title="Tasks by status"
+      emptyMessage="No tasks to chart yet."
+      slices={slices}
+      valueFormat="count"
+      centerTotalLabel="Total Tasks"
+      valueColumnLabel="Count"
+      categoryColumnLabel="Status"
+      valueDetailLabel="Count"
+      itemNoun="tasks"
+      selectedKey={selectedKey}
+      onSelectKey={onSelectKey}
+      onClearSelection={onClearSelection}
+    />
   );
 }
 
@@ -1400,57 +1558,88 @@ const STRATEGY_COLORS = [
   "#94a3b8",
 ];
 
-export function StrategySpendPieChart({
-  data,
-}: {
-  data: { name: string; value: number }[];
-}) {
-  const filtered = data.filter((d) => d.value > 0);
-  const total = filtered.reduce((sum, d) => sum + d.value, 0);
-  const withPct = filtered.map((d) => ({
-    ...d,
-    pct: total > 0 ? Math.round((d.value / total) * 100) : 0,
-  }));
+export function buildStrategyDonutSlices(
+  rows: {
+    type: string;
+    spend: number;
+    clicks: number;
+    conversions: number;
+    ctr: number;
+    cpa: number;
+    conversionsDeltaPct: number | null;
+  }[],
+): DonutBreakdownSlice[] {
+  const withSpend = rows.filter((r) => r.spend > 0);
+  const totalSpend = withSpend.reduce((s, r) => s + r.spend, 0);
+  return withSpend
+    .map((r, index) => {
+      const delta =
+        r.conversionsDeltaPct == null
+          ? "Not available"
+          : `${r.conversionsDeltaPct > 0 ? "+" : ""}${r.conversionsDeltaPct}%`;
+      return {
+        key: r.type,
+        name: r.type,
+        value: r.spend,
+        count: 1,
+        share: totalSpend > 0 ? (r.spend / totalSpend) * 100 : null,
+        color: STRATEGY_COLORS[index % STRATEGY_COLORS.length],
+        insights: [
+          {
+            label: "Clicks",
+            value: r.clicks.toLocaleString(),
+          },
+          {
+            label: "Conversions",
+            value: r.conversions.toLocaleString(),
+          },
+          {
+            label: "CTR",
+            value: `${r.ctr}%`,
+          },
+          {
+            label: "CPA",
+            value: r.conversions > 0 ? money(r.cpa) : "Not available",
+          },
+          {
+            label: "Conv. Δ (30d)",
+            value: delta,
+          },
+        ],
+      } satisfies DonutBreakdownSlice;
+    })
+    .sort((a, b) => b.value - a.value);
+}
 
+export function StrategySpendPieChart({
+  slices,
+  selectedKey,
+  onSelectKey,
+  onClearSelection,
+}: {
+  slices: DonutBreakdownSlice[];
+  selectedKey?: string | null;
+  onSelectKey?: (key: string) => void;
+  onClearSelection?: () => void;
+}) {
   return (
-    <ChartCard title="Spend by strategy" empty={!withPct.length}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={withPct}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            innerRadius={48}
-            outerRadius={80}
-            paddingAngle={2}
-          >
-            {withPct.map((entry, i) => (
-              <Cell
-                key={entry.name}
-                fill={STRATEGY_COLORS[i % STRATEGY_COLORS.length]}
-              />
-            ))}
-          </Pie>
-          <Tooltip
-            formatter={(value, _name, item) => {
-              const pct = item?.payload?.pct;
-              const amount = new Intl.NumberFormat("en-US", {
-                style: "currency",
-                currency: "USD",
-                maximumFractionDigits: 0,
-              }).format(Number(value));
-              return [
-                pct != null ? `${pct}% | ${amount}` : amount,
-                "Spend",
-              ];
-            }}
-          />
-          <Legend />
-        </PieChart>
-      </ResponsiveContainer>
-    </ChartCard>
+    <DonutBreakdownViz
+      title="Spend by strategy"
+      subtitle="Last 30 days"
+      emptyMessage="No strategy spend to chart yet."
+      slices={slices}
+      valueFormat="money"
+      centerTotalLabel="Total Spend"
+      valueColumnLabel="Spend"
+      countColumnLabel="Rows"
+      categoryColumnLabel="Strategy"
+      valueDetailLabel="Spend"
+      countDetailLabel="Entries"
+      itemNoun="strategies"
+      selectedKey={selectedKey}
+      onSelectKey={onSelectKey}
+      onClearSelection={onClearSelection}
+    />
   );
 }
 
@@ -1515,113 +1704,66 @@ export function MonthlySeriesChart({
 }
 
 export function EmployeeTrackChart({
-  data,
+  slices,
+  subtitle,
+  selectedKey,
+  onSelectKey,
+  onClearSelection,
 }: {
-  data: { name: string; value: number; fill: string }[];
+  slices: DonutBreakdownSlice[];
+  subtitle?: string;
+  selectedKey?: string | null;
+  onSelectKey?: (key: string) => void;
+  onClearSelection?: () => void;
 }) {
-  const total = data.reduce((s, d) => s + d.value, 0);
-  const onTrack = data.find((d) => d.name === "On track")?.value ?? 0;
-  const healthy = total > 0 ? Math.round((onTrack / total) * 100) : 0;
-
   return (
-    <ChartCard title="Projects on track" empty={!total} compact>
-      <div className="relative h-full w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              innerRadius={48}
-              outerRadius={72}
-              paddingAngle={2}
-              strokeWidth={0}
-            >
-              {data.map((entry) => (
-                <Cell key={entry.name} fill={entry.fill} />
-              ))}
-            </Pie>
-            <Tooltip
-              formatter={(value, name) => [
-                `${Number(value)} tasks`,
-                String(name),
-              ]}
-            />
-            <Legend
-              verticalAlign="bottom"
-              height={28}
-              formatter={(value) => (
-                <span className="text-xs opacity-80">{value}</span>
-              )}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pb-6">
-          <div className="text-2xl font-bold tabular-nums">{healthy}%</div>
-          <div className="text-[10px] uppercase tracking-wide opacity-60">
-            on track
-          </div>
-        </div>
-      </div>
-    </ChartCard>
+    <DonutBreakdownViz
+      title="Projects on track"
+      subtitle={subtitle}
+      emptyMessage="No project status to chart yet."
+      slices={slices}
+      valueFormat="count"
+      centerTotalLabel="Total Projects"
+      valueColumnLabel="Count"
+      categoryColumnLabel="Status"
+      valueDetailLabel="Count"
+      itemNoun="projects"
+      selectedKey={selectedKey}
+      onSelectKey={onSelectKey}
+      onClearSelection={onClearSelection}
+    />
   );
 }
 
 export function EmployeeBudgetChart({
-  data,
+  slices,
+  subtitle,
+  selectedKey,
+  onSelectKey,
+  onClearSelection,
 }: {
-  data: { name: string; value: number; fill: string }[];
+  slices: DonutBreakdownSlice[];
+  subtitle?: string;
+  selectedKey?: string | null;
+  onSelectKey?: (key: string) => void;
+  onClearSelection?: () => void;
 }) {
-  const total = data.reduce((s, d) => s + d.value, 0);
-  const under = data.find((d) => d.name === "Under budget")?.value ?? 0;
-  const near = data.find((d) => d.name === "Near limit")?.value ?? 0;
-  const healthy = total > 0 ? Math.round(((under + near) / total) * 100) : 0;
-
   return (
-    <ChartCard title="Campaigns on budget" empty={!total} compact>
-      <div className="relative h-full w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              innerRadius={48}
-              outerRadius={72}
-              paddingAngle={2}
-              strokeWidth={0}
-            >
-              {data.map((entry) => (
-                <Cell key={entry.name} fill={entry.fill} />
-              ))}
-            </Pie>
-            <Tooltip
-              formatter={(value, name) => [
-                `${Number(value)} campaigns`,
-                String(name),
-              ]}
-            />
-            <Legend
-              verticalAlign="bottom"
-              height={28}
-              formatter={(value) => (
-                <span className="text-xs opacity-80">{value}</span>
-              )}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pb-6">
-          <div className="text-2xl font-bold tabular-nums">{healthy}%</div>
-          <div className="text-[10px] uppercase tracking-wide opacity-60">
-            healthy
-          </div>
-        </div>
-      </div>
-    </ChartCard>
+    <DonutBreakdownViz
+      title="Campaigns on budget"
+      subtitle={subtitle}
+      emptyMessage="No budget health to chart yet."
+      slices={slices}
+      valueFormat="count"
+      centerTotalLabel="Total Campaigns"
+      valueColumnLabel="Count"
+      categoryColumnLabel="Status"
+      valueDetailLabel="Count"
+      itemNoun="campaigns"
+      selectedKey={selectedKey}
+      onSelectKey={onSelectKey}
+      onClearSelection={onClearSelection}
+    />
   );
 }
 

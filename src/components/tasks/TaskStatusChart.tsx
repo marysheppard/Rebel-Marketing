@@ -1,15 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-} from "recharts";
-import { ChartCard } from "@/components/Charts";
+  DonutBreakdownViz,
+  buildCountDonutSlices,
+  type DonutBreakdownSlice,
+} from "@/components/DonutBreakdownViz";
 
 const COLORS: Record<string, string> = {
   "Not Started": "#94a3b8",
@@ -23,52 +19,44 @@ const COLORS: Record<string, string> = {
   Active: "#38bdf8",
   Late: "#f87171",
   "On Hold": "#fbbf24",
+  Submitted: "#a78bfa",
+  "Needs Revision": "#f59e0b",
 };
 
 export function TaskStatusChart({
   data,
+  slices: slicesProp,
   title = "Task mix",
+  selectedKey,
+  onSelectKey,
+  onClearSelection,
 }: {
-  data: { name: string; value: number }[];
+  data?: { name: string; value: number }[];
+  slices?: DonutBreakdownSlice[];
   title?: string;
+  selectedKey?: string | null;
+  onSelectKey?: (key: string) => void;
+  onClearSelection?: () => void;
 }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const filtered = data.filter((d) => d.value > 0);
-  const hasData = filtered.length > 0;
+  const slices = useMemo(() => {
+    if (slicesProp) return slicesProp;
+    return buildCountDonutSlices(data ?? [], COLORS);
+  }, [slicesProp, data]);
 
   return (
-    <ChartCard title={title} empty={!hasData}>
-      {mounted && hasData ? (
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={filtered}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              innerRadius={52}
-              outerRadius={80}
-              paddingAngle={2}
-            >
-              {filtered.map((entry) => (
-                <Cell
-                  key={entry.name}
-                  fill={COLORS[entry.name] ?? "#64748b"}
-                />
-              ))}
-            </Pie>
-            <Tooltip />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
-      ) : (
-        <div className="h-full w-full" aria-hidden />
-      )}
-    </ChartCard>
+    <DonutBreakdownViz
+      title={title}
+      emptyMessage="No tasks to chart yet."
+      slices={slices}
+      valueFormat="count"
+      centerTotalLabel="Total"
+      valueColumnLabel="Count"
+      categoryColumnLabel="Status"
+      valueDetailLabel="Count"
+      itemNoun="items"
+      selectedKey={selectedKey}
+      onSelectKey={onSelectKey}
+      onClearSelection={onClearSelection}
+    />
   );
 }

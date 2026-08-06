@@ -7,6 +7,7 @@ import {
   ApprovalClientWorkloadChart,
   ApprovalStatusDetailChart,
   ApprovalStatusPieChart,
+  buildApprovalDonutSlices,
 } from "@/components/Charts";
 import { UpdateApprovalStatusForm } from "@/components/forms";
 import { EmptyState, StatCard, StatusBadge } from "@/components/ui";
@@ -37,7 +38,7 @@ export function ApprovalsBoard({
   items,
   isClient,
   variant = "simple",
-  statusPie: statusPieProp,
+  statusPie: _statusPieProp,
   agingBars: agingBarsProp,
   pendingCount: pendingCountProp,
   overdueCount: overdueCountProp,
@@ -46,6 +47,7 @@ export function ApprovalsBoard({
   items: ApprovalBoardItem[];
   isClient: boolean;
   variant?: "simple" | "advanced";
+  /** @deprecated simple mode builds slices from items */
   statusPie: { name: string; value: number }[];
   agingBars: { bucket: string; count: number; fill?: string }[];
   pendingCount: number;
@@ -53,6 +55,7 @@ export function ApprovalsBoard({
   avgWaitDays: number | null;
 }) {
   const [tab, setTab] = useState<"pending" | "all">("pending");
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [filters, setFilters] = useState<ApprovalChartFilters>({
     clientId: "all",
     type: "all",
@@ -61,10 +64,13 @@ export function ApprovalsBoard({
 
   const advanced = variant === "advanced";
 
-  const filteredItems = useMemo(
-    () => (advanced ? filterApprovalItems(items, filters) : items),
-    [advanced, items, filters],
-  );
+  const slices = useMemo(() => buildApprovalDonutSlices(items), [items]);
+
+  const filteredItems = useMemo(() => {
+    if (advanced) return filterApprovalItems(items, filters);
+    if (!statusFilter) return items;
+    return items.filter((a) => a.approval_status === statusFilter);
+  }, [advanced, items, filters, statusFilter]);
 
   /** Charts stay comparable when status is drilled (like costs category donut). */
   const chartScopeItems = useMemo(
@@ -257,9 +263,19 @@ export function ApprovalsBoard({
           />
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <ApprovalStatusPieChart data={statusPieProp} />
-          <ApprovalAgingBarChart data={agingBarsProp} />
+        <div className="space-y-4">
+          <ApprovalStatusPieChart
+            slices={slices}
+            selectedKey={statusFilter}
+            onSelectKey={(key) => {
+              setStatusFilter(key);
+              setTab("all");
+            }}
+            onClearSelection={() => setStatusFilter(null)}
+          />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ApprovalAgingBarChart data={agingBarsProp} />
+          </div>
         </div>
       )}
 
@@ -285,7 +301,9 @@ export function ApprovalsBoard({
       {tab === "pending" ? (
         pending.length === 0 ? (
           <p className="rounded-box border border-base-300 bg-base-100 p-6 text-sm opacity-60">
-            Nothing waiting. You are caught up on approvals.
+            {!advanced && statusFilter
+              ? `No pending approvals with status "${statusFilter}".`
+              : "Nothing waiting. You are caught up on approvals."}
           </p>
         ) : (
           <div className="grid gap-4">
@@ -361,57 +379,65 @@ export function ApprovalsBoard({
               </tr>
             </thead>
             <tbody>
-              {filteredItems.map((a) => (
-                <tr key={a.id}>
-                  <td>{a.requested_date}</td>
-                  <td>
-                    <Link
-                      href={`/app/clients/${a.client_id}`}
-                      className="link link-hover"
-                    >
-                      {a.client_name}
-                    </Link>
+              {filteredItems.length === 0 ? (
+                <tr>
+                  <td colSpan={isClient ? 8 : 7} className="opacity-60">
+                    No approvals match this filter.
                   </td>
-                  <td>
-                    <Link
-                      href={`/app/campaigns/${a.campaign_id}`}
-                      className="link link-hover"
-                    >
-                      {a.campaign_name}
-                    </Link>
-                  </td>
-                  <td>{a.approval_type}</td>
-                  <td className="max-w-xs">{a.description}</td>
-                  <td>
-                    {a.waitingDays != null ? (
-                      <span
-                        className={
-                          a.waitingDays >= 7
-                            ? "font-medium text-error"
-                            : a.waitingDays >= 3
-                              ? "text-warning"
-                              : ""
-                        }
-                      >
-                        {a.waitingDays}d
-                      </span>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-                  <td>
-                    <StatusBadge status={a.approval_status} />
-                  </td>
-                  {isClient ? (
-                    <td>
-                      <UpdateApprovalStatusForm
-                        approvalId={a.id}
-                        currentStatus={a.approval_status}
-                      />
-                    </td>
-                  ) : null}
                 </tr>
-              ))}
+              ) : (
+                filteredItems.map((a) => (
+                  <tr key={a.id}>
+                    <td>{a.requested_date}</td>
+                    <td>
+                      <Link
+                        href={`/app/clients/${a.client_id}`}
+                        className="link link-hover"
+                      >
+                        {a.client_name}
+                      </Link>
+                    </td>
+                    <td>
+                      <Link
+                        href={`/app/campaigns/${a.campaign_id}`}
+                        className="link link-hover"
+                      >
+                        {a.campaign_name}
+                      </Link>
+                    </td>
+                    <td>{a.approval_type}</td>
+                    <td className="max-w-xs">{a.description}</td>
+                    <td>
+                      {a.waitingDays != null ? (
+                        <span
+                          className={
+                            a.waitingDays >= 7
+                              ? "font-medium text-error"
+                              : a.waitingDays >= 3
+                                ? "text-warning"
+                                : ""
+                          }
+                        >
+                          {a.waitingDays}d
+                        </span>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td>
+                      <StatusBadge status={a.approval_status} />
+                    </td>
+                    {isClient ? (
+                      <td>
+                        <UpdateApprovalStatusForm
+                          approvalId={a.id}
+                          currentStatus={a.approval_status}
+                        />
+                      </td>
+                    ) : null}
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

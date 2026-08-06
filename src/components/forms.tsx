@@ -1132,6 +1132,9 @@ export function CreateInvoiceForm({
   contracts,
   campaigns,
   unbilledWorkByCampaign,
+  compact = false,
+  onSuccess,
+  onCancel,
 }: {
   clients: Option[];
   contracts: {
@@ -1147,6 +1150,9 @@ export function CreateInvoiceForm({
   }[];
   campaigns: { id: string; label: string; client_id: string }[];
   unbilledWorkByCampaign: Record<string, number>;
+  compact?: boolean;
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -1156,6 +1162,22 @@ export function CreateInvoiceForm({
   const [campaignId, setCampaignId] = useState("");
   const [subtotal, setSubtotal] = useState("");
   const [markWorkBilled, setMarkWorkBilled] = useState(true);
+  const fieldClass = compact
+    ? "input input-bordered input-sm w-full"
+    : "input input-bordered w-full";
+  const selectClass = compact
+    ? "select select-bordered select-sm w-full"
+    : "select select-bordered w-full";
+  const textareaClass = compact
+    ? "textarea textarea-bordered textarea-sm w-full"
+    : "textarea textarea-bordered w-full";
+  const labelClass = compact ? "text-xs font-medium" : "text-sm font-medium";
+  const formClass = compact
+    ? "form-grid grid gap-2.5 sm:grid-cols-2"
+    : "form-grid grid gap-4 sm:grid-cols-2";
+  const checkboxClass = compact ? "checkbox checkbox-sm" : "checkbox";
+  const submitClass = compact ? "btn btn-primary btn-sm" : "btn btn-primary";
+  const cancelClass = compact ? "btn btn-ghost btn-sm" : "btn btn-ghost";
 
   const filteredContracts = contracts.filter((c) => !clientId || c.client_id === clientId);
   const filteredCampaigns = campaigns.filter((c) => !clientId || c.client_id === clientId);
@@ -1242,16 +1264,17 @@ export function CreateInvoiceForm({
     setCampaignId("");
     setSubtotal("");
     router.refresh();
+    onSuccess?.();
   }
 
   return (
-    <form onSubmit={onSubmit} className="form-grid grid gap-4 sm:grid-cols-2">
+    <form onSubmit={onSubmit} className={formClass}>
       <FormError message={error} />
       <label>
-        <span className="text-sm font-medium">Client *</span>
+        <span className={labelClass}>Client *</span>
         <select
           name="client_id"
-          className="select select-bordered w-full"
+          className={selectClass}
           required
           value={clientId}
           onChange={(e) => {
@@ -1270,19 +1293,19 @@ export function CreateInvoiceForm({
         </select>
       </label>
       <label>
-        <span className="text-sm font-medium">Invoice number *</span>
+        <span className={labelClass}>Invoice number *</span>
         <input
           name="invoice_number"
-          className="input input-bordered w-full"
+          className={fieldClass}
           required
           defaultValue={`INV-${Date.now().toString().slice(-8)}`}
         />
       </label>
       <label>
-        <span className="text-sm font-medium">Contract</span>
+        <span className={labelClass}>Contract</span>
         <select
           name="contract_id"
-          className="select select-bordered w-full"
+          className={selectClass}
           value={contractId}
           onChange={(e) => applyContractPrefill(e.target.value)}
         >
@@ -1295,10 +1318,10 @@ export function CreateInvoiceForm({
         </select>
       </label>
       <label>
-        <span className="text-sm font-medium">Campaign</span>
+        <span className={labelClass}>Campaign</span>
         <select
           name="campaign_id"
-          className="select select-bordered w-full"
+          className={selectClass}
           value={campaignId}
           onChange={(e) => setCampaignId(e.target.value)}
         >
@@ -1331,47 +1354,68 @@ export function CreateInvoiceForm({
         </div>
       ) : null}
       <label>
-        <span className="text-sm font-medium">Invoice date *</span>
+        <span className={labelClass}>Invoice date *</span>
         <input
           name="invoice_date"
           type="date"
-          className="input input-bordered w-full"
+          className={fieldClass}
           required
           defaultValue={new Date().toISOString().slice(0, 10)}
         />
       </label>
       <label>
-        <span className="text-sm font-medium">Due date *</span>
-        <input name="due_date" type="date" className="input input-bordered w-full" required />
+        <span className={labelClass}>Due date *</span>
+        <input name="due_date" type="date" className={fieldClass} required />
       </label>
       <label>
-        <span className="text-sm font-medium">Subtotal *</span>
+        <span className={labelClass}>Subtotal *</span>
         <input
           name="subtotal"
           type="number"
           min={0}
           step="0.01"
-          className="input input-bordered w-full"
+          className={fieldClass}
           required
           value={subtotal}
           onChange={(e) => setSubtotal(e.target.value)}
         />
       </label>
       <label>
-        <span className="text-sm font-medium">Pass-through</span>
-        <input name="pass_through_amount" type="number" min={0} step="0.01" className="input input-bordered w-full" defaultValue={0} />
+        <span className={labelClass}>Pass-through</span>
+        <input
+          name="pass_through_amount"
+          type="number"
+          min={0}
+          step="0.01"
+          className={fieldClass}
+          defaultValue={0}
+        />
       </label>
       <label>
-        <span className="text-sm font-medium">Tax</span>
-        <input name="tax_amount" type="number" min={0} step="0.01" className="input input-bordered w-full" defaultValue={0} />
+        <span className={labelClass}>Tax</span>
+        <input
+          name="tax_amount"
+          type="number"
+          min={0}
+          step="0.01"
+          className={fieldClass}
+          defaultValue={0}
+        />
       </label>
       <label>
-        <span className="text-sm font-medium">Total</span>
-        <input name="total_amount" type="number" min={0} step="0.01" className="input input-bordered w-full" placeholder="Auto-calculated if blank" />
+        <span className={labelClass}>Total</span>
+        <input
+          name="total_amount"
+          type="number"
+          min={0}
+          step="0.01"
+          className={fieldClass}
+          placeholder="Auto-calculated if blank"
+        />
       </label>
       <label>
-        <span className="text-sm font-medium">Status</span>
-        <select name="status" className="select select-bordered w-full" defaultValue="Draft">
+        <span className={labelClass}>Status</span>
+        <select name="status" className={selectClass} defaultValue="Draft">
           <option>Draft</option>
           <option>Sent</option>
           <option>Partially Paid</option>
@@ -1385,21 +1429,26 @@ export function CreateInvoiceForm({
         <label className="flex-row items-center gap-2 sm:col-span-2">
           <input
             type="checkbox"
-            className="checkbox"
+            className={checkboxClass}
             checked={markWorkBilled}
             onChange={(e) => setMarkWorkBilled(e.target.checked)}
           />
-          <span className="text-sm font-medium">
+          <span className={labelClass}>
             Mark {unbilledHours.toFixed(1)}h of approved unbilled work as billed
           </span>
         </label>
       ) : null}
       <label className="sm:col-span-2">
-        <span className="text-sm font-medium">Notes</span>
-        <textarea name="notes" className="textarea textarea-bordered w-full" rows={2} />
+        <span className={labelClass}>Notes</span>
+        <textarea name="notes" className={textareaClass} rows={compact ? 2 : 2} />
       </label>
-      <div className="sm:col-span-2">
-        <button type="submit" className="btn btn-primary" disabled={loading}>
+      <div className={`flex flex-wrap gap-2 sm:col-span-2 ${compact ? "justify-end pt-1" : ""}`}>
+        {onCancel ? (
+          <button type="button" className={cancelClass} onClick={onCancel} disabled={loading}>
+            Cancel
+          </button>
+        ) : null}
+        <button type="submit" className={submitClass} disabled={loading}>
           {loading ? "Saving…" : "Create invoice"}
         </button>
       </div>

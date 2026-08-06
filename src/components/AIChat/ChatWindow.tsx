@@ -6,7 +6,8 @@ import { MessageBubble } from "@/components/AIChat/MessageBubble";
 import { SuggestedQuestions } from "@/components/AIChat/SuggestedQuestions";
 import { TypingIndicator } from "@/components/AIChat/TypingIndicator";
 import type { ChatAction, ChatMessage } from "@/components/AIChat/types";
-import { askAssistant } from "@/services/aiService";
+import { postChatMessage } from "@/services/chatClient";
+import { getPageByPath } from "@/services/knowledgeBase";
 import {
   getSmartSuggestions,
   parseEntityFromPath,
@@ -95,30 +96,63 @@ export function ChatWindow({
       content: trimmed,
       createdAt: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, userMsg]);
+    const nextMessages = [...messages, userMsg];
+    setMessages(nextMessages);
     setInput("");
     setTyping(true);
 
     try {
       const entity = parseEntityFromPath(pathname);
-      const result = await askAssistant({
+      const page = getPageByPath(pathname);
+      const history = nextMessages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .slice(-12)
+        .map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        }));
+
+      const result = await postChatMessage({
         message: trimmed,
         context: {
+          page: page?.title ?? null,
           pathname,
-          entityType: entity.entityType,
-          entityId: entity.entityId,
+          role,
+          client: entity.entityType === "client" ? entity.entityId : null,
+          contract: entity.entityType === "contract" ? entity.entityId : null,
+          campaign: entity.entityType === "campaign" ? entity.entityId : null,
         },
-        history: [...messages, userMsg],
-        role,
+        history,
       });
+
+      if (!result.ok) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: "assistant",
+            content: result.error,
+            failed: true,
+            retryOf: trimmed,
+            actions: [
+              {
+                label: `Email ${SUPPORT_CONTACT.email}`,
+                href: SUPPORT_CONTACT.emailHref,
+              },
+            ],
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+        return;
+      }
 
       setMessages((prev) => [
         ...prev,
         {
           id: uid(),
           role: "assistant",
-          content: result.content,
-          actions: result.actions,
+          content: result.message,
+          actions: smartActions.slice(0, 2),
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -128,8 +162,9 @@ export function ChatWindow({
         {
           id: uid(),
           role: "assistant",
-          content:
-            `Something went wrong. Please email support at ${SUPPORT_CONTACT.email}.`,
+          content: `Something went wrong. Please email support at ${SUPPORT_CONTACT.email}.`,
+          failed: true,
+          retryOf: trimmed,
           actions: [
             {
               label: `Email ${SUPPORT_CONTACT.email}`,

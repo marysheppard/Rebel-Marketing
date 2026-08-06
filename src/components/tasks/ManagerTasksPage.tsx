@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { AddTaskForm } from "@/components/tasks/AddTaskForm";
-import { TaskStatusChart } from "@/components/tasks/TaskStatusChart";
-import { TaskTable } from "@/components/tasks/TaskTable";
+import { ManagerTasksClient } from "@/components/tasks/ManagerTasksClient";
 import { ListExportButton } from "@/components/exports/ListExportButton";
 import { PageHeader } from "@/components/ui";
 import {
@@ -89,35 +88,6 @@ export async function ManagerTasksPage() {
     id: e.id,
     label: e.full_name,
   }));
-
-  const openTasks = tasks.filter((t) => t.status !== "Completed");
-  const overdue = openTasks.filter(
-    (t) => t.due_date && t.due_date < todayStr,
-  ).length;
-  const overdueIds = new Set(
-    openTasks
-      .filter((t) => t.due_date && t.due_date < todayStr)
-      .map((t) => t.id),
-  );
-  const taskMix = [
-    {
-      name: "Not Started",
-      value: openTasks.filter(
-        (t) => t.status === "Not Started" && !overdueIds.has(t.id),
-      ).length,
-    },
-    {
-      name: "In Progress",
-      value: openTasks.filter(
-        (t) => t.status === "In Progress" && !overdueIds.has(t.id),
-      ).length,
-    },
-    {
-      name: "Completed",
-      value: tasks.filter((t) => t.status === "Completed").length,
-    },
-    { name: "Overdue", value: overdue },
-  ];
 
   type ExportTask = {
     id: string;
@@ -226,10 +196,7 @@ export async function ManagerTasksPage() {
           </div>
         }
       />
-      <div className="mb-8 max-w-xl">
-        <TaskStatusChart data={taskMix} title="Task mix" />
-      </div>
-      <TaskTable tasks={tasks} todayStr={todayStr} canEdit />
+      <ManagerTasksClient tasks={tasks} todayStr={todayStr} canEdit />
     </div>
   );
 }
