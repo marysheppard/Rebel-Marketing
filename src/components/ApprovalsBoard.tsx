@@ -20,6 +20,10 @@ import {
   uniqueTypes,
   type ApprovalChartFilters,
 } from "@/lib/approvals-metrics";
+import {
+  CLIENT_CHANGE_TYPES,
+  isClientChangeType,
+} from "@/lib/change-requests";
 
 export type ApprovalBoardItem = {
   id: string;
@@ -117,11 +121,19 @@ export function ApprovalsBoard({
   const pendingTabCount = pending.length;
   const allTabCount = filteredItems.length;
 
+  function canDecide(a: ApprovalBoardItem) {
+    if (a.approval_status !== "Pending") return false;
+    // Client-originated requests: staff decide. Agency→client approvals: client decides.
+    return isClientChangeType(a.approval_type) ? !isClient : isClient;
+  }
+
+  const showActionsColumn = filteredItems.some((a) => canDecide(a));
+
   if (items.length === 0) {
     return (
       <EmptyState
         title="No approval requests"
-        description="Staff can request client approval on campaigns. Clients respond here."
+        description="Staff request client sign-off on creative and budget. Clients can also submit change requests from their portal."
       />
     );
   }
@@ -202,7 +214,14 @@ export function ApprovalsBoard({
               }
             >
               <option value="all">All types</option>
-              {types.map((t) => (
+              {[
+                ...new Set([
+                  ...CLIENT_CHANGE_TYPES,
+                  ...types,
+                ]),
+              ]
+                .sort()
+                .map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
@@ -316,6 +335,11 @@ export function ApprovalsBoard({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusBadge status={a.approval_status} />
+                      {isClientChangeType(a.approval_type) ? (
+                        <span className="badge badge-info badge-sm">
+                          Client request
+                        </span>
+                      ) : null}
                       <span className="text-sm font-medium">
                         {a.approval_type}
                       </span>
@@ -352,7 +376,7 @@ export function ApprovalsBoard({
                       Requested {a.requested_date}
                     </p>
                   </div>
-                  {isClient ? (
+                  {canDecide(a) ? (
                     <UpdateApprovalStatusForm
                       approvalId={a.id}
                       currentStatus={a.approval_status}
@@ -375,13 +399,16 @@ export function ApprovalsBoard({
                 <th>Description</th>
                 <th>Days waiting</th>
                 <th>Status</th>
-                {isClient ? <th>Actions</th> : null}
+                {showActionsColumn ? <th>Actions</th> : null}
               </tr>
             </thead>
             <tbody>
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={isClient ? 8 : 7} className="opacity-60">
+                  <td
+                    colSpan={showActionsColumn ? 8 : 7}
+                    className="opacity-60"
+                  >
                     No approvals match this filter.
                   </td>
                 </tr>
@@ -405,7 +432,16 @@ export function ApprovalsBoard({
                         {a.campaign_name}
                       </Link>
                     </td>
-                    <td>{a.approval_type}</td>
+                    <td>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span>{a.approval_type}</span>
+                        {isClientChangeType(a.approval_type) ? (
+                          <span className="badge badge-info badge-sm">
+                            Client request
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
                     <td className="max-w-xs">{a.description}</td>
                     <td>
                       {a.waitingDays != null ? (
@@ -427,12 +463,14 @@ export function ApprovalsBoard({
                     <td>
                       <StatusBadge status={a.approval_status} />
                     </td>
-                    {isClient ? (
+                    {showActionsColumn ? (
                       <td>
-                        <UpdateApprovalStatusForm
-                          approvalId={a.id}
-                          currentStatus={a.approval_status}
-                        />
+                        {canDecide(a) ? (
+                          <UpdateApprovalStatusForm
+                            approvalId={a.id}
+                            currentStatus={a.approval_status}
+                          />
+                        ) : null}
                       </td>
                     ) : null}
                   </tr>
