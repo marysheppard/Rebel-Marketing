@@ -400,20 +400,108 @@ export function ClicksByCampaignChart({
   data: { name: string; clicks: number }[];
   periodLabel?: string;
 }) {
+  const [sort, setSort] = useState<
+    "clicks_desc" | "clicks_asc" | "name_asc" | "name_desc"
+  >("clicks_desc");
+
   const title = periodLabel
     ? `Clicks by campaign (${periodLabel})`
     : "Clicks by campaign";
+
+  const rows = useMemo(() => {
+    const list = [...data];
+    list.sort((a, b) => {
+      switch (sort) {
+        case "clicks_asc":
+          return a.clicks - b.clicks;
+        case "clicks_desc":
+          return b.clicks - a.clicks;
+        case "name_asc":
+          return a.name.localeCompare(b.name);
+        case "name_desc":
+          return b.name.localeCompare(a.name);
+        default:
+          return 0;
+      }
+    });
+    // Use `campaign` (not `name`) for the axis — Recharts treats `name` specially
+    // and can hide category labels on vertical layouts.
+    return list.slice(0, 25).map((r) => ({
+      campaign: r.name,
+      clicks: r.clicks,
+    }));
+  }, [data, sort]);
+
+  const chartHeight = Math.max(240, rows.length * 44 + 32);
+
   return (
-    <ChartCard title={title} empty={!data.length}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-          <XAxis dataKey="name" hide />
-          <YAxis />
-          <Tooltip />
-          <Bar dataKey="clicks" fill="#0ea5e9" name="Clicks" />
-        </BarChart>
-      </ResponsiveContainer>
+    <ChartCard
+      title={title}
+      empty={!data.length}
+      fluid
+      toolbar={
+        <label className="flex max-w-xs flex-col gap-1">
+          <span className="text-xs opacity-70">Sort</span>
+          <select
+            className="select select-bordered select-sm w-full"
+            value={sort}
+            onChange={(e) =>
+              setSort(
+                e.target.value as
+                  | "clicks_desc"
+                  | "clicks_asc"
+                  | "name_asc"
+                  | "name_desc",
+              )
+            }
+            aria-label="Sort campaign performance"
+          >
+            <option value="clicks_desc">Clicks: high to low</option>
+            <option value="clicks_asc">Clicks: low to high</option>
+            <option value="name_asc">Name: A to Z</option>
+            <option value="name_desc">Name: Z to A</option>
+          </select>
+        </label>
+      }
+    >
+      <div style={{ height: chartHeight, width: "100%", minHeight: 240 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={rows}
+            layout="vertical"
+            margin={{ left: 12, right: 48, top: 8, bottom: 8 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+            <YAxis
+              type="category"
+              dataKey="campaign"
+              width={168}
+              interval={0}
+              tick={{ fontSize: 12, fill: "currentColor" }}
+            />
+            <Tooltip
+              formatter={(value) => [Number(value).toLocaleString(), "Clicks"]}
+              labelFormatter={(label) => String(label)}
+            />
+            <Bar
+              dataKey="clicks"
+              fill="#0ea5e9"
+              name="Clicks"
+              radius={[0, 4, 4, 0]}
+              label={{
+                position: "right",
+                fontSize: 11,
+                fill: "currentColor",
+                formatter: (v: number) =>
+                  Number(v) >= 1000
+                    ? `${(Number(v) / 1000).toFixed(1)}k`
+                    : String(v),
+              }}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </ChartCard>
   );
 }
@@ -875,7 +963,9 @@ export function CtrByCampaignChart({
           <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
           <XAxis dataKey="name" hide />
           <YAxis unit="%" />
-          <Tooltip formatter={(value) => [`${Number(value).toFixed(2)}%`, "CTR"]} />
+          <Tooltip
+            formatter={(value) => [`${Number(value).toFixed(2)}%`, "CTR"]}
+          />
           <Bar dataKey="ctr" fill="#14b8a6" name="CTR %" />
         </BarChart>
       </ResponsiveContainer>
