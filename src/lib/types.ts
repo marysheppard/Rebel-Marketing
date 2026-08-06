@@ -356,7 +356,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   agency_manager: "Agency Manager",
   account_manager: "Account Manager",
   marketing: "Marketing Team",
-  billing: "Billing / Accounting",
+  billing: "Billing",
   client: "Client",
 };
 

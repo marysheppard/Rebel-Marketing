@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ListExportButton } from "@/components/exports/ListExportButton";
 import { TaskPriorityBarChart, TaskStatusPieChart } from "@/components/Charts";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
+import type { TaskPriority } from "@/lib/types";
 
 export type TaskBoardItem = {
   id: string;
@@ -18,8 +19,115 @@ export type TaskBoardItem = {
   overdue: boolean;
 };
 
+const PRIORITIES: TaskPriority[] = ["Low", "Medium", "High", "Urgent"];
+
 function isClosed(status: string) {
   return status === "Submitted" || status === "Approved";
+}
+
+function PriorityMultiSelect({
+  selected,
+  onChange,
+}: {
+  selected: TaskPriority[];
+  onChange: (next: TaskPriority[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const allSelected = selected.length === 0 || selected.length === PRIORITIES.length;
+  const summary = allSelected
+    ? "All priorities"
+    : selected.length === 1
+      ? selected[0]
+      : `${selected.length} priorities`;
+
+  function toggle(p: TaskPriority) {
+    // Empty selection means "all priorities"
+    if (selected.length === 0) {
+      onChange(PRIORITIES.filter((x) => x !== p));
+      return;
+    }
+    const set = new Set(selected);
+    if (set.has(p)) set.delete(p);
+    else set.add(p);
+    const next = PRIORITIES.filter((x) => set.has(x));
+    onChange(next.length === 0 || next.length === PRIORITIES.length ? [] : next);
+  }
+
+  return (
+    <div className="relative w-full max-w-[14rem]" ref={rootRef}>
+      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide opacity-60">
+        Priority
+      </span>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm h-auto min-h-10 w-full justify-between gap-2 border border-base-300 px-3 py-2 font-normal"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Filter open tasks by priority: ${summary}`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="min-w-0 truncate text-left text-sm">{summary}</span>
+        <span className="shrink-0 text-[10px] opacity-50" aria-hidden>
+          {open ? "▴" : "▾"}
+        </span>
+      </button>
+      {open ? (
+        <div
+          className="absolute left-0 top-[calc(100%+0.35rem)] z-50 w-full rounded-box border border-base-300 bg-base-100 p-3 shadow-xl"
+          role="listbox"
+          aria-multiselectable
+          aria-label="Priority"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-2 flex gap-2">
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={() => onChange([])}
+            >
+              All priorities
+            </button>
+          </div>
+          <ul className="max-h-56 space-y-1 overflow-y-auto">
+            {PRIORITIES.map((p) => {
+              const checked = allSelected || selected.includes(p);
+              return (
+                <li key={p}>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-base-200">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm"
+                      checked={checked}
+                      onChange={() => toggle(p)}
+                    />
+                    <span>{p}</span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function TaskCard({ item }: { item: TaskBoardItem }) {
@@ -79,6 +187,7 @@ export function TasksBoard({
   submittedCount: number;
 }) {
   const [tab, setTab] = useState<"attention" | "progress" | "all">("attention");
+  const [priorityFilter, setPriorityFilter] = useState<TaskPriority[]>([]);
 
   const weekEnd = useMemo(() => {
     const d = new Date(`${todayStr}T12:00:00`);
@@ -86,28 +195,65 @@ export function TasksBoard({
     return d.toISOString().slice(0, 10);
   }, [todayStr]);
 
+  const matchesOpenPriority = (t: TaskBoardItem) => {
+    if (isClosed(t.status)) return false;
+    if (
+      priorityFilter.length > 0 &&
+      !priorityFilter.includes(t.priority as TaskPriority)
+    ) {
+      return false;
+    }
+    return true;
+  };
+
   const needsAttention = items.filter(
     (t) =>
-      !isClosed(t.status) &&
+      matchesOpenPriority(t) &&
       t.due_date != null &&
       (t.overdue || (t.due_date >= todayStr && t.due_date <= weekEnd)),
   );
 
   const inProgress = items.filter(
     (t) =>
-      t.status === "In Progress" ||
-      t.status === "Not Started" ||
-      t.status === "Needs Revision",
+      matchesOpenPriority(t) &&
+      (t.status === "In Progress" ||
+        t.status === "Not Started" ||
+        t.status === "Needs Revision"),
   );
 
   const allSorted = useMemo(() => {
-    return [...items].sort((a, b) => {
-      if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
-      const ad = a.due_date ?? "9999-99-99";
-      const bd = b.due_date ?? "9999-99-99";
-      return ad.localeCompare(bd);
-    });
-  }, [items]);
+    return items
+      .filter((t) => {
+        if (isClosed(t.status)) return false;
+        if (
+          priorityFilter.length > 0 &&
+          !priorityFilter.includes(t.priority as TaskPriority)
+        ) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+        const ad = a.due_date ?? "9999-99-99";
+        const bd = b.due_date ?? "9999-99-99";
+        return ad.localeCompare(bd);
+      });
+  }, [items, priorityFilter]);
+
+  const list =
+    tab === "attention"
+      ? needsAttention
+      : tab === "progress"
+        ? inProgress
+        : allSorted;
+
+  const priorityEmptyHint =
+    priorityFilter.length === 0
+      ? null
+      : priorityFilter.length === 1
+        ? priorityFilter[0]
+        : priorityFilter.join(", ");
 
   return (
     <div>
@@ -194,41 +340,50 @@ export function TasksBoard({
             <TaskPriorityBarChart data={priorityBars} />
           </div>
 
-          <div role="tablist" className="tabs tabs-boxed w-fit bg-base-200">
-            <button
-              type="button"
-              role="tab"
-              className={`tab ${tab === "attention" ? "tab-active" : ""}`}
-              onClick={() => setTab("attention")}
-            >
-              Needs attention ({needsAttention.length})
-            </button>
-            <button
-              type="button"
-              role="tab"
-              className={`tab ${tab === "progress" ? "tab-active" : ""}`}
-              onClick={() => setTab("progress")}
-            >
-              In progress ({inProgress.length})
-            </button>
-            <button
-              type="button"
-              role="tab"
-              className={`tab ${tab === "all" ? "tab-active" : ""}`}
-              onClick={() => setTab("all")}
-            >
-              All ({items.length})
-            </button>
+          <div className="flex flex-wrap items-end gap-3">
+            <PriorityMultiSelect
+              selected={priorityFilter}
+              onChange={setPriorityFilter}
+            />
+
+            <div role="tablist" className="tabs tabs-boxed w-fit bg-base-200">
+              <button
+                type="button"
+                role="tab"
+                className={`tab ${tab === "attention" ? "tab-active" : ""}`}
+                onClick={() => setTab("attention")}
+              >
+                Needs attention ({needsAttention.length})
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={`tab ${tab === "progress" ? "tab-active" : ""}`}
+                onClick={() => setTab("progress")}
+              >
+                In progress ({inProgress.length})
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={`tab ${tab === "all" ? "tab-active" : ""}`}
+                onClick={() => setTab("all")}
+              >
+                All ({allSorted.length})
+              </button>
+            </div>
           </div>
 
           {tab === "attention" ? (
-            needsAttention.length === 0 ? (
+            list.length === 0 ? (
               <p className="rounded-box border border-base-300 bg-base-100 p-6 text-sm opacity-60">
-                Nothing urgent. No overdue or near-due tasks.
+                {priorityEmptyHint
+                  ? `No open tasks with priority ${priorityEmptyHint} need attention.`
+                  : "Nothing urgent. No overdue or near-due tasks."}
               </p>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {needsAttention.map((t) => (
+                {list.map((t) => (
                   <TaskCard key={t.id} item={t} />
                 ))}
               </div>
@@ -236,13 +391,15 @@ export function TasksBoard({
           ) : null}
 
           {tab === "progress" ? (
-            inProgress.length === 0 ? (
+            list.length === 0 ? (
               <p className="rounded-box border border-base-300 bg-base-100 p-6 text-sm opacity-60">
-                No open tasks in progress right now.
+                {priorityEmptyHint
+                  ? `No open tasks with priority ${priorityEmptyHint} in progress.`
+                  : "No open tasks in progress right now."}
               </p>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {inProgress.map((t) => (
+                {list.map((t) => (
                   <TaskCard key={t.id} item={t} />
                 ))}
               </div>
@@ -250,57 +407,65 @@ export function TasksBoard({
           ) : null}
 
           {tab === "all" ? (
-            <div className="overflow-x-auto rounded-box border border-base-300">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Task</th>
-                    <th>Campaign / Client</th>
-                    <th>Due</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allSorted.map((t) => (
-                    <tr key={t.id}>
-                      <td>
-                        <Link
-                          href={`/app/tasks/${t.id}`}
-                          className="link link-hover font-medium"
-                        >
-                          {t.title}
-                        </Link>
-                        {t.description ? (
-                          <div className="mt-0.5 max-w-xs truncate text-sm opacity-60">
-                            {t.description}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="text-sm">
-                        <div>{t.campaign_name}</div>
-                        <div className="opacity-60">{t.client_name}</div>
-                      </td>
-                      <td
-                        className={
-                          t.overdue
-                            ? "font-medium text-error"
-                            : "whitespace-nowrap"
-                        }
-                      >
-                        {t.due_date ?? "—"}
-                      </td>
-                      <td>
-                        <StatusBadge status={t.priority} />
-                      </td>
-                      <td>
-                        <StatusBadge status={t.status} />
-                      </td>
+            list.length === 0 ? (
+              <p className="rounded-box border border-base-300 bg-base-100 p-6 text-sm opacity-60">
+                {priorityEmptyHint
+                  ? `No open tasks with priority ${priorityEmptyHint}.`
+                  : "No open tasks."}
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-box border border-base-300">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Task</th>
+                      <th>Campaign / Client</th>
+                      <th>Due</th>
+                      <th>Priority</th>
+                      <th>Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {list.map((t) => (
+                      <tr key={t.id}>
+                        <td>
+                          <Link
+                            href={`/app/tasks/${t.id}`}
+                            className="link link-hover font-medium"
+                          >
+                            {t.title}
+                          </Link>
+                          {t.description ? (
+                            <div className="mt-0.5 max-w-xs truncate text-sm opacity-60">
+                              {t.description}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="text-sm">
+                          <div>{t.campaign_name}</div>
+                          <div className="opacity-60">{t.client_name}</div>
+                        </td>
+                        <td
+                          className={
+                            t.overdue
+                              ? "font-medium text-error"
+                              : "whitespace-nowrap"
+                          }
+                        >
+                          {t.due_date ?? "—"}
+                        </td>
+                        <td>
+                          <StatusBadge status={t.priority} />
+                        </td>
+                        <td>
+                          <StatusBadge status={t.status} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
           ) : null}
         </div>
       )}
