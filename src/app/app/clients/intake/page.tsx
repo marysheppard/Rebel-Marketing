@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ClientIntakeForm } from "@/components/ClientIntakeForm";
 import { PageHeader } from "@/components/ui";
-import { canManageClients, getProfile } from "@/lib/page-auth";
+import { canManageClients, canManageContracts, getProfile } from "@/lib/page-auth";
 import { redirect } from "next/navigation";
 
 export default async function ClientIntakePage() {
@@ -26,6 +26,7 @@ export default async function ClientIntakePage() {
         }
       />
       <ClientIntakeForm
+        canCreateContract={canManageContracts(profile.role)}
         accountManagers={(managers ?? []).map((m) => ({
           id: m.id,
           label: m.full_name,

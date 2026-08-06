@@ -6,13 +6,19 @@ import {
   type BillingInvoiceRow,
   type UnbilledEntry,
 } from "@/lib/billing";
-import { remainingBalance } from "@/lib/finance";
+import { contractBillRate, remainingBalance } from "@/lib/finance";
 import { joinField, num } from "@/lib/format";
-import { canManageBilling, getProfile } from "@/lib/page-auth";
+import {
+  canManageBilling,
+  canViewBillingPages,
+  getProfile,
+} from "@/lib/page-auth";
+import { redirect } from "next/navigation";
 
 export default async function BillingPage() {
   const { supabase, profile } = await getProfile();
   if (!profile) return null;
+  if (!canViewBillingPages(profile.role)) redirect("/app");
 
   const canManage = canManageBilling(profile.role);
 
@@ -27,14 +33,43 @@ export default async function BillingPage() {
       supabase
         .from("work_entries")
         .select(
-          "id, campaign_id, hours, work_date, work_type, description, campaigns(campaign_name, client_id, clients(client_name))",
+          "id, campaign_id, hours, work_date, work_type, description, campaigns(campaign_name, client_id, contract_id, clients(client_name))",
         )
         .eq("billable", true)
         .eq("billed", false)
         .eq("approval_status", "Approved")
         .order("work_date", { ascending: false }),
-      supabase.from("campaigns").select("id, campaign_name"),
+      supabase.from("campaigns").select("id, campaign_name, contract_id"),
     ]);
+
+  const contractIds = [
+    ...new Set(
+      (unbilledWork ?? [])
+        .map((w) => {
+          const camps = w.campaigns as
+            | { contract_id?: string }
+            | { contract_id?: string }[]
+            | null;
+          const camp = Array.isArray(camps) ? camps[0] : camps;
+          return camp?.contract_id ? String(camp.contract_id) : null;
+        })
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  const { data: contractsRaw } = contractIds.length
+    ? await supabase
+        .from("contracts")
+        .select("id, overage_hourly_rate")
+        .in("id", contractIds)
+    : { data: [] as { id: string; overage_hourly_rate: number | null }[] };
+
+  const rateByContract = new Map(
+    (contractsRaw ?? []).map((c) => [
+      c.id as string,
+      contractBillRate(c, DEFAULT_BILL_RATE_USD),
+    ]),
+  );
 
   const campaignNameById = new Map(
     (campaignsMeta ?? []).map((c) => [c.id as string, c.campaign_name as string]),
@@ -45,6 +80,7 @@ export default async function BillingPage() {
       | {
           campaign_name?: string;
           client_id?: string;
+          contract_id?: string;
           clients?:
             | { client_name?: string }
             | { client_name?: string }[]
@@ -53,6 +89,7 @@ export default async function BillingPage() {
       | Array<{
           campaign_name?: string;
           client_id?: string;
+          contract_id?: string;
           clients?:
             | { client_name?: string }
             | { client_name?: string }[]
@@ -64,7 +101,9 @@ export default async function BillingPage() {
     const clientsRel = camp?.clients;
     const clientObj = Array.isArray(clientsRel) ? clientsRel[0] : clientsRel;
     const hours = num(w.hours);
-    const rate = DEFAULT_BILL_RATE_USD;
+    const contractId = camp?.contract_id ? String(camp.contract_id) : null;
+    const rate =
+      (contractId && rateByContract.get(contractId)) || DEFAULT_BILL_RATE_USD;
 
     return {
       id: w.id as string,
@@ -81,6 +120,7 @@ export default async function BillingPage() {
       client_name: clientObj?.client_name ?? "Client",
       estimated_rate: rate,
       estimated_amount: estimateEntryAmount(hours, rate),
+      contract_id: contractId,
     };
   });
 

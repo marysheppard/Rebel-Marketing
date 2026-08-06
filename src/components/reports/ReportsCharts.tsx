@@ -165,7 +165,11 @@ export function ReportsCharts({
         </ResponsiveContainer>
       </ChartCard>
 
-      <ApprovalStatusPieChart slices={approvalSlices} />
+      <ApprovalStatusPieChart
+        slices={approvalSlices}
+        layout="stacked"
+        showDetailsCard={false}
+      />
 
       <ChartCard title="Unbilled hours by campaign" empty={!unbilledBars.length} compact>
         <ResponsiveContainer width="100%" height="100%">

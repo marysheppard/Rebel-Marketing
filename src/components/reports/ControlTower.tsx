@@ -11,11 +11,11 @@ import {
 import type { ControlAlert } from "@/lib/controls";
 import { SEVERITY_LABELS } from "@/lib/controls";
 import { alertCategory } from "@/components/reports/types";
+import { CollapsibleSection } from "@/components/reports/CollapsibleSection";
 
 type SeverityFilter = "all" | "error" | "warning" | "info";
 
 export function ControlTower({ alerts }: { alerts: ControlAlert[] }) {
-  const [open, setOpen] = useState(true);
   const [severity, setSeverity] = useState<SeverityFilter>("all");
   const [category, setCategory] = useState<string>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -61,44 +61,28 @@ export function ControlTower({ alerts }: { alerts: ControlAlert[] }) {
   }
 
   return (
-    <section className="rounded-box border border-base-300 bg-base-100 shadow-sm">
-      <div
-        className={`bg-base-200/40 px-4 py-3 sm:px-5 ${
-          open ? "border-b border-base-300" : ""
-        }`}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="text-lg font-bold tracking-tight text-[#0b1f3a]">
-              Control tower
-            </h2>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm gap-1 border border-base-300"
-              onClick={() => setOpen((v) => !v)}
-              aria-expanded={open}
-              aria-controls="control-tower-body"
-            >
-              <ChevronDown
-                className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
-                  open ? "rotate-0" : "-rotate-90"
-                }`}
-                aria-hidden
-              />
-              <span className="text-xs font-medium">{open ? "Collapse" : "Expand"}</span>
-            </button>
-          </div>
-          {!open ? (
-            <span className="badge badge-ghost">
-              {alerts.length} flag{alerts.length === 1 ? "" : "s"} hidden
+    <CollapsibleSection
+      title="Control tower"
+      subtitle="Exceptions that need a billing or operations decision."
+      summary={
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="badge badge-ghost badge-sm">
+            {alerts.length} flag{alerts.length === 1 ? "" : "s"}
+          </span>
+          {counts.error > 0 ? (
+            <span className="badge badge-error badge-sm">{counts.error} critical</span>
+          ) : null}
+          {counts.warning > 0 ? (
+            <span className="badge badge-warning badge-sm">
+              {counts.warning} warning
             </span>
           ) : null}
-        </div>
-        <p className="mt-1 text-sm opacity-65">
-          Exceptions that need a billing or operations decision — compact by default.
-        </p>
-
-        <div className="mt-3 flex flex-wrap gap-2">
+        </span>
+      }
+      headerClassName="bg-base-200/40"
+    >
+      <div className="border-b border-base-300 bg-base-200/20 px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap gap-2">
           {(
             [
               ["all", "All", alerts.length],
@@ -146,38 +130,36 @@ export function ControlTower({ alerts }: { alerts: ControlAlert[] }) {
         </div>
       </div>
 
-      {open ? (
-        <div id="control-tower-body" className="divide-y divide-base-300">
-          {grouped.map(([group, rows]) => (
-            <div key={group} className="px-4 py-3 sm:px-5">
-              <div className="mb-2 flex items-center gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide opacity-60">
-                  {group}
-                </h3>
-                <span className="badge badge-ghost badge-sm">{rows.length}</span>
-              </div>
-              <ul className="space-y-2">
-                {rows.map((a) => (
-                  <ControlRow
-                    key={a.id}
-                    alert={a}
-                    expanded={expandedId === a.id}
-                    onToggle={() =>
-                      setExpandedId((prev) => (prev === a.id ? null : a.id))
-                    }
-                  />
-                ))}
-              </ul>
+      <div className="divide-y divide-base-300">
+        {grouped.map(([group, rows]) => (
+          <div key={group} className="px-4 py-3 sm:px-5">
+            <div className="mb-2 flex items-center gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide opacity-60">
+                {group}
+              </h3>
+              <span className="badge badge-ghost badge-sm">{rows.length}</span>
             </div>
-          ))}
-          {!grouped.length ? (
-            <p className="px-5 py-8 text-center text-sm opacity-60">
-              No exceptions match these filters.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-    </section>
+            <ul className="space-y-2">
+              {rows.map((a) => (
+                <ControlRow
+                  key={a.id}
+                  alert={a}
+                  expanded={expandedId === a.id}
+                  onToggle={() =>
+                    setExpandedId((prev) => (prev === a.id ? null : a.id))
+                  }
+                />
+              ))}
+            </ul>
+          </div>
+        ))}
+        {!grouped.length ? (
+          <p className="px-5 py-8 text-center text-sm opacity-60">
+            No exceptions match these filters.
+          </p>
+        ) : null}
+      </div>
+    </CollapsibleSection>
   );
 }
 

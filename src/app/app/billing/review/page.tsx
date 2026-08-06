@@ -7,8 +7,14 @@ import {
   parseWorkEntryIdsFromNotes,
   type UnbilledEntry,
 } from "@/lib/billing";
+import { contractBillRate } from "@/lib/finance";
 import { joinField, num } from "@/lib/format";
-import { canManageBilling, getProfile } from "@/lib/page-auth";
+import {
+  canManageBilling,
+  canViewBillingPages,
+  getProfile,
+} from "@/lib/page-auth";
+import { redirect } from "next/navigation";
 
 type SearchParams = Promise<{ entries?: string; invoice?: string }>;
 
@@ -19,13 +25,16 @@ export default async function BillingReviewPage({
 }) {
   const { supabase, profile } = await getProfile();
   if (!profile) return null;
+  if (!canViewBillingPages(profile.role)) redirect("/app");
 
   const sp = await searchParams;
   const canManage = canManageBilling(profile.role);
 
   const { data: contractsRaw } = await supabase
     .from("contracts")
-    .select("id, contract_name, contract_number, client_id, monthly_retainer")
+    .select(
+      "id, contract_name, contract_number, client_id, billing_method, monthly_retainer, project_fee, deposit_amount, included_agency_hours, overage_hourly_rate, pass_through_markup_pct",
+    )
     .order("contract_name");
 
   const contracts = (contractsRaw ?? []).map((c) => ({
@@ -33,7 +42,20 @@ export default async function BillingReviewPage({
     label: `${c.contract_name} (${c.contract_number})`,
     client_id: c.client_id as string,
     monthly_retainer: num(c.monthly_retainer),
+    billing_method: String(c.billing_method ?? ""),
+    project_fee: num(c.project_fee),
+    deposit_amount: num(c.deposit_amount),
+    included_agency_hours: num(c.included_agency_hours),
+    overage_hourly_rate: num(c.overage_hourly_rate),
+    pass_through_markup_pct: num(c.pass_through_markup_pct),
   }));
+
+  const rateByContract = new Map(
+    contracts.map((c) => [
+      c.id,
+      contractBillRate(c, DEFAULT_BILL_RATE_USD),
+    ]),
+  );
 
   if (sp.invoice) {
     const { data: inv } = await supabase
@@ -60,11 +82,11 @@ export default async function BillingReviewPage({
       const { data: work } = await supabase
         .from("work_entries")
         .select(
-          "id, campaign_id, hours, work_date, work_type, description, campaigns(campaign_name, client_id, clients(client_name))",
+          "id, campaign_id, hours, work_date, work_type, description, campaigns(campaign_name, client_id, contract_id, clients(client_name))",
         )
         .in("id", workIds);
 
-      entries = (work ?? []).map((w) => mapWorkRow(w));
+      entries = (work ?? []).map((w) => mapWorkRow(w, rateByContract));
     }
 
     const clientName =
@@ -74,15 +96,19 @@ export default async function BillingReviewPage({
       ) || "Client";
 
     let retainerPaidHint: number | null = null;
+    let hasPriorSentInvoice = false;
     if (inv.contract_id) {
       const { data: related } = await supabase
         .from("invoices")
-        .select("total_amount")
+        .select("id, total_amount, status")
         .eq("contract_id", inv.contract_id)
         .neq("status", "Canceled");
       retainerPaidHint = (related ?? []).reduce(
         (s, r) => s + num(r.total_amount),
         0,
+      );
+      hasPriorSentInvoice = (related ?? []).some(
+        (r) => r.id !== inv.id && r.status !== "Draft",
       );
     }
 
@@ -110,6 +136,7 @@ export default async function BillingReviewPage({
           clientName={clientName === "—" ? "Client" : clientName}
           canManage={canManage}
           retainerPaidHint={retainerPaidHint}
+          hasPriorSentInvoice={hasPriorSentInvoice}
         />
       </div>
     );
@@ -134,17 +161,31 @@ export default async function BillingReviewPage({
     );
   }
 
+  if (!canManage) {
+    return (
+      <div>
+        <PageHeader
+          title="Billing only"
+          subtitle="Only the billing role can create invoices from approved work."
+        />
+        <Link href="/app/billing" className="btn btn-primary">
+          Back to Billing
+        </Link>
+      </div>
+    );
+  }
+
   const { data: work } = await supabase
     .from("work_entries")
     .select(
-      "id, campaign_id, hours, work_date, work_type, description, billable, billed, approval_status, campaigns(campaign_name, client_id, clients(client_name))",
+      "id, campaign_id, hours, work_date, work_type, description, billable, billed, approval_status, campaigns(campaign_name, client_id, contract_id, clients(client_name))",
     )
     .in("id", entryIds)
     .eq("billable", true)
     .eq("billed", false)
     .eq("approval_status", "Approved");
 
-  const entries = (work ?? []).map((w) => mapWorkRow(w));
+  const entries = (work ?? []).map((w) => mapWorkRow(w, rateByContract));
 
   if (!entries.length) {
     return (
@@ -175,6 +216,19 @@ export default async function BillingReviewPage({
     );
   }
 
+  const defaultContractId =
+    entries.find((e) => e.contract_id)?.contract_id ?? null;
+  let hasPriorSentInvoice = false;
+  if (defaultContractId) {
+    const { data: related } = await supabase
+      .from("invoices")
+      .select("id, status")
+      .eq("contract_id", defaultContractId)
+      .neq("status", "Canceled")
+      .neq("status", "Draft");
+    hasPriorSentInvoice = (related ?? []).length > 0;
+  }
+
   return (
     <div>
       <InvoiceComposer
@@ -183,16 +237,22 @@ export default async function BillingReviewPage({
         contracts={contracts}
         clientName={entries[0].client_name}
         canManage={canManage}
+        defaultContractId={defaultContractId}
+        hasPriorSentInvoice={hasPriorSentInvoice}
       />
     </div>
   );
 }
 
-function mapWorkRow(w: Record<string, unknown>): UnbilledEntry {
+function mapWorkRow(
+  w: Record<string, unknown>,
+  rateByContract: Map<string, number>,
+): UnbilledEntry {
   const camps = w.campaigns as
     | {
         campaign_name?: string;
         client_id?: string;
+        contract_id?: string;
         clients?:
           | { client_name?: string }
           | { client_name?: string }[]
@@ -201,6 +261,7 @@ function mapWorkRow(w: Record<string, unknown>): UnbilledEntry {
     | {
         campaign_name?: string;
         client_id?: string;
+        contract_id?: string;
         clients?:
           | { client_name?: string }
           | { client_name?: string }[]
@@ -212,7 +273,9 @@ function mapWorkRow(w: Record<string, unknown>): UnbilledEntry {
   const clientsRel = camp?.clients;
   const clientObj = Array.isArray(clientsRel) ? clientsRel[0] : clientsRel;
   const hours = num(w.hours);
-  const rate = DEFAULT_BILL_RATE_USD;
+  const contractId = camp?.contract_id ? String(camp.contract_id) : null;
+  const rate =
+    (contractId && rateByContract.get(contractId)) || DEFAULT_BILL_RATE_USD;
 
   return {
     id: String(w.id),
@@ -226,5 +289,6 @@ function mapWorkRow(w: Record<string, unknown>): UnbilledEntry {
     client_name: clientObj?.client_name ?? "Client",
     estimated_rate: rate,
     estimated_amount: estimateEntryAmount(hours, rate),
+    contract_id: contractId,
   };
 }

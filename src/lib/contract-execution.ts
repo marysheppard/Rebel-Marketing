@@ -119,6 +119,18 @@ export async function finalizeContract(contractId: string) {
   } = await supabase.auth.getUser();
   if (!user) return { ok: false as const, error: "Not authenticated." };
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || profile.role !== "account_manager") {
+    return {
+      ok: false as const,
+      error: "Only an account manager can finalize a contract.",
+    };
+  }
+
   const { data: contract, error } = await supabase
     .from("contracts")
     .select("*")
@@ -205,6 +217,18 @@ export async function sendForSignature(input: {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false as const, error: "Not authenticated." };
+
+  const { data: senderProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (!senderProfile || senderProfile.role !== "account_manager") {
+    return {
+      ok: false as const,
+      error: "Only an account manager can send a contract for signature.",
+    };
+  }
 
   const { data: contract, error } = await supabase
     .from("contracts")
@@ -301,7 +325,7 @@ export async function sendForSignature(input: {
     .update({ status: "Locked", locked_at: nowIso })
     .eq("id", version.id);
 
-  await supabase
+  const { error: statusErr } = await supabase
     .from("contracts")
     .update({
       contract_status: "Awaiting Client Signature",
@@ -309,6 +333,15 @@ export async function sendForSignature(input: {
       updated_at: nowIso,
     })
     .eq("id", input.contractId);
+
+  if (statusErr) {
+    return {
+      ok: false as const,
+      error:
+        statusErr.message ||
+        "Signature request created but contract status could not be updated.",
+    };
+  }
 
   const href = `/app/contracts/${input.contractId}/sign`;
   await supabase.from("notifications").insert({
@@ -405,12 +438,12 @@ export async function notifyAgencyAfterClientSignature(contractId: string) {
   const { data: managers } = await supabase
     .from("profiles")
     .select("id")
-    .in("role", ["agency_manager", "account_manager"]);
+    .eq("role", "agency_manager");
 
   const rows = (managers ?? []).map((m) => ({
     user_id: m.id,
-    title: "Client signature received",
-    body: `${contract.contract_name} (${contract.contract_number}) is ready for agency countersignature.`,
+    title: "Contract ready for countersignature",
+    body: `${contract.contract_name} (${contract.contract_number}) was signed by the client and needs your review and countersignature.`,
     href: `/app/contracts/${contractId}`,
   }));
 
@@ -473,13 +506,10 @@ export async function countersignAsAgency(input: {
     .eq("id", user.id)
     .single();
 
-  if (
-    !profile ||
-    (profile.role !== "agency_manager" && profile.role !== "account_manager")
-  ) {
+  if (!profile || profile.role !== "agency_manager") {
     return {
       ok: false as const,
-      error: "Only an agency or account manager can countersign.",
+      error: "Only an agency manager can countersign.",
     };
   }
 
@@ -581,6 +611,21 @@ export async function countersignAsAgency(input: {
       title: "Agreement fully executed",
       body: `${contract.contract_name} is fully executed. Engagement can now proceed.`,
       href: `/app/contracts/documents`,
+    });
+  }
+
+  const { data: clientRow } = await supabase
+    .from("clients")
+    .select("account_manager_id")
+    .eq("id", contract.client_id)
+    .maybeSingle();
+  const accountManagerId = clientRow?.account_manager_id as string | null;
+  if (accountManagerId) {
+    await supabase.from("notifications").insert({
+      user_id: accountManagerId,
+      title: "Agreement fully executed",
+      body: `${contract.contract_name} (${contract.contract_number}) was countersigned. You can continue with this client and contract.`,
+      href: `/app/contracts/${input.contractId}`,
     });
   }
 

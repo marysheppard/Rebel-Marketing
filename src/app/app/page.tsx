@@ -1,4 +1,4 @@
-import { CustomerDashboardBody } from "@/components/CustomerDashboardBody";
+﻿import { CustomerDashboardBody } from "@/components/CustomerDashboardBody";
 import { EmployeeDashboardBody } from "@/components/EmployeeDashboardBody";
 import {
   AccountManagerDashboard,
@@ -157,17 +157,21 @@ async function EmployeeDashboard({
     assignedCampaignIds.length > 0
       ? await supabase
           .from("campaign_metrics")
-          .select("campaign_id, metric_date, impressions, clicks, conversions, spend")
+          .select(
+            "campaign_id, metric_date, impressions, clicks, conversions, spend",
+          )
           .in("campaign_id", assignedCampaignIds)
           .order("metric_date", { ascending: true })
-      : { data: [] as {
-          campaign_id: string;
-          metric_date: string;
-          impressions: number;
-          clicks: number;
-          conversions: number;
-          spend: number;
-        }[] };
+      : {
+          data: [] as {
+            campaign_id: string;
+            metric_date: string;
+            impressions: number;
+            clicks: number;
+            conversions: number;
+            spend: number;
+          }[],
+        };
 
   const ownedClients = (managedClients ?? []) as Client[];
   const myAssignments: AssignmentRow[] = (assignments ?? []).map((row) => {
@@ -367,24 +371,68 @@ async function EmployeeDashboard({
     (locationRows ?? []).map((r) => [r.id as string, r]),
   );
 
-  const mapMarkers = workingClients
-    .map((c) => {
-      const loc = locationById.get(c.id);
-      const lat = loc?.latitude != null ? Number(loc.latitude) : NaN;
-      const lng = loc?.longitude != null ? Number(loc.longitude) : NaN;
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-      return {
-        id: c.id,
-        name: c.name,
-        lat,
-        lng,
-        city: loc?.city || undefined,
-        state: loc?.state || undefined,
-      };
-    })
-    .filter((m): m is NonNullable<typeof m> => m != null);
+  function clientHealth(
+    openCount: number,
+    overdueCount: number,
+  ): "risk" | "attention" | "ok" {
+    if (overdueCount > 0) return "risk";
+    if (openCount > 0) return "attention";
+    return "ok";
+  }
 
-  const missingMapCount = workingClients.length - mapMarkers.length;
+  const nextDueByClient = new Map<string, string>();
+  for (const t of openTasks) {
+    if (!t.client_id || !t.due_date) continue;
+    const prev = nextDueByClient.get(t.client_id);
+    if (!prev || t.due_date < prev) nextDueByClient.set(t.client_id, t.due_date);
+  }
+
+  const mapClients = workingClients.map((c) => {
+    const loc = locationById.get(c.id);
+    const lat = loc?.latitude != null ? Number(loc.latitude) : NaN;
+    const lng = loc?.longitude != null ? Number(loc.longitude) : NaN;
+    const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+    const activeCampaigns = c.campaigns.filter(
+      (camp) =>
+        camp.status !== "Completed" &&
+        camp.status !== "Canceled" &&
+        camp.status !== "Cancelled",
+    );
+    return {
+      id: c.id,
+      name: c.name,
+      city: loc?.city || undefined,
+      state: loc?.state || undefined,
+      hasCoords,
+      lat: hasCoords ? lat : undefined,
+      lng: hasCoords ? lng : undefined,
+      openCount: c.openCount,
+      overdueCount: c.overdueCount,
+      activeCampaignCount: activeCampaigns.length,
+      nextDueDate: nextDueByClient.get(c.id),
+      campaignNames: activeCampaigns.slice(0, 3).map((camp) => camp.name),
+      health: clientHealth(c.openCount, c.overdueCount),
+    };
+  });
+
+  const mapMarkers = mapClients
+    .filter((c) => c.hasCoords && c.lat != null && c.lng != null)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      lat: c.lat!,
+      lng: c.lng!,
+      city: c.city,
+      state: c.state,
+      openCount: c.openCount,
+      overdueCount: c.overdueCount,
+      activeCampaignCount: c.activeCampaignCount,
+      nextDueDate: c.nextDueDate,
+      campaignNames: c.campaignNames,
+      health: c.health,
+    }));
+
+  const missingMapCount = mapClients.filter((c) => !c.hasCoords).length;
 
   const calendarTasks = openTasks
     .filter((t) => t.due_date)
@@ -398,6 +446,7 @@ async function EmployeeDashboard({
           t.status !== "Submitted" &&
           t.status !== "Approved",
       ),
+      clientId: t.client_id || undefined,
     }));
 
   const calendarCampaigns = myAssignments
@@ -406,6 +455,7 @@ async function EmployeeDashboard({
       id: a.campaigns!.id,
       title: a.campaigns!.campaign_name,
       date: a.campaigns!.end_date,
+      clientId: a.campaigns!.client_id || undefined,
     }));
 
   const calendarEvents = (eventRows ?? []).map((ev) => {
@@ -421,26 +471,35 @@ async function EmployeeDashboard({
     };
   });
 
-  const campaignNameById = new Map<string, string>();
+  const campaignMetaById = new Map<
+    string,
+    { name: string; clientId: string }
+  >();
   for (const a of myAssignments) {
     if (a.campaigns) {
-      campaignNameById.set(a.campaigns.id, a.campaigns.campaign_name);
+      campaignMetaById.set(a.campaigns.id, {
+        name: a.campaigns.campaign_name,
+        clientId: a.campaigns.client_id,
+      });
     }
   }
 
   const totalsByCampaign = new Map<
     string,
-    { name: string; clicks: number; impressions: number }
+    { name: string; clicks: number; impressions: number; clientId: string }
   >();
   const byDate = new Map<string, { impressions: number; clicks: number }>();
 
   for (const m of metricRows ?? []) {
     const cid = String(m.campaign_id);
-    const name = campaignNameById.get(cid) ?? "Campaign";
+    const meta = campaignMetaById.get(cid);
+    const name = meta?.name ?? "Campaign";
+    const clientId = meta?.clientId ?? "";
     const prev = totalsByCampaign.get(cid) ?? {
       name,
       clicks: 0,
       impressions: 0,
+      clientId,
     };
     prev.clicks += num(m.clicks);
     prev.impressions += num(m.impressions);
@@ -456,7 +515,7 @@ async function EmployeeDashboard({
   }
 
   const clicksByCampaign = [...totalsByCampaign.values()]
-    .map((r) => ({ name: r.name, clicks: r.clicks }))
+    .map((r) => ({ name: r.name, clicks: r.clicks, clientId: r.clientId }))
     .sort((a, b) => b.clicks - a.clicks);
 
   const ctrByCampaign = [...totalsByCampaign.values()]
@@ -466,6 +525,7 @@ async function EmployeeDashboard({
         r.impressions > 0
           ? Math.round((r.clicks / r.impressions) * 10000) / 100
           : 0,
+      clientId: r.clientId,
     }))
     .sort((a, b) => b.ctr - a.ctr);
 
@@ -520,8 +580,10 @@ async function EmployeeDashboard({
         due_date: t.due_date,
         priority: t.priority,
         status: t.status,
+        client_id: t.client_id || null,
       }))}
       mapMarkers={mapMarkers}
+      mapClients={mapClients}
       missingMapCount={missingMapCount}
       clicksByCampaign={clicksByCampaign}
       calendarTasks={calendarTasks}

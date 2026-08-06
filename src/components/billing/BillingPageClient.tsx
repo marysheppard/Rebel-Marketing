@@ -110,7 +110,11 @@ export function BillingPageClient({
     <div className="space-y-6">
       <PageHeader
         title="Billing"
-        subtitle="Turn approved work into invoices. Accounts Receivable handles collections and payments."
+        subtitle={
+          canManage
+            ? "Turn approved work into invoices. Accounts Receivable handles collections and payments."
+            : "View ready-to-invoice work and draft invoices. Only Billing can create or send invoices."
+        }
         actions={
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn btn-ghost btn-sm" onClick={collapseAll}>
@@ -123,6 +127,12 @@ export function BillingPageClient({
           </div>
         }
       />
+      {!canManage ? (
+        <div className="rounded-box border border-info/30 bg-info/10 px-4 py-3 text-sm">
+          Waiting for Billing — you can review the queue, but Create, Send, and payment
+          recording are restricted to the billing role.
+        </div>
+      ) : null}
 
       <InvoiceStatusBar invoices={allInvoices} />
 

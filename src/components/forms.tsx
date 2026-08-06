@@ -153,6 +153,25 @@ export function CreateContractForm({ clients }: { clients: Option[] }) {
     }
 
     const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setError("Not authenticated.");
+      setLoading(false);
+      return;
+    }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    if (!profile || profile.role !== "account_manager") {
+      setError("Only an account manager can create contracts.");
+      setLoading(false);
+      return;
+    }
+
     const { error: insertError } = await supabase.from("contracts").insert({
       client_id: String(fd.get("client_id")),
       contract_name: String(fd.get("contract_name")).trim(),
@@ -1109,7 +1128,7 @@ export function UpdateApprovalStatusForm({
         </button>
         <button
           type="button"
-          className="btn btn-warning btn-sm"
+          className="btn btn-outline btn-sm"
           disabled={loading}
           onClick={() => updateStatus("Changes Requested")}
         >
@@ -1117,13 +1136,83 @@ export function UpdateApprovalStatusForm({
         </button>
         <button
           type="button"
-          className="btn btn-error btn-sm"
+          className="btn btn-ghost btn-sm text-error"
           disabled={loading}
           onClick={() => updateStatus("Rejected")}
         >
           Reject
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Approve billable work entries for the Ready-to-Invoice queue (AM / agency). */
+export function UpdateWorkEntryApprovalForm({
+  workEntryId,
+  currentStatus,
+  billable,
+  billed,
+  hours,
+  campaignName,
+  clientName,
+  estimatedAmount,
+}: {
+  workEntryId: string;
+  currentStatus: string;
+  billable: boolean;
+  billed: boolean;
+  hours: number;
+  campaignName: string;
+  clientName: string;
+  estimatedAmount: number;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  if (currentStatus !== "Pending" || !billable || billed) return null;
+
+  async function approve() {
+    setError(null);
+    setLoading(true);
+    const supabase = createClient();
+    const { error: updateError } = await supabase
+      .from("work_entries")
+      .update({ approval_status: "Approved" })
+      .eq("id", workEntryId)
+      .eq("approval_status", "Pending");
+    if (updateError) {
+      setLoading(false);
+      setError("Could not approve work entry.");
+      return;
+    }
+
+    const { notifyBillingAfterWorkApproved } = await import(
+      "@/lib/billing-notifications"
+    );
+    await notifyBillingAfterWorkApproved(supabase, {
+      clientName,
+      campaignName,
+      hours,
+      estimatedAmount,
+    });
+
+    setLoading(false);
+    router.refresh();
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <FormError message={error} />
+      <button
+        type="button"
+        className="btn btn-success btn-xs"
+        disabled={loading}
+        onClick={() => void approve()}
+      >
+        {loading ? "…" : "Approve for billing"}
+      </button>
     </div>
   );
 }
@@ -1208,6 +1297,25 @@ export function CreateInvoiceForm({
     e.preventDefault();
     setError(null);
     setLoading(true);
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      setError("Not authenticated.");
+      return;
+    }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    if (!profile || profile.role !== "billing") {
+      setLoading(false);
+      setError("Only the billing role can create invoices.");
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     const sub = num(fd.get("subtotal"));
     const pass_through_amount = num(fd.get("pass_through_amount"));
@@ -1220,7 +1328,6 @@ export function CreateInvoiceForm({
       return;
     }
 
-    const supabase = createClient();
     const selectedCampaignId = String(fd.get("campaign_id") ?? "") || null;
     const { data: invoice, error: insertError } = await supabase
       .from("invoices")
