@@ -1,7 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { ClientMapMarker } from "@/components/ClientMap";
+import type {
+  ClientMapListItem,
+  ClientMapMarker,
+} from "@/components/ClientMap";
 
 const ClientMapInner = dynamic(
   () => import("@/components/ClientMap").then((m) => m.ClientMap),
@@ -20,10 +23,24 @@ const ClientMapInner = dynamic(
 
 export function ClientMapDynamic({
   markers,
+  clients = [],
   missingCount = 0,
+  selectedClientId = null,
+  onSelectClient,
 }: {
   markers: ClientMapMarker[];
+  clients?: ClientMapListItem[];
   missingCount?: number;
+  selectedClientId?: string | null;
+  onSelectClient?: (clientId: string | null) => void;
 }) {
-  return <ClientMapInner markers={markers} missingCount={missingCount} />;
+  return (
+    <ClientMapInner
+      markers={markers}
+      clients={clients}
+      missingCount={missingCount}
+      selectedClientId={selectedClientId}
+      onSelectClient={onSelectClient}
+    />
+  );
 }

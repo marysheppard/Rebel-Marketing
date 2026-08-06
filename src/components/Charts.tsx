@@ -38,6 +38,19 @@ import {
   buildMoneyDonutSlices,
   type DonutBreakdownSlice,
 } from "@/components/DonutBreakdownViz";
+
+/** Recharts LabelFormatter values are RenderableText; coerce safely for bar labels. */
+function formatCompactCountLabel(value: unknown): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+function formatPercentLabel(value: unknown): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  return `${n.toFixed(1)}%`;
+}
 import type { MarketingTrendPoint } from "@/lib/marketing-trend";
 
 export type { DonutBreakdownSlice };
@@ -582,10 +595,7 @@ export function CampaignVolumeRankingChart({
               label={{
                 position: "right",
                 fontSize: 11,
-                formatter: (v: number) =>
-                  Number(v) >= 1000
-                    ? `${(Number(v) / 1000).toFixed(1)}k`
-                    : String(v),
+                formatter: formatCompactCountLabel,
               }}
             />
           </BarChart>
@@ -1007,7 +1017,7 @@ export function CampaignCtrRankingChart({
               label={{
                 position: "right",
                 fontSize: 11,
-                formatter: (v: number) => `${Number(v).toFixed(1)}%`,
+                formatter: formatPercentLabel,
               }}
             >
               {rows.map((row) => (
