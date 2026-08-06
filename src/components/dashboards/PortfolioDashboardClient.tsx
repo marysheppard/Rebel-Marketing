@@ -461,59 +461,32 @@ export function PortfolioDashboardClient({
     budgetTotal > 0 ? Math.round((budgetHealthyCount / budgetTotal) * 100) : 0;
 
   const attention = (
-    isAm
-      ? [
-          source.pendingApprovals > 0
-            ? {
-                label: `${source.pendingApprovals} pending approval${source.pendingApprovals === 1 ? "" : "s"}`,
-                href: "/app/approvals",
-              }
-            : null,
-          source.overdueTasksOnBook > 0
-            ? {
-                label: `${source.overdueTasksOnBook} overdue task${source.overdueTasksOnBook === 1 ? "" : "s"} on your book`,
-                href: "/app/tasks",
-              }
-            : null,
-          campsOver > 0
-            ? {
-                label: `${campsOver} campaign${campsOver === 1 ? "" : "s"} over budget`,
-                href: p("/app/campaigns"),
-              }
-            : null,
-          overdueCount > 0
-            ? {
-                label: `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}`,
-                href: "/app/alerts",
-              }
-            : null,
-        ]
-      : [
-          source.openExceptions > 0
-            ? {
-                label: `${source.openExceptions} open exception${source.openExceptions === 1 ? "" : "s"}`,
-                href: "/app/controls",
-              }
-            : null,
-          overdueCount > 0
-            ? {
-                label: `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}`,
-                href: "/app/ar",
-              }
-            : null,
-          campsOver > 0
-            ? {
-                label: `${campsOver} campaign${campsOver === 1 ? "" : "s"} over budget`,
-                href: p("/app/campaigns"),
-              }
-            : null,
-          tasksAtRisk > 0
-            ? {
-                label: `${tasksAtRisk} overdue task${tasksAtRisk === 1 ? "" : "s"} across staff`,
-                href: "/app/employees",
-              }
-            : null,
-        ]
+    [
+      source.openExceptions > 0
+        ? {
+            label: `${source.openExceptions} open exception${source.openExceptions === 1 ? "" : "s"}`,
+            href: isAm ? "/app/alerts" : "/app/controls",
+          }
+        : null,
+      overdueCount > 0
+        ? {
+            label: `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}`,
+            href: "/app/ar",
+          }
+        : null,
+      campsOver > 0
+        ? {
+            label: `${campsOver} campaign${campsOver === 1 ? "" : "s"} over budget`,
+            href: p("/app/campaigns"),
+          }
+        : null,
+      tasksAtRisk > 0
+        ? {
+            label: `${tasksAtRisk} overdue task${tasksAtRisk === 1 ? "" : "s"} across staff`,
+            href: isAm ? "/app/tasks" : "/app/employees",
+          }
+        : null,
+    ] as ({ label: string; href: string } | null)[]
   ).filter(Boolean) as { label: string; href: string }[];
 
   const deliveryLinks = [
@@ -974,9 +947,7 @@ export function PortfolioDashboardClient({
         </div>
       ) : (
         <p className="border-b border-base-300 pb-4 text-sm opacity-60">
-          {isAm
-            ? "Nothing urgent on your book right now."
-            : "No urgent exceptions right now."}{" "}
+          No urgent exceptions right now.{" "}
           <Link href="/app/alerts" className="link link-hover">
             View alerts
           </Link>
