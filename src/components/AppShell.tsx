@@ -331,6 +331,14 @@ export function AppShell({
     } catch {
       /* ignore */
     }
+    try {
+      const { consumeDeferredPasswordChange } = await import(
+        "@/app/actions/change-portal-password"
+      );
+      await consumeDeferredPasswordChange();
+    } catch {
+      /* best-effort: still sign out */
+    }
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/");

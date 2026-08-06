@@ -138,7 +138,7 @@ export function ContractBuilderForm({ client }: { client: Client }) {
       .in("status", ["Prospect", "Intake in Progress", "Ready for Contract"]);
 
     setEngagementNote(
-      "Saved as Draft. Open the contract record to Finalize for Signature, then Send for Signature to a linked client user.",
+      "Saved as Draft. Open the contract record to Finalize for Signature, then Send to Client Portal for a linked client user.",
     );
     setSavedContractId(data.id);
     setAgreementHtml(html);

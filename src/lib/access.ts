@@ -12,6 +12,12 @@ export function isEmployeeRole(role: UserRole) {
 export function isClientPortalHome(pathname: string) {
   if (pathname === "/app" || pathname === "/app/") return true;
   if (
+    pathname === "/app/account/change-password" ||
+    pathname.startsWith("/app/account/change-password/")
+  ) {
+    return true;
+  }
+  if (
     pathname === "/app/contracts/documents" ||
     pathname.startsWith("/app/contracts/documents/")
   ) {
@@ -27,6 +33,19 @@ export function isClientPortalHome(pathname: string) {
     return true;
   }
   return false;
+}
+
+/** Client with a spent OTP must stay on the change-password screen. */
+export function clientNeedsForcedPasswordChange(profile: {
+  role: UserRole;
+  must_change_password?: boolean | null;
+  password_change_deferred?: boolean | null;
+}) {
+  return (
+    isClientRole(profile.role) &&
+    !!profile.must_change_password &&
+    !profile.password_change_deferred
+  );
 }
 
 /** True for any /app/* path that is not allowed for clients. */
