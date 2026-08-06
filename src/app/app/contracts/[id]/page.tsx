@@ -13,6 +13,7 @@ import {
   getProfile,
   isClientRole,
 } from "@/lib/page-auth";
+import { clientUserCanSignContract } from "@/lib/contract-signing";
 import type { Contract } from "@/lib/types";
 
 export default async function ContractDetailPage({
@@ -21,7 +22,7 @@ export default async function ContractDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { supabase, profile } = await getProfile();
+  const { supabase, profile, userId } = await getProfile();
 
   const { data: contract } = await supabase
     .from("contracts")
@@ -69,6 +70,17 @@ export default async function ContractDetailPage({
   const html =
     contract.signed_agreement_html || contract.agreement_html || "";
 
+  const clientCanReviewSign =
+    !!profile &&
+    !!userId &&
+    isClientRole(profile.role) &&
+    (await clientUserCanSignContract(
+      supabase,
+      id,
+      userId,
+      contract.contract_status,
+    ));
+
   return (
     <div>
       <PageHeader
@@ -98,8 +110,7 @@ export default async function ContractDetailPage({
                 }
               />
             ) : null}
-            {profile && isClientRole(profile.role) &&
-            status === "Awaiting Client Signature" ? (
+            {clientCanReviewSign ? (
               <Link href={`/app/contracts/${id}/sign`} className="btn btn-primary btn-sm">
                 Review &amp; Sign
               </Link>

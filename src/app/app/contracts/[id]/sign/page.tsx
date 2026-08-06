@@ -4,6 +4,7 @@ import { ClientSignForm } from "@/components/ClientSignForm";
 import { ContractTimeline } from "@/components/ContractTimeline";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { normalizeContractStatus } from "@/lib/contract-status";
+import { getOpenSignatureRequestForClientUser } from "@/lib/contract-signing";
 import { getProfile, isClientRole } from "@/lib/page-auth";
 
 export default async function ContractSignPage({
@@ -23,17 +24,13 @@ export default async function ContractSignPage({
     .single();
   if (!contract) notFound();
 
-  const { data: request } = await supabase
-    .from("signature_requests")
-    .select("*")
-    .eq("contract_id", id)
-    .eq("signer_user_id", userId)
-    .in("status", ["Sent", "Viewed"])
-    .order("sent_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const request = await getOpenSignatureRequestForClientUser(
+    supabase,
+    id,
+    userId,
+  );
 
-  let viewedAt = request?.viewed_at as string | null | undefined;
+  let viewedAt = request?.viewed_at ?? null;
   if (request?.status === "Sent") {
     const now = new Date().toISOString();
     await supabase

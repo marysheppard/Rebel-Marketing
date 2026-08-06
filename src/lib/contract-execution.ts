@@ -325,7 +325,7 @@ export async function sendForSignature(input: {
     .update({ status: "Locked", locked_at: nowIso })
     .eq("id", version.id);
 
-  await supabase
+  const { error: statusErr } = await supabase
     .from("contracts")
     .update({
       contract_status: "Awaiting Client Signature",
@@ -333,6 +333,15 @@ export async function sendForSignature(input: {
       updated_at: nowIso,
     })
     .eq("id", input.contractId);
+
+  if (statusErr) {
+    return {
+      ok: false as const,
+      error:
+        statusErr.message ||
+        "Signature request created but contract status could not be updated.",
+    };
+  }
 
   const href = `/app/contracts/${input.contractId}/sign`;
   await supabase.from("notifications").insert({
