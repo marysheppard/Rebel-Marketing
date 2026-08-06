@@ -13,6 +13,7 @@ import {
   getProfile,
   isClientRole,
 } from "@/lib/page-auth";
+import { clientUserCanSignContract } from "@/lib/contract-signing";
 import type { Contract } from "@/lib/types";
 
 export default async function ContractDetailPage({
@@ -21,7 +22,7 @@ export default async function ContractDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { supabase, profile } = await getProfile();
+  const { supabase, profile, userId } = await getProfile();
 
   const { data: contract } = await supabase
     .from("contracts")
@@ -64,9 +65,21 @@ export default async function ContractDetailPage({
     !!profile && canManageContracts(profile.role) && !isClientRole(profile.role);
   const canSignAgency =
     !!profile && canCountersign(profile.role) && !isClientRole(profile.role);
+  const showExecutionPanel = canManage || canSignAgency;
   const status = normalizeContractStatus(contract.contract_status);
   const html =
     contract.signed_agreement_html || contract.agreement_html || "";
+
+  const clientCanReviewSign =
+    !!profile &&
+    !!userId &&
+    isClientRole(profile.role) &&
+    (await clientUserCanSignContract(
+      supabase,
+      id,
+      userId,
+      contract.contract_status,
+    ));
 
   return (
     <div>
@@ -77,7 +90,7 @@ export default async function ContractDetailPage({
         }`}
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {canManage ? (
+            {showExecutionPanel ? (
               <ContractExecutionPanel
                 contract={contract as Contract}
                 canManage={canManage}
@@ -97,8 +110,7 @@ export default async function ContractDetailPage({
                 }
               />
             ) : null}
-            {profile && isClientRole(profile.role) &&
-            status === "Awaiting Client Signature" ? (
+            {clientCanReviewSign ? (
               <Link href={`/app/contracts/${id}/sign`} className="btn btn-primary btn-sm">
                 Review &amp; Sign
               </Link>
@@ -153,6 +165,12 @@ export default async function ContractDetailPage({
           {request?.decline_reason ? (
             <p className="text-error">
               Declined: {request.decline_reason}
+            </p>
+          ) : status === "Awaiting Agency Signature" ? (
+            <p className="opacity-70">
+              {canSignAgency
+                ? "Client has signed. Review the agreement and complete Agency Countersign."
+                : "Client has signed. Waiting for an agency manager to countersign."}
             </p>
           ) : request &&
             ["Sent", "Viewed"].includes(String(request.status)) ? (

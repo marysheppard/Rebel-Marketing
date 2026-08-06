@@ -64,10 +64,13 @@ export function ClientsExplorer({
   source,
   initialPeriod = "ytd",
   canManage = false,
+  canCreateContract = false,
 }: {
   source: ClientsExplorerSource;
   initialPeriod?: PeriodKey;
   canManage?: boolean;
+  /** Account Managers only — New contract CTA */
+  canCreateContract?: boolean;
 }) {
   const [period, setPeriod] = useState<PeriodKey>(initialPeriod);
   const [customStart, setCustomStart] = useState("");
@@ -227,20 +230,20 @@ export function ClientsExplorer({
               filterConfig={{ showDates: false }}
             />
             {canManage ? (
-              <>
-                <Link
-                  href="/app/clients/intake"
-                  className="btn btn-primary btn-sm"
-                >
-                  New Client Intake
-                </Link>
-                <Link
-                  href="/app/contracts/builder"
-                  className="btn btn-outline btn-sm"
-                >
-                  New contract
-                </Link>
-              </>
+              <Link
+                href="/app/clients/intake"
+                className="btn btn-primary btn-sm"
+              >
+                New Client Intake
+              </Link>
+            ) : null}
+            {canCreateContract ? (
+              <Link
+                href="/app/contracts/builder"
+                className="btn btn-outline btn-sm"
+              >
+                New contract
+              </Link>
             ) : null}
           </div>
         }

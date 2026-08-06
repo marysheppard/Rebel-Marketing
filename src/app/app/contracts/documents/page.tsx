@@ -1,5 +1,6 @@
 import { ClientContractsDocumentsTable } from "@/components/contracts/ClientContractsDocumentsTable";
 import { EmptyState, PageHeader } from "@/components/ui";
+import { getOpenSignatureRequestsByContractForClientUser } from "@/lib/contract-signing";
 import { getProfile, isClientRole } from "@/lib/page-auth";
 import { redirect } from "next/navigation";
 
@@ -8,31 +9,21 @@ export default async function ContractsDocumentsPage() {
   if (!profile || !userId) redirect("/login");
   if (!isClientRole(profile.role)) redirect("/app/contracts");
 
-  const [{ data: contracts }, { data: requests }] = await Promise.all([
-    supabase
-      .from("contracts")
-      .select(
-        "id, client_id, contract_name, contract_number, contract_status, billing_method, monthly_retainer, project_fee, campaign_budget, start_date, end_date, payment_terms, deposit_amount, renewal_option, client_signed_at, agency_signed_at, fully_executed_at, clients(client_name, contact_name, contact_email, contact_phone)",
-      )
-      .order("updated_at", { ascending: false }),
-    supabase
-      .from("signature_requests")
-      .select("id, contract_id, status, sent_at, due_at, signer_user_id")
-      .eq("signer_user_id", userId)
-      .in("status", [
-        "Sent",
-        "Viewed",
-        "Awaiting Agency",
-        "Fully Executed",
-        "Declined",
-      ])
-      .order("sent_at", { ascending: false }),
-  ]);
+  const { data: contracts } = await supabase
+    .from("contracts")
+    .select(
+      "id, client_id, contract_name, contract_number, contract_status, billing_method, monthly_retainer, project_fee, campaign_budget, start_date, end_date, payment_terms, deposit_amount, renewal_option, client_signed_at, agency_signed_at, fully_executed_at, clients(client_name, contact_name, contact_email, contact_phone)",
+    )
+    .order("updated_at", { ascending: false });
 
-  const openByContract = new Map(
-    (requests ?? [])
-      .filter((r) => r.status === "Sent" || r.status === "Viewed")
-      .map((r) => [r.contract_id as string, r]),
+  const openByContract = await getOpenSignatureRequestsByContractForClientUser(
+    supabase,
+    userId,
+    (contracts ?? []).map((c) => ({
+      id: String(c.id),
+      client_id: String(c.client_id),
+      contract_status: String(c.contract_status),
+    })),
   );
 
   const rows = (contracts ?? []).map((c) => {

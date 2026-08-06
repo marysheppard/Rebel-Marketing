@@ -78,8 +78,10 @@ function Req({ children }: { children: React.ReactNode }) {
 
 export function ClientIntakeForm({
   accountManagers = [],
+  canCreateContract = false,
 }: {
   accountManagers?: Option[];
+  canCreateContract?: boolean;
 }) {
   const router = useRouter();
   const [values, setValues] = useState<ClientIntakeValues>(initialValues);
@@ -168,6 +170,10 @@ export function ClientIntakeForm({
     router.refresh();
 
     if (mode === "build") {
+      if (!canCreateContract) {
+        router.push(`/app/clients/${data.id}`);
+        return;
+      }
       router.push(`/app/contracts/builder?clientId=${data.id}`);
       return;
     }
@@ -191,12 +197,14 @@ export function ClientIntakeForm({
                     <Link href={`/app/clients/${c.id}`} className="link link-hover text-xs">
                       Open profile
                     </Link>
-                    <Link
-                      href={`/app/contracts/builder?clientId=${c.id}`}
-                      className="btn btn-primary btn-xs"
-                    >
-                      New contract
-                    </Link>
+                    {canCreateContract ? (
+                      <Link
+                        href={`/app/contracts/builder?clientId=${c.id}`}
+                        className="btn btn-primary btn-xs"
+                      >
+                        New contract
+                      </Link>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -620,14 +628,16 @@ export function ClientIntakeForm({
         >
           {loading ? "Saving…" : "Save Client"}
         </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!canSubmit}
-          onClick={() => saveClient("build")}
-        >
-          {loading ? "Saving…" : "Save & Build Contract"}
-        </button>
+        {canCreateContract ? (
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!canSubmit}
+            onClick={() => saveClient("build")}
+          >
+            {loading ? "Saving…" : "Save & Build Contract"}
+          </button>
+        ) : null}
       </div>
     </div>
   );

@@ -120,6 +120,25 @@ export function ContractBuilderForm({ client }: { client: Client }) {
     });
 
     const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setError("Not authenticated.");
+      setLoading(false);
+      return;
+    }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    if (!profile || profile.role !== "account_manager") {
+      setError("Only an account manager can create contracts.");
+      setLoading(false);
+      return;
+    }
+
     const { data, error: insertError } = await supabase
       .from("contracts")
       .insert({

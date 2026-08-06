@@ -1,7 +1,9 @@
 import { TimePtoBoard } from "@/components/TimePtoBoard";
+import { DEFAULT_BILL_RATE_USD, estimateEntryAmount } from "@/lib/billing";
 import { num } from "@/lib/format";
 import {
   canLogWork,
+  canManageClients,
   getProfile,
   isClientRole,
   isEmployeeRole,
@@ -47,7 +49,7 @@ export default async function WorkPage() {
     supabase
       .from("work_entries")
       .select(
-        "*, campaigns(campaign_name, client_id), profiles(full_name), tasks(title)",
+        "*, campaigns(campaign_name, client_id, clients(client_name)), profiles(full_name), tasks(title)",
       )
       .order("work_date", { ascending: false }),
     isEmployee
@@ -154,10 +156,18 @@ export default async function WorkPage() {
 
   const entries = list.map((w) => {
     const camps = w.campaigns as
-      | { campaign_name?: string }
-      | { campaign_name?: string }[]
+      | {
+          campaign_name?: string;
+          clients?: { client_name?: string } | { client_name?: string }[] | null;
+        }
+      | {
+          campaign_name?: string;
+          clients?: { client_name?: string } | { client_name?: string }[] | null;
+        }[]
       | null;
     const campObj = Array.isArray(camps) ? camps[0] : camps;
+    const clientsRel = campObj?.clients;
+    const clientObj = Array.isArray(clientsRel) ? clientsRel[0] : clientsRel;
     const tasksRel = w.tasks as
       | { title?: string }
       | { title?: string }[]
@@ -168,22 +178,26 @@ export default async function WorkPage() {
       | { full_name?: string }[]
       | null;
     const profileObj = Array.isArray(profilesRel) ? profilesRel[0] : profilesRel;
+    const hours = num(w.hours);
 
     return {
       id: String(w.id),
       work_date: String(w.work_date),
       campaign_id: String(w.campaign_id),
       campaign_name: campObj?.campaign_name ?? "—",
+      client_name: clientObj?.client_name ?? "Client",
       task_id: w.task_id ? String(w.task_id) : null,
       task_title: taskObj?.title ?? null,
       work_type: String(w.work_type ?? ""),
       description: String(w.description ?? ""),
-      hours: num(w.hours),
+      hours,
       billable: Boolean(w.billable),
+      billed: Boolean(w.billed),
       retainer_bucket: w.retainer_bucket ? String(w.retainer_bucket) : null,
       out_of_scope: Boolean(w.out_of_scope),
       approval_status: String(w.approval_status ?? "Pending"),
       logged_by: profileObj?.full_name ?? "—",
+      estimated_amount: estimateEntryAmount(hours, DEFAULT_BILL_RATE_USD),
     };
   });
 
@@ -199,6 +213,7 @@ export default async function WorkPage() {
   return (
     <TimePtoBoard
       isEmployee={isEmployee}
+      canApproveWork={canManageClients(profile.role)}
       userId={userId}
       entries={entries}
       pto={ptoItems}

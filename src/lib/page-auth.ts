@@ -58,16 +58,27 @@ export function canManageClients(role: UserRole) {
   return role === "agency_manager" || role === "account_manager";
 }
 
+/** Draft / finalize / send / portal setup — Account Managers only (SoD). */
 export function canManageContracts(role: UserRole) {
-  return role === "agency_manager" || role === "account_manager";
+  return role === "account_manager";
 }
 
 export function canFinalizeContract(role: UserRole) {
   return canManageContracts(role);
 }
 
+/** Agency Managers only — cannot draft; countersign after client signs. */
 export function canCountersign(role: UserRole) {
-  return role === "agency_manager" || role === "account_manager";
+  return role === "agency_manager";
+}
+
+/** Open contract records (list/detail) without create/finalize powers. */
+export function canViewContracts(role: UserRole) {
+  return (
+    role === "account_manager" ||
+    role === "agency_manager" ||
+    role === "billing"
+  );
 }
 
 export function canSignAsClient(role: UserRole) {
@@ -129,8 +140,9 @@ export function canCreateApprovals(role: UserRole) {
   );
 }
 
+/** Create / send invoices and record payments — Billing only (SoD). */
 export function canManageBilling(role: UserRole) {
-  return role === "agency_manager" || role === "billing";
+  return role === "billing";
 }
 
 export function canRecordPayments(role: UserRole) {

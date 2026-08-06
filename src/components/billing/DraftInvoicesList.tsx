@@ -37,6 +37,24 @@ export function DraftInvoicesList({
     setBusyId(inv.id);
     setError(null);
     const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setBusyId(null);
+      setError("Not authenticated.");
+      return;
+    }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    if (!profile || profile.role !== "billing") {
+      setBusyId(null);
+      setError("Only the billing role can send invoices.");
+      return;
+    }
     const workIds = parseWorkEntryIdsFromNotes(inv.notes);
 
     const { error: updErr } = await supabase

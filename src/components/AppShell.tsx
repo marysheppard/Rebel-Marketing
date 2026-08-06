@@ -162,7 +162,7 @@ const NAV: {
     href: "/app/billing",
     label: "Billing",
     icon: Receipt,
-    roles: ["agency_manager", "billing"],
+    roles: ["agency_manager", "billing", "account_manager"],
   },
   {
     href: "/app/calendar",
