@@ -318,3 +318,72 @@ export function invoiceStatusAmountStack(
   return { amounts, total, count: invoices.length };
 }
 
+export type InvoiceStatusChartSlice = {
+  key: InvoiceStatusStackKey;
+  name: string;
+  value: number;
+  count: number;
+  share: number;
+  average: number | null;
+};
+
+/** Donut slices for invoice mix by status (amount > 0 only). */
+export function buildInvoiceStatusSlices(
+  invoices: {
+    total_amount: number | string;
+    status: string;
+    disputed?: boolean;
+  }[],
+): { slices: InvoiceStatusChartSlice[]; total: number; count: number } {
+  const amounts = {
+    sent: 0,
+    partial: 0,
+    paid: 0,
+    disputed: 0,
+    draft: 0,
+    overdue: 0,
+    canceled: 0,
+  } satisfies Record<InvoiceStatusStackKey, number>;
+  const counts = {
+    sent: 0,
+    partial: 0,
+    paid: 0,
+    disputed: 0,
+    draft: 0,
+    overdue: 0,
+    canceled: 0,
+  } satisfies Record<InvoiceStatusStackKey, number>;
+
+  for (const inv of invoices) {
+    const key = statusBucket(inv);
+    amounts[key] += num(inv.total_amount);
+    counts[key] += 1;
+  }
+
+  for (const k of INVOICE_STATUS_STACK_KEYS) {
+    amounts[k] = Math.round(amounts[k] * 100) / 100;
+  }
+
+  const total =
+    Math.round(
+      INVOICE_STATUS_STACK_KEYS.reduce((s, k) => s + amounts[k], 0) * 100,
+    ) / 100;
+
+  const slices: InvoiceStatusChartSlice[] = INVOICE_STATUS_STACK_KEYS.filter(
+    (k) => amounts[k] > 0,
+  ).map((key) => {
+    const value = amounts[key];
+    const count = counts[key];
+    return {
+      key,
+      name: INVOICE_STATUS_STACK_META[key].label,
+      value,
+      count,
+      share: total > 0 ? (value / total) * 100 : 0,
+      average: count > 0 ? Math.round((value / count) * 100) / 100 : null,
+    };
+  });
+
+  return { slices, total, count: invoices.length };
+}
+
