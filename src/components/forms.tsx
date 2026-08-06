@@ -1237,6 +1237,91 @@ export function UpdateWorkEntryApprovalForm({
   );
 }
 
+/** Approve or reject another user's PTO (AM / agency). Never use for own requests. */
+export function UpdatePtoStatusForm({
+  ptoId,
+  requesterUserId,
+  currentUserId,
+  currentStatus,
+}: {
+  ptoId: string;
+  requesterUserId: string;
+  currentUserId: string;
+  currentStatus: string;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  if (
+    currentStatus !== "Pending" ||
+    !requesterUserId ||
+    requesterUserId === currentUserId
+  ) {
+    return null;
+  }
+
+  async function setStatus(next: "Approved" | "Rejected") {
+    setError(null);
+    setLoading(true);
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user || user.id !== currentUserId || user.id === requesterUserId) {
+      setLoading(false);
+      setError("You cannot approve your own PTO request.");
+      return;
+    }
+
+    const { data, error: updateError } = await supabase
+      .from("pto_requests")
+      .update({ status: next })
+      .eq("id", ptoId)
+      .eq("status", "Pending")
+      .neq("user_id", user.id)
+      .select("id");
+
+    if (updateError) {
+      setLoading(false);
+      setError(updateError.message || `Could not ${next.toLowerCase()} PTO.`);
+      return;
+    }
+    if (!data?.length) {
+      setLoading(false);
+      setError("PTO was not updated. It may already be decided or is your own.");
+      return;
+    }
+
+    setLoading(false);
+    router.refresh();
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <FormError message={error} />
+      <div className="flex flex-wrap gap-1">
+        <button
+          type="button"
+          className="btn btn-success btn-xs"
+          disabled={loading}
+          onClick={() => void setStatus("Approved")}
+        >
+          {loading ? "…" : "Approve"}
+        </button>
+        <button
+          type="button"
+          className="btn btn-error btn-xs"
+          disabled={loading}
+          onClick={() => void setStatus("Rejected")}
+        >
+          {loading ? "…" : "Reject"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function CreateInvoiceForm({
   clients,
   contracts,

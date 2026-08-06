@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CreateWorkForm, PtoRequestForm, UpdateWorkEntryApprovalForm } from "@/components/forms";
+import {
+  CreateWorkForm,
+  PtoRequestForm,
+  UpdatePtoStatusForm,
+  UpdateWorkEntryApprovalForm,
+} from "@/components/forms";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { TimePtoExportButton } from "@/components/work/TimePtoExportButton";
 import { num } from "@/lib/format";
@@ -34,6 +39,11 @@ export type PtoItem = {
   hours: number;
   status: string;
   reason: string;
+};
+
+export type TeamPtoItem = PtoItem & {
+  user_id: string;
+  requester_name: string;
 };
 
 function formatHours(n: number) {
@@ -85,12 +95,25 @@ function FlagBadges({
   );
 }
 
+function sortPtoByPendingThenDate<T extends { status: string; start_date: string }>(
+  items: T[],
+) {
+  return [...items].sort((a, b) => {
+    const ap = a.status === "Pending" ? 0 : 1;
+    const bp = b.status === "Pending" ? 0 : 1;
+    if (ap !== bp) return ap - bp;
+    return b.start_date.localeCompare(a.start_date);
+  });
+}
+
 export function TimePtoBoard({
   isEmployee,
   canApproveWork = false,
+  canApprovePto = false,
   userId,
   entries,
   pto,
+  teamPto = [],
   campaigns,
   tasks,
   weekStart,
@@ -104,9 +127,11 @@ export function TimePtoBoard({
 }: {
   isEmployee: boolean;
   canApproveWork?: boolean;
+  canApprovePto?: boolean;
   userId: string;
   entries: TimeEntryItem[];
   pto: PtoItem[];
+  teamPto?: TeamPtoItem[];
   campaigns: { id: string; label: string }[];
   tasks: { id: string; label: string; campaign_id: string }[];
   weekStart: string;
@@ -132,14 +157,15 @@ export function TimePtoBoard({
     return entries;
   }, [entries, range, weekStart, monthStart]);
 
-  const ptoSorted = useMemo(() => {
-    return [...pto].sort((a, b) => {
-      const ap = a.status === "Pending" ? 0 : 1;
-      const bp = b.status === "Pending" ? 0 : 1;
-      if (ap !== bp) return ap - bp;
-      return b.start_date.localeCompare(a.start_date);
-    });
-  }, [pto]);
+  const ptoSorted = useMemo(() => sortPtoByPendingThenDate(pto), [pto]);
+
+  const teamPtoSorted = useMemo(
+    () =>
+      sortPtoByPendingThenDate(
+        teamPto.filter((r) => r.user_id !== userId),
+      ),
+    [teamPto, userId],
+  );
 
   return (
     <div>
@@ -222,7 +248,11 @@ export function TimePtoBoard({
           <StatCard
             label="Pending PTO"
             value={String(pendingPto)}
-            hint="Open time-off requests"
+            hint={
+              canApprovePto
+                ? "Team time-off awaiting decision"
+                : "Open time-off requests"
+            }
             tone={pendingPto > 0 ? "warn" : "neutral"}
           />
         </div>
@@ -376,6 +406,63 @@ export function TimePtoBoard({
                         </td>
                         <td className="max-w-[12rem] truncate text-sm">
                           {r.reason || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {canApprovePto ? (
+        <section className="mt-10">
+          <h2 className="mb-4 text-xl font-bold text-[#0b1f3a]">
+            Team PTO requests
+          </h2>
+          <div className="rounded-box border border-base-300 bg-base-100 p-5">
+            {teamPtoSorted.length === 0 ? (
+              <p className="text-sm opacity-60">
+                No team PTO requests to review.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="table table-sm">
+                  <thead>
+                    <tr>
+                      <th>Person</th>
+                      <th>Dates</th>
+                      <th>Hours</th>
+                      <th>Status</th>
+                      <th>Reason</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {teamPtoSorted.map((r) => (
+                      <tr key={r.id}>
+                        <td className="whitespace-nowrap font-medium">
+                          {r.requester_name}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          {r.start_date} → {r.end_date}
+                        </td>
+                        <td>{num(r.hours)}</td>
+                        <td>
+                          <StatusBadge status={r.status} />
+                        </td>
+                        <td className="max-w-[12rem] truncate text-sm">
+                          {r.reason || "—"}
+                        </td>
+                        <td>
+                          <UpdatePtoStatusForm
+                            ptoId={r.id}
+                            requesterUserId={r.user_id}
+                            currentUserId={userId}
+                            currentStatus={r.status}
+                          />
                         </td>
                       </tr>
                     ))}
