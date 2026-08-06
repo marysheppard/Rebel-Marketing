@@ -13,6 +13,10 @@ export type Profile = {
   weekly_hour_target: number | null;
   monthly_hour_target: number | null;
   created_at: string;
+  /** Client must set a permanent password (after deferred OTP session). */
+  must_change_password?: boolean;
+  /** First OTP login may use the portal; cleared on logout so next login forces change. */
+  password_change_deferred?: boolean;
 };
 
 export type TaskStatus =

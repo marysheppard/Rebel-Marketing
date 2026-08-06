@@ -1,4 +1,4 @@
-# Local env (secrets — never commit)
+“The team’s main branch has been updated. Help me update my local project with the latest version of main from GitHub. Then switch me back to my own branch and bring the latest main changes into my branch. Do not edit app files unless needed to complete the update.”# Local env (secrets — never commit)
 .env
 .env*.local
 

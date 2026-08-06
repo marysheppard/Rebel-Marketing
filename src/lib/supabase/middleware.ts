@@ -1,6 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isAdminOnlyAppPath, isClientRole } from "@/lib/access";
+import {
+  clientNeedsForcedPasswordChange,
+  isAdminOnlyAppPath,
+  isClientRole,
+} from "@/lib/access";
 import type { UserRole } from "@/lib/types";
 
 export async function updateSession(request: NextRequest) {
@@ -50,14 +54,11 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isAuthPage =
     path === "/login" || path === "/signup" || path.startsWith("/auth");
-  // Public marketing site + scoped signing invite access (not the full client portal).
-  const isPublic =
-    isAuthPage ||
-    path === "/" ||
-    path === "/sign" ||
-    path.startsWith("/sign/") ||
-    path === "/activate" ||
-    path.startsWith("/activate/");
+  // Public marketing site and auth pages only (signing is authenticated portal).
+  const isPublic = isAuthPage || path === "/";
+  const isChangePasswordPath =
+    path === "/app/account/change-password" ||
+    path.startsWith("/app/account/change-password/");
 
   if (!user && !isPublic && path.startsWith("/app")) {
     const url = request.nextUrl.clone();
@@ -65,23 +66,44 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Authenticated users leave auth pages for /app; homepage and /sign stay reachable.
+  // Authenticated users leave auth pages for /app; homepage stays reachable.
   if (user && (path === "/login" || path === "/signup")) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, must_change_password, password_change_deferred")
+      .eq("id", user.id)
+      .single();
+
     const url = request.nextUrl.clone();
-    url.pathname = "/app";
+    if (profile && clientNeedsForcedPasswordChange(profile)) {
+      url.pathname = "/app/account/change-password";
+    } else {
+      url.pathname = "/app";
+    }
     return NextResponse.redirect(url);
   }
 
-  // Clients may only access allowed portal paths — not admin routes.
-  if (user && path.startsWith("/app") && isAdminOnlyAppPath(path)) {
+  if (user && path.startsWith("/app")) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, must_change_password, password_change_deferred")
       .eq("id", user.id)
       .single();
 
     const role = profile?.role as UserRole | undefined;
-    if (role && isClientRole(role)) {
+
+    if (
+      profile &&
+      clientNeedsForcedPasswordChange(profile) &&
+      !isChangePasswordPath
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/app/account/change-password";
+      return NextResponse.redirect(url);
+    }
+
+    // Clients may only access allowed portal paths — not admin routes.
+    if (role && isClientRole(role) && isAdminOnlyAppPath(path)) {
       const url = request.nextUrl.clone();
       url.pathname = "/app";
       url.searchParams.set("denied", "1");

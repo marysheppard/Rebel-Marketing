@@ -19,7 +19,11 @@ export const metadata: Metadata = {
     "Rebel Marketing is a growth-focused agency for brand campaigns, client partnerships, and measurable results.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html
       lang="en"

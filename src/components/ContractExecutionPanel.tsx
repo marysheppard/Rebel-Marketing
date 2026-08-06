@@ -1,25 +1,26 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import {
-  getClientInviteContext,
-  resendSigningInvitation,
-  sendSigningInvitation,
-} from "@/app/actions/signing-invite";
-import {
-  getClientActivationStatus,
-  resendDashboardActivation,
-} from "@/app/actions/dashboard-activation";
+import { useState } from "react";
+import { ensureClientPortalAccount, resetClientPortalPassword } from "@/app/actions/ensure-client-portal";
 import {
   countersignAsAgency,
   finalizeContract,
   listLinkedSigners,
   reviseAfterDecline,
+  sendForSignature,
   type LinkedSigner,
 } from "@/lib/contract-execution";
 import { normalizeContractStatus } from "@/lib/contract-status";
 import type { Contract } from "@/lib/types";
+
+type PortalCredentials = {
+  customerId: string;
+  email: string;
+  temporaryPassword?: string;
+  alreadyActive: boolean;
+  linkedExistingAuthUser?: boolean;
+};
 
 type Props = {
   contract: Contract;
@@ -30,11 +31,10 @@ type Props = {
   openRequest?: {
     id: string;
     status: string;
-    recipient_email?: string | null;
-    email_delivery_status?: string | null;
-    invite_expires_at?: string | null;
+    signer_user_id?: string | null;
+    due_at?: string | null;
+    sent_at?: string | null;
   } | null;
-  showResendActivation?: boolean;
 };
 
 export function ContractExecutionPanel({
@@ -44,7 +44,6 @@ export function ContractExecutionPanel({
   hasCampaign,
   profileName = "",
   openRequest = null,
-  showResendActivation = false,
 }: Props) {
   const router = useRouter();
   const status = normalizeContractStatus(contract.contract_status);
@@ -61,56 +60,62 @@ export function ContractExecutionPanel({
   const [agencyTitle, setAgencyTitle] = useState("Agency Manager");
   const [agencySig, setAgencySig] = useState("");
   const [authorized, setAuthorized] = useState(false);
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactName, setContactName] = useState("");
-  const [customerId, setCustomerId] = useState("");
-  const [overrideEmail, setOverrideEmail] = useState("");
-  const [activationEligible, setActivationEligible] = useState(showResendActivation);
-  const [simulatedPreview, setSimulatedPreview] = useState<{
-    subject: string;
-    text: string;
-    temporaryAccessCode?: string;
-    activationCode?: string;
-    signingLink?: string;
-  } | null>(null);
+  const [portalCredentials, setPortalCredentials] = useState<PortalCredentials | null>(
+    null,
+  );
+  const [portalProvisionError, setPortalProvisionError] = useState<string | null>(null);
 
-  const canResend =
-    canManage &&
-    status === "Awaiting Client Signature" &&
-    openRequest &&
-    ["Sent", "Viewed"].includes(openRequest.status);
-
-  useEffect(() => {
-    if (!canManage) return;
-    const postSign =
-      status === "Awaiting Agency Signature" ||
-      status === "Fully Executed" ||
-      status === "Active" ||
-      showResendActivation;
-    if (!postSign) return;
-    void getClientActivationStatus(contract.client_id).then((s) => {
-      if (s.ok) setActivationEligible(!s.hasActivePortal);
-    });
-  }, [canManage, contract.client_id, showResendActivation, status]);
+  async function provisionPortalAccount() {
+    const provision = await ensureClientPortalAccount(contract.client_id);
+    if (!provision.ok) {
+      setPortalCredentials(null);
+      setPortalProvisionError(provision.error);
+      return provision;
+    }
+    setPortalProvisionError(null);
+    if (provision.alreadyActive) {
+      setPortalCredentials({
+        customerId: provision.customerId,
+        email: provision.email,
+        alreadyActive: true,
+      });
+      setMessage(
+        "Contract ready. Client portal account is already active — send when ready.",
+      );
+    } else if (provision.createdNewUser && provision.temporaryPassword) {
+      setPortalCredentials({
+        customerId: provision.customerId,
+        email: provision.email,
+        temporaryPassword: provision.temporaryPassword,
+        alreadyActive: false,
+      });
+      setMessage(
+        "Contract finalized. Share the one-time portal password with the client, then Send to Client Portal.",
+      );
+    } else {
+      setPortalCredentials({
+        customerId: provision.customerId,
+        email: provision.email,
+        alreadyActive: false,
+        linkedExistingAuthUser: true,
+      });
+      setMessage(
+        "Contract finalized. Existing Auth user linked to this client — Send to Client Portal when ready.",
+      );
+    }
+    return provision;
+  }
 
   async function openSendModal() {
     setSendOpen(true);
-    setSimulatedPreview(null);
+    setError(null);
+    setMessage(null);
     setSignersLoading(true);
     try {
-      const [rows, ctx] = await Promise.all([
-        listLinkedSigners(contract.client_id),
-        getClientInviteContext(contract.client_id),
-      ]);
+      const rows = await listLinkedSigners(contract.client_id);
       setSigners(rows);
       const preferred = rows.find((r) => r.preferred) || rows[0];
       setSignerId(preferred?.user_id || "");
-      if (ctx.ok) {
-        setContactEmail(ctx.client.contactEmail);
-        setContactName(ctx.client.contactName);
-        setCustomerId(ctx.client.customerId);
-        setOverrideEmail("");
-      }
     } finally {
       setSignersLoading(false);
     }
@@ -130,11 +135,19 @@ export function ContractExecutionPanel({
     }
   }
 
-  const destinationEmail = contactEmail.trim() || overrideEmail.trim();
-  const canSend =
-    !!destinationEmail.includes("@") &&
-    !!contactName.trim() &&
-    (!!signerId || signers.length === 0);
+  const canSend = !!signerId && signers.length > 0;
+  const showPortalRetry =
+    canManage &&
+    (status === "Finalized" || status === "Awaiting Client Signature") &&
+    (!portalCredentials || !!portalProvisionError);
+  const showResetPassword =
+    canManage &&
+    (status === "Finalized" ||
+      status === "Awaiting Client Signature" ||
+      status === "Awaiting Agency Signature" ||
+      status === "Fully Executed" ||
+      status === "Active" ||
+      !!portalCredentials);
 
   return (
     <div className="flex flex-col items-end gap-2">
@@ -152,11 +165,63 @@ export function ContractExecutionPanel({
                 }
                 const result = await finalizeContract(contract.id);
                 if (!result.ok) throw new Error(result.error);
-                setMessage("Contract finalized. Ready to send for signature.");
+                setMessage("Contract finalized. Setting up client portal account…");
+                const provision = await provisionPortalAccount();
+                if (!provision.ok) {
+                  setError(`Portal account not created: ${provision.error}`);
+                }
               })
             }
           >
             {loading === "finalize" ? "Finalizing…" : "Finalize for Signature"}
+          </button>
+        ) : null}
+
+        {showPortalRetry ? (
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            disabled={!!loading}
+            onClick={() =>
+              run("provision", async () => {
+                const provision = await provisionPortalAccount();
+                if (!provision.ok) {
+                  throw new Error(provision.error);
+                }
+              })
+            }
+          >
+            {loading === "provision" ? "Creating…" : "Create portal account"}
+          </button>
+        ) : null}
+
+        {showResetPassword ? (
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            disabled={!!loading}
+            onClick={() =>
+              run("reset-password", async () => {
+                const confirmed = window.confirm(
+                  "Reset this client's portal password? The previous password will stop working immediately.",
+                );
+                if (!confirmed) return;
+                const result = await resetClientPortalPassword(contract.client_id);
+                if (!result.ok) throw new Error(result.error);
+                setPortalProvisionError(null);
+                setPortalCredentials({
+                  customerId: result.customerId,
+                  email: result.email,
+                  temporaryPassword: result.temporaryPassword,
+                  alreadyActive: true,
+                });
+                setMessage(
+                  "New portal password generated. Share it offline with the client (shown once).",
+                );
+              })
+            }
+          >
+            {loading === "reset-password" ? "Resetting…" : "Reset portal password"}
           </button>
         ) : null}
 
@@ -167,82 +232,7 @@ export function ContractExecutionPanel({
             disabled={!!loading}
             onClick={() => void openSendModal()}
           >
-            Send for Signature
-          </button>
-        ) : null}
-
-        {canResend ? (
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            disabled={!!loading}
-            onClick={() =>
-              run("resend", async () => {
-                const result = await resendSigningInvitation({ contractId: contract.id });
-                if (!result.ok) throw new Error(result.error);
-                setSimulatedPreview(
-                  result.simulatedPreview
-                    ? {
-                        subject: result.simulatedPreview.subject,
-                        text: result.simulatedPreview.text,
-                        temporaryAccessCode: result.simulatedPreview.temporaryAccessCode,
-                        signingLink: result.simulatedPreview.signingLink,
-                      }
-                    : null,
-                );
-                const statusLabel =
-                  result.deliveryStatus === "sent"
-                    ? "Email sent"
-                    : result.deliveryStatus === "simulated"
-                      ? "Email simulated (dev)"
-                      : "Email failed";
-                setMessage(
-                  `${statusLabel} to ${result.recipientEmail}. Prior access code invalidated.`,
-                );
-                if (result.deliveryError) {
-                  throw new Error(result.deliveryError);
-                }
-              })
-            }
-          >
-            {loading === "resend" ? "Resending…" : "Resend Signing Email"}
-          </button>
-        ) : null}
-
-        {canManage && activationEligible ? (
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            disabled={!!loading}
-            onClick={() =>
-              run("resend-activation", async () => {
-                const result = await resendDashboardActivation({
-                  clientId: contract.client_id,
-                });
-                if (!result.ok) throw new Error(result.error);
-                setSimulatedPreview(
-                  result.simulatedPreview
-                    ? {
-                        subject: result.simulatedPreview.subject,
-                        text: result.simulatedPreview.text,
-                        activationCode: result.simulatedPreview.activationCode,
-                      }
-                    : null,
-                );
-                const statusLabel =
-                  result.deliveryStatus === "sent"
-                    ? "Activation emailed"
-                    : result.deliveryStatus === "simulated"
-                      ? "Activation simulated (dev)"
-                      : "Activation email failed";
-                setMessage(
-                  `${statusLabel} to ${result.recipientEmail}. Prior unused activation codes invalidated.`,
-                );
-                if (result.deliveryError) throw new Error(result.deliveryError);
-              })
-            }
-          >
-            {loading === "resend-activation" ? "Resending…" : "Resend Dashboard Activation"}
+            Send to Client Portal
           </button>
         ) : null}
 
@@ -261,98 +251,119 @@ export function ContractExecutionPanel({
       {error ? <span className="max-w-sm text-right text-xs text-error">{error}</span> : null}
       {message ? <span className="max-w-sm text-right text-xs text-success">{message}</span> : null}
 
-      {simulatedPreview && !sendOpen ? (
-        <div className="mt-2 max-w-lg rounded-box border border-warning/40 bg-warning/10 p-3 text-left text-xs">
-          <p className="font-semibold">Simulated email preview (not delivered)</p>
-          <p className="mt-1 opacity-80">Subject: {simulatedPreview.subject}</p>
-          {simulatedPreview.temporaryAccessCode ? (
-            <p className="mt-1">
-              Temporary signing code (shown once):{" "}
-              <code className="font-mono">{simulatedPreview.temporaryAccessCode}</code>
+      {portalCredentials ? (
+        <div className="mt-2 max-w-lg rounded-box border border-success/40 bg-success/10 p-3 text-left text-xs">
+          <p className="font-semibold">
+            {portalCredentials.temporaryPassword
+              ? portalCredentials.alreadyActive && !portalCredentials.linkedExistingAuthUser
+                ? "Portal password ready to share"
+                : "Client portal credentials"
+              : portalCredentials.alreadyActive
+                ? "Client portal already active"
+                : "Client portal user linked"}
+          </p>
+          <p className="mt-2">
+            Customer ID:{" "}
+            <code className="font-mono font-semibold">{portalCredentials.customerId}</code>
+          </p>
+          <p className="mt-1">
+            Login email: <strong>{portalCredentials.email}</strong>
+          </p>
+          {portalCredentials.temporaryPassword ? (
+            <>
+              <p className="mt-1">
+                One-time password:{" "}
+                <code className="font-mono font-semibold">
+                  {portalCredentials.temporaryPassword}
+                </code>
+              </p>
+              <p className="mt-2 opacity-80">
+                Share Customer ID and password offline (phone, chat, or in person). Do not email
+                if you cannot. Shown once on this page — copy them before you leave. If needed
+                again, use <strong>Reset portal password</strong>. After the client signs in once
+                with this password, their next login will ask them to choose a permanent password.
+              </p>
+              <p className="mt-1 opacity-80">
+                Client login: Client Portal → Customer ID + password → Contracts &amp; Documents.
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 opacity-80">
+              No new password was generated. Use <strong>Reset portal password</strong> to issue
+              a fresh password to share offline.
             </p>
-          ) : null}
-          {simulatedPreview.activationCode ? (
-            <p className="mt-1">
-              Activation code (shown once):{" "}
-              <code className="font-mono">{simulatedPreview.activationCode}</code>
-            </p>
-          ) : null}
-          {simulatedPreview.signingLink ? (
-            <p className="mt-1">
-              Link: <code className="break-all">{simulatedPreview.signingLink}</code>
-            </p>
-          ) : null}
-          <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap opacity-80">
-            {simulatedPreview.text}
-          </pre>
+          )}
         </div>
+      ) : null}
+
+      {portalProvisionError && !portalCredentials ? (
+        <div className="mt-2 max-w-lg rounded-box border border-warning/40 bg-warning/10 p-3 text-left text-xs">
+          <p className="font-semibold">Portal account not created</p>
+          <p className="mt-1">{portalProvisionError}</p>
+          <p className="mt-2 opacity-80">
+            The contract is finalized. Fix the issue, then click Create portal account.
+          </p>
+        </div>
+      ) : null}
+
+      {openRequest && status === "Awaiting Client Signature" ? (
+        <p className="max-w-sm text-right text-xs opacity-70">
+          Sent to client portal
+          {openRequest.sent_at
+            ? ` on ${new Date(openRequest.sent_at).toLocaleString()}`
+            : ""}
+          {openRequest.due_at
+            ? ` · due ${new Date(openRequest.due_at).toLocaleDateString()}`
+            : ""}
+          .
+        </p>
       ) : null}
 
       {sendOpen ? (
         <dialog className="modal modal-open">
           <div className="modal-box max-w-lg">
-            <h3 className="text-lg font-bold">Send for Signature</h3>
+            <h3 className="text-lg font-bold">Send to Client Portal</h3>
             <p className="mt-2 text-sm opacity-70">
-              Emails a secure temporary access code to the client profile contact. Linked portal
-              users (primary) also get an in-app notification to sign while logged in.
+              Assign this agreement to an authorized client user. They will review and sign after
+              signing in with their normal client portal login.
             </p>
 
             {signersLoading ? (
-              <p className="mt-4 text-sm opacity-70">Loading client details…</p>
+              <p className="mt-4 text-sm opacity-70">Loading linked client users…</p>
+            ) : signers.length === 0 ? (
+              <div className="mt-4 rounded-box border border-warning/40 bg-warning/10 p-3 text-sm">
+                This client does not have an active portal account. Create or activate a client
+                user before sending the agreement.
+              </div>
             ) : (
               <>
                 <div className="mt-4 rounded-box bg-base-200 p-3 text-sm">
                   <p>
-                    <span className="opacity-70">Authorized signer:</span>{" "}
-                    <strong>{contactName || "—"}</strong>
+                    <span className="opacity-70">Contract:</span>{" "}
+                    <strong>{contract.contract_name}</strong>
                   </p>
                   <p className="mt-1">
-                    <span className="opacity-70">Customer ID:</span>{" "}
-                    <strong>{customerId || "—"}</strong>
+                    <span className="opacity-70">Delivery:</span>{" "}
+                    <strong>Client portal (in-app)</strong>
                   </p>
-                  {contactEmail ? (
-                    <p className="mt-1">
-                      <span className="opacity-70">Invitation email:</span>{" "}
-                      <strong>{contactEmail}</strong>
-                    </p>
-                  ) : (
-                    <label className="form-control mt-2 w-full">
-                      <span className="label-text text-warning">
-                        Profile email missing — enter destination email
-                      </span>
-                      <input
-                        type="email"
-                        className="input input-bordered input-sm"
-                        value={overrideEmail}
-                        onChange={(e) => setOverrideEmail(e.target.value)}
-                        placeholder="client@example.com"
-                        required
-                      />
-                    </label>
-                  )}
                 </div>
 
-                {signers.length === 0 ? (
-                  <p className="mt-3 text-sm opacity-70">
-                    No linked portal user — invitation will use the email access path only.
-                  </p>
-                ) : (
-                  <label className="form-control mt-3 w-full">
-                    <span className="label-text">In-app signer (primary)</span>
-                    <select
-                      className="select select-bordered"
-                      value={signerId}
-                      onChange={(e) => setSignerId(e.target.value)}
-                    >
-                      {signers.map((s) => (
-                        <option key={s.user_id} value={s.user_id}>
-                          {s.full_name} ({s.email})
-                          {s.preferred ? " · primary contact" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
+                <label className="form-control mt-3 w-full">
+                  <span className="label-text">Authorized client signer</span>
+                  <select
+                    className="select select-bordered"
+                    value={signerId}
+                    onChange={(e) => setSignerId(e.target.value)}
+                    required
+                  >
+                    {signers.map((s) => (
+                      <option key={s.user_id} value={s.user_id}>
+                        {s.full_name} ({s.email})
+                        {s.preferred ? " · primary contact" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
                 <label className="form-control mt-3 w-full">
                   <span className="label-text">Message (optional)</span>
@@ -364,58 +375,34 @@ export function ContractExecutionPanel({
                     placeholder="Please review and sign when ready."
                   />
                 </label>
-
-                {simulatedPreview ? (
-                  <div className="mt-3 rounded-box border border-warning/40 bg-warning/10 p-3 text-xs">
-                    <p className="font-semibold">Simulated email (dev) — code shown once</p>
-                    <p className="mt-1 font-mono">
-                      {simulatedPreview.temporaryAccessCode ||
-                        simulatedPreview.activationCode}
-                    </p>
-                    <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap opacity-80">
-                      {simulatedPreview.text}
-                    </pre>
-                  </div>
-                ) : null}
               </>
             )}
 
             <div className="modal-action">
               <button type="button" className="btn btn-ghost" onClick={() => setSendOpen(false)}>
-                {simulatedPreview ? "Close" : "Cancel"}
+                Cancel
               </button>
-              {!simulatedPreview ? (
+              {signers.length > 0 ? (
                 <button
                   type="button"
                   className="btn btn-primary"
                   disabled={!!loading || signersLoading || !canSend}
                   onClick={() =>
                     run("send", async () => {
-                      const result = await sendSigningInvitation({
+                      const result = await sendForSignature({
                         contractId: contract.id,
-                        signerUserId: signerId || undefined,
+                        signerUserId: signerId,
                         agencyMessage,
-                        overrideEmail: contactEmail ? undefined : overrideEmail,
                       });
                       if (!result.ok) throw new Error(result.error);
-                      setSimulatedPreview(result.simulatedPreview);
-                      const statusLabel =
-                        result.deliveryStatus === "sent"
-                          ? "Invitation emailed"
-                          : result.deliveryStatus === "simulated"
-                            ? "Invitation simulated (dev)"
-                            : "Invitation email failed";
-                      setMessage(`${statusLabel} to ${result.recipientEmail}.`);
-                      if (result.deliveryError) {
-                        throw new Error(result.deliveryError);
-                      }
-                      if (result.deliveryStatus !== "simulated") {
-                        setSendOpen(false);
-                      }
+                      setSendOpen(false);
+                      setMessage(
+                        "Agreement sent to the client portal. The assigned user will see it under Contracts & Documents.",
+                      );
                     })
                   }
                 >
-                  {loading === "send" ? "Sending…" : `Send to ${destinationEmail || "…"}`}
+                  {loading === "send" ? "Sending…" : "Send to Client Portal"}
                 </button>
               ) : null}
             </div>
