@@ -1,4 +1,6 @@
+import { EmployeeExportButton } from "@/components/employees/EmployeeExportButton";
 import { PageHeader, StatusBadge } from "@/components/ui";
+import { formatEmail, mailtoHref } from "@/lib/contact-format";
 import { num } from "@/lib/format";
 import { formatHours } from "@/lib/time";
 import { requireRoles } from "@/lib/page-auth";
@@ -40,11 +42,22 @@ export default async function EmployeesPage() {
     );
   }
 
+  const rows = (profiles ?? []).map((p) => ({
+    id: p.id as string,
+    full_name: p.full_name as string,
+    email: (p.email as string) ?? "",
+    role: p.role as string,
+    department: (p.department as string) ?? "",
+    internal_cost_rate: num(p.internal_cost_rate ?? 75),
+    hours_30d: hoursByUser.get(p.id as string) ?? 0,
+  }));
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Employees"
         subtitle="Staff roster, roles, and recent utilization (last 30 days)"
+        actions={<EmployeeExportButton rows={rows} />}
       />
 
       <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
@@ -59,20 +72,33 @@ export default async function EmployeesPage() {
             </tr>
           </thead>
           <tbody>
-            {(profiles ?? []).map((p) => (
+            {rows.map((p) => (
               <tr key={p.id}>
                 <td>
                   <div className="font-medium">{p.full_name}</div>
-                  <div className="text-xs opacity-60">{p.email}</div>
+                  {mailtoHref(p.email) ? (
+                    <a
+                      href={mailtoHref(p.email)!}
+                      className="link link-hover text-xs opacity-60"
+                    >
+                      {formatEmail(p.email)}
+                    </a>
+                  ) : (
+                    <div className="text-xs opacity-60">
+                      {formatEmail(p.email)}
+                    </div>
+                  )}
                 </td>
                 <td>
-                  <StatusBadge status={ROLE_LABELS[p.role as keyof typeof ROLE_LABELS] ?? p.role} />
+                  <StatusBadge
+                    status={
+                      ROLE_LABELS[p.role as keyof typeof ROLE_LABELS] ?? p.role
+                    }
+                  />
                 </td>
                 <td>{p.department || "—"}</td>
-                <td>
-                  ${num(p.internal_cost_rate ?? 75).toFixed(0)}/hr
-                </td>
-                <td>{formatHours(hoursByUser.get(p.id) ?? 0)}</td>
+                <td>${p.internal_cost_rate.toFixed(0)}/hr</td>
+                <td>{formatHours(p.hours_30d)}</td>
               </tr>
             ))}
           </tbody>

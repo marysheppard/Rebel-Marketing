@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ArrowLeft, Briefcase, Building2 } from "lucide-react";
 import { RebelLogo } from "@/components/RebelLogo";
+import { SiteFooter } from "@/components/SiteFooter";
 import { createClient } from "@/lib/supabase/client";
 import {
   CUSTOMER_LOGIN_IDS,
@@ -30,6 +31,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialPortal = portalFromQuery(searchParams.get("portal"));
+  const portalParam = searchParams.get("portal");
 
   const [step, setStep] = useState<Step>(
     initialPortal ? "credentials" : "choose",
@@ -43,13 +45,13 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const next = portalFromQuery(searchParams.get("portal"));
+    const next = portalFromQuery(portalParam);
     if (next) {
       setPortal(next);
       setStep("credentials");
       setError(null);
     }
-  }, [searchParams]);
+  }, [portalParam]);
 
   function choosePortal(next: Portal) {
     setPortal(next);
@@ -441,14 +443,19 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="rebel-hero flex min-h-screen items-center justify-center">
-          <p className="text-sm text-[#1e3a5f]">Loading…</p>
-        </main>
-      }
-    >
-      <LoginForm />
-    </Suspense>
+    <div className="flex min-h-screen flex-col">
+      <div className="flex-1">
+        <Suspense
+          fallback={
+            <main className="rebel-hero flex min-h-screen items-center justify-center">
+              <p className="text-sm text-[#1e3a5f]">Loading…</p>
+            </main>
+          }
+        >
+          <LoginForm />
+        </Suspense>
+      </div>
+      <SiteFooter variant="public" />
+    </div>
   );
 }

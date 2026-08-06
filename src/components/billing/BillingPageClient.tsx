@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { ActiveInvoicesTable } from "@/components/billing/ActiveInvoicesTable";
+import { BillingExportButton } from "@/components/billing/BillingExportButton";
 import { DraftInvoicesList } from "@/components/billing/DraftInvoicesList";
+import { InvoiceCsvButton } from "@/components/billing/InvoiceCsvButton";
 import { InvoiceStatusBar } from "@/components/billing/InvoiceStatusBar";
 import { PaidHistorySection } from "@/components/billing/PaidHistorySection";
 import { ReadyToInvoicePanel } from "@/components/billing/ReadyToInvoicePanel";
@@ -19,6 +21,7 @@ function CollapsibleSection({
   children,
   subtitle,
   badge,
+  headerAction,
 }: {
   title: string;
   open: boolean;
@@ -26,16 +29,17 @@ function CollapsibleSection({
   children: React.ReactNode;
   subtitle?: string;
   badge?: string;
+  headerAction?: React.ReactNode;
 }) {
   return (
     <section className="rounded-box border border-base-300 bg-base-100 shadow-sm">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-base-200/40"
-        onClick={onToggle}
-        aria-expanded={open}
-      >
-        <div className="min-w-0">
+      <div className="flex w-full items-center gap-2 px-4 py-3">
+        <button
+          type="button"
+          className="min-w-0 flex-1 text-left hover:opacity-90"
+          onClick={onToggle}
+          aria-expanded={open}
+        >
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-bold">{title}</h2>
             {badge ? (
@@ -45,11 +49,22 @@ function CollapsibleSection({
           {subtitle ? (
             <p className="mt-0.5 text-sm opacity-70">{subtitle}</p>
           ) : null}
-        </div>
-        <ChevronDown
-          className={`h-5 w-5 shrink-0 opacity-60 transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
+        </button>
+        {headerAction ? (
+          <div className="flex shrink-0 items-center">{headerAction}</div>
+        ) : null}
+        <button
+          type="button"
+          className="btn btn-ghost btn-xs btn-square shrink-0"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-label={open ? `Collapse ${title}` : `Expand ${title}`}
+        >
+          <ChevronDown
+            className={`h-5 w-5 opacity-60 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </div>
       {open ? (
         <div className="border-t border-base-300 px-4 py-4">{children}</div>
       ) : null}
@@ -104,6 +119,7 @@ export function BillingPageClient({
             <button type="button" className="btn btn-outline btn-sm" onClick={expandAll}>
               Expand all
             </button>
+            <BillingExportButton invoices={allInvoices} />
           </div>
         }
       />
@@ -131,6 +147,13 @@ export function BillingPageClient({
           badge={String(drafts.length)}
           open={open.drafts}
           onToggle={() => toggle("drafts")}
+          headerAction={
+            <InvoiceCsvButton
+              invoices={drafts}
+              filename="billing-draft-invoices"
+              label="draft invoices"
+            />
+          }
         >
           <DraftInvoicesList drafts={drafts} canManage={canManage} embedded />
         </CollapsibleSection>
@@ -141,6 +164,13 @@ export function BillingPageClient({
           badge={String(active.length)}
           open={open.active}
           onToggle={() => toggle("active")}
+          headerAction={
+            <InvoiceCsvButton
+              invoices={active}
+              filename="billing-active-invoices"
+              label="active invoices"
+            />
+          }
         >
           <ActiveInvoicesTable
             invoices={active}
@@ -155,6 +185,13 @@ export function BillingPageClient({
           badge={String(history.length)}
           open={open.history}
           onToggle={() => toggle("history")}
+          headerAction={
+            <InvoiceCsvButton
+              invoices={history}
+              filename="billing-paid-history-invoices"
+              label="paid / history invoices"
+            />
+          }
         >
           <PaidHistorySection invoices={history} embedded />
         </CollapsibleSection>

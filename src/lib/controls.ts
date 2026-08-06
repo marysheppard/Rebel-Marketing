@@ -506,7 +506,7 @@ export function buildControlAlerts(data: ControlInput): ControlAlert[] {
         "Our app reduces the risk by flagging missing employee time entries.",
       title: "Missing time entries",
       detail: m.detail,
-      href: "/app/time",
+      href: "/app/work",
       clientId: m.clientId ?? null,
       exceptionType: "Missing time",
     });

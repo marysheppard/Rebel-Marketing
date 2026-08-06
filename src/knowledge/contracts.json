@@ -1,0 +1,82 @@
+[
+  {
+    "id": "contracts-create",
+    "question": "How do I create a contract?",
+    "keywords": ["create contract", "new contract", "add contract", "make contract", "where contract"],
+    "answer": "Go to **Contracts** in the sidebar → scroll to **New contract** → select the client → enter name, number, dates, and billing method → click **Create contract**.",
+    "href": "/app/contracts",
+    "navLabel": "Open Contracts"
+  },
+  {
+    "id": "contracts-where",
+    "question": "Where do I manage contracts?",
+    "keywords": ["where contracts", "contracts page", "manage contracts", "view contracts"],
+    "answer": "Open **Contracts** from the left sidebar. You’ll see commercial terms, billing methods, retainers, and project fees for each engagement.",
+    "href": "/app/contracts",
+    "navLabel": "Go to Contracts"
+  },
+  {
+    "id": "contracts-edit",
+    "question": "How do I edit a contract?",
+    "keywords": ["edit contract", "update contract", "change contract"],
+    "answer": "Go to **Contracts** → click a contract name to open its detail page → review or update terms from there. Start from the contracts list if you’re unsure which record to open.",
+    "href": "/app/contracts",
+    "navLabel": "Browse Contracts"
+  },
+  {
+    "id": "contracts-billing-methods",
+    "question": "What billing methods can a contract use?",
+    "keywords": ["billing method", "project fee", "campaign billing", "mixed billing"],
+    "answer": "Contracts support Monthly Retainer, Project Fee, Campaign Billing, Pass-Through, and Mixed. Choose the method when creating the contract so invoicing matches the engagement.",
+    "href": "/app/contracts",
+    "navLabel": "Open Contracts"
+  },
+  {
+    "id": "contracts-project-fee",
+    "question": "What is a project fee?",
+    "keywords": ["project fee", "fixed price", "fixed-fee", "project fees"],
+    "answer": "A project fee is a fixed price for scoped work (for example a brand refresh). Set it on the contract and/or campaign, then invoice against that fee in Billing.",
+    "href": "/app/contracts",
+    "navLabel": "Open Contracts"
+  },
+  {
+    "id": "contracts-status",
+    "question": "What do contract statuses mean?",
+    "keywords": ["contract status", "draft", "active contract", "expired", "pending renewal"],
+    "answer": "Common statuses include Draft, Active, Pending Renewal, Expired, and Canceled. Active contracts are the ones you typically staff campaigns against and bill from.",
+    "href": "/app/contracts",
+    "navLabel": "View Contracts"
+  },
+  {
+    "id": "contracts-link-client",
+    "question": "How do I link a contract to a client?",
+    "keywords": ["link client", "contract client", "select client contract"],
+    "answer": "When you create a contract, the **Client** field is required. Pick the client first, then enter commercial terms and save with **Create contract**.",
+    "href": "/app/contracts",
+    "navLabel": "Create a Contract"
+  },
+  {
+    "id": "contracts-renewal",
+    "question": "How do renewals work?",
+    "keywords": ["renewal", "renew", "pending renewal"],
+    "answer": "Contracts can include a renewal option and end dates. Watch Pending Renewal statuses on the Contracts list and update terms before the engagement lapses.",
+    "href": "/app/contracts",
+    "navLabel": "Open Contracts"
+  },
+  {
+    "id": "contracts-scope",
+    "question": "Where do I enter contract scope?",
+    "keywords": ["scope", "contract scope", "statement"],
+    "answer": "Scope is part of the New contract form on the Contracts page. Describe deliverables and boundaries there so campaigns and billing stay aligned.",
+    "href": "/app/contracts",
+    "navLabel": "Open Contracts"
+  },
+  {
+    "id": "contracts-to-invoice",
+    "question": "How do I generate an invoice from a contract?",
+    "keywords": ["generate invoice", "invoice from contract", "make invoice", "create invoice contract"],
+    "answer": "Go to **Billing** → use **Create invoice** → select the client (and contract/campaign when applicable) → enter amounts and dates → click **Create invoice**. Review unpaid balances later under Accounts Receivable.",
+    "href": "/app/billing",
+    "navLabel": "Open Billing"
+  }
+]

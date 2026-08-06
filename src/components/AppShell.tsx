@@ -30,6 +30,7 @@ import {
 import { NotificationBell } from "@/components/NotificationBell";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { RebelLogo } from "@/components/RebelLogo";
+import { SiteFooter } from "@/components/SiteFooter";
 import { createClient } from "@/lib/supabase/client";
 import { ROLE_LABELS, type Profile, type UserRole } from "@/lib/types";
 
@@ -50,7 +51,7 @@ const AGENCY_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
   },
   {
     label: "People",
-    hrefs: ["/app/employees"],
+    hrefs: ["/app/employees", "/app/work"],
   },
   {
     label: "Risk",
@@ -72,7 +73,7 @@ const AM_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
   },
   {
     label: "Delivery",
-    hrefs: ["/app/approvals", "/app/tasks", "/app/time", "/app/costs"],
+    hrefs: ["/app/approvals", "/app/tasks", "/app/work", "/app/costs"],
   },
 ];
 
@@ -227,16 +228,10 @@ const NAV: {
     roles: ["marketing", "account_manager"],
   },
   {
-    href: "/app/time",
-    label: "Time Entry",
-    icon: Clock,
-    roles: ["account_manager"],
-  },
-  {
     href: "/app/work",
     label: "Time & PTO",
     icon: Clock,
-    roles: ["marketing"],
+    roles: ["marketing", "account_manager", "agency_manager", "billing"],
   },
 ];
 
@@ -389,6 +384,13 @@ export function AppShell({
           </Suspense>
           {children}
         </main>
+        <SiteFooter
+          variant="app"
+          links={forRole.map((item) => ({
+            href: item.href,
+            label: item.label,
+          }))}
+        />
       </div>
       <div className="drawer-side z-30">
         <label htmlFor="app-drawer" className="drawer-overlay" />
@@ -438,6 +440,10 @@ export function AppShell({
           </div>
         </aside>
       </div>
+      {/* Assistant temporarily disabled — re-enable with:
+          import { ChatWidget } from "@/components/AIChat";
+          <ChatWidget userId={profile.id} role={profile.role} />
+      */}
     </div>
   );
 }

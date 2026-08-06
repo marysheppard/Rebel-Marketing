@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BillingStatusBadge } from "@/components/billing/BillingStatusBadge";
+import { InvoicePdfButton } from "@/components/billing/InvoicePdfButton";
 import {
   parseWorkEntryIdsFromNotes,
   type BillingInvoiceRow,
@@ -121,7 +122,7 @@ export function DraftInvoicesList({
                   <BillingStatusBadge status={d.status} />
                 </td>
                 <td className="text-right">
-                  <div className="flex flex-wrap justify-end gap-2">
+                  <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                     <Link
                       href={`/app/billing/review?invoice=${d.id}`}
                       className="btn btn-ghost btn-sm"
@@ -138,6 +139,10 @@ export function DraftInvoicesList({
                         {busyId === d.id ? "Sending…" : "Send invoice"}
                       </button>
                     ) : null}
+                    <InvoicePdfButton
+                      invoice={d}
+                      className="btn btn-ghost btn-sm btn-square shrink-0 opacity-60 hover:opacity-100"
+                    />
                   </div>
                 </td>
               </tr>

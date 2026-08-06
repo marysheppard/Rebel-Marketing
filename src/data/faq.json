@@ -1,0 +1,64 @@
+{
+  "faqs": [
+    {
+      "id": "what-is-this-app",
+      "question": "What is this application?",
+      "answer": "Rebel Marketing’s Contract Engagement and Contract-to-Cash system. It helps the agency manage clients, contracts, campaigns, work, costs, approvals, invoicing, payments, and profitability in one place.",
+      "keywords": ["what is", "overview", "about", "system", "application"]
+    },
+    {
+      "id": "ai-purpose",
+      "question": "What can the AI assistant do?",
+      "answer": "It is a help and navigation assistant. It explains pages, walks you through workflows, links you to the right screens, and can search clients or open invoices. It does not write marketing copy or replace staff decisions.",
+      "keywords": ["ai", "assistant", "help", "chat", "copilot"]
+    },
+    {
+      "id": "roles",
+      "question": "What are the user roles?",
+      "answer": "Agency Manager, Account Manager, Marketing, Billing, and Client. Sidebar menus change by role. Clients only access the Customer Dashboard.",
+      "keywords": ["role", "permission", "client portal", "employee"]
+    },
+    {
+      "id": "retainer-meaning",
+      "question": "What is a retainer?",
+      "answer": "A monthly recurring fee for ongoing services. Create or edit a contract, set Billing method to Monthly Retainer, and enter the Monthly retainer amount.",
+      "keywords": ["retainer", "monthly", "recurring"]
+    },
+    {
+      "id": "how-invoices-work",
+      "question": "How do invoices work?",
+      "answer": "Create invoices under Billing. Track collection and record payments under Accounts Receivable. Invoice statuses include Draft, Sent, Partially Paid, Paid, Overdue, Disputed, and Canceled.",
+      "keywords": ["invoice", "billing", "how invoices", "payment"]
+    },
+    {
+      "id": "pass-through",
+      "question": "What is a pass-through cost?",
+      "answer": "A cost that is billed through to the client (media, production, vendors). When you Record cost on Costs, enable Pass-through if it should flow to the client invoice.",
+      "keywords": ["pass-through", "passthrough", "pass through"]
+    },
+    {
+      "id": "active-projects",
+      "question": "Where do I see active projects?",
+      "answer": "Check Campaigns for Active campaigns, Contracts for Active contracts, and Reports for an operational overview of engagements.",
+      "keywords": ["active projects", "active campaigns", "engagements"]
+    },
+    {
+      "id": "campaign-expenses",
+      "question": "Where can I view campaign expenses?",
+      "answer": "Open Costs to see recorded spend, open a campaign’s detail page for budget context, or use Reports for campaign budget performance.",
+      "keywords": ["campaign expenses", "spend", "budget", "costs"]
+    },
+    {
+      "id": "export-invoices",
+      "question": "How do I export invoices or contracts?",
+      "answer": "Most operational tabs have an Export button in the page header (or next to filters). Use it to filter and download CSV or PDF for that area — Billing, Campaigns, Clients, Contracts, Costs, AR, Accounting, Approvals, Tasks, Time Entry, Time & PTO, Employees, Calendar, Controls, Audit Trail, and Profitability. Dashboards and overview/report pages do not include Export.",
+      "keywords": ["export", "download", "csv", "pdf", "invoice export", "save as pdf", "profitability export", "campaign export", "employee export", "pto export", "time export"]
+    },
+    {
+      "id": "contact-support",
+      "question": "How do I contact support?",
+      "answer": "Please email support at hello@rebelmarketing.demo and our team will help you.",
+      "keywords": ["contact", "support", "phone", "email", "help desk", "call"]
+    }
+  ]
+}

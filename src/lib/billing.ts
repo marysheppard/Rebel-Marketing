@@ -49,6 +49,13 @@ export type BillingInvoiceRow = {
   remaining: number;
   campaign_label: string;
   payments?: { amount: number }[] | null;
+  /** Optional fields used for invoice PDF generation */
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  contract_number?: string | null;
+  contract_name?: string | null;
+  payment_terms?: string | null;
 };
 
 export type InvoiceType =

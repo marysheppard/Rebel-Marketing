@@ -20,7 +20,9 @@ export default async function BillingPage() {
     await Promise.all([
       supabase
         .from("invoices")
-        .select("*, clients(client_name), payments(amount), campaigns(campaign_name)")
+        .select(
+          "*, clients(client_name, contact_name, contact_email, contact_phone), payments(amount), campaigns(campaign_name), contracts(contract_number, contract_name, payment_terms)",
+        )
         .order("invoice_date", { ascending: false }),
       supabase
         .from("work_entries")
@@ -83,16 +85,31 @@ export default async function BillingPage() {
   });
 
   const invoiceRows: BillingInvoiceRow[] = (invoicesRaw ?? []).map((i) => {
-    const clientName =
-      joinField(
-        (i as { clients?: { client_name: string } }).clients,
-        "client_name",
-      ) || "—";
+    const clientsRel = (i as {
+      clients?: {
+        client_name?: string;
+        contact_name?: string;
+        contact_email?: string;
+        contact_phone?: string;
+      };
+    }).clients;
+    const contractsRel = (i as {
+      contracts?: {
+        contract_number?: string;
+        contract_name?: string;
+        payment_terms?: string | null;
+      };
+    }).contracts;
+    const clientName = joinField(clientsRel, "client_name") || "—";
     const campLabel =
       joinField(
         (i as { campaigns?: { campaign_name: string } }).campaigns,
         "campaign_name",
       ) || (i.campaign_id ? campaignNameById.get(i.campaign_id) ?? "—" : "—");
+    const clientObj = Array.isArray(clientsRel) ? clientsRel[0] : clientsRel;
+    const contractObj = Array.isArray(contractsRel)
+      ? contractsRel[0]
+      : contractsRel;
 
     return {
       id: i.id,
@@ -114,6 +131,12 @@ export default async function BillingPage() {
       remaining: remainingBalance(i),
       campaign_label: campLabel,
       payments: i.payments as { amount: number }[] | null,
+      contact_name: clientObj?.contact_name ?? "",
+      contact_email: clientObj?.contact_email ?? "",
+      contact_phone: clientObj?.contact_phone ?? "",
+      contract_number: contractObj?.contract_number ?? null,
+      contract_name: contractObj?.contract_name ?? null,
+      payment_terms: contractObj?.payment_terms ?? null,
     };
   });
 

@@ -5,6 +5,13 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
+import {
+  formatAddress,
+  formatEmail,
+  formatPhone,
+  mailtoHref,
+  telHref,
+} from "@/lib/contact-format";
 import type { Client } from "@/lib/types";
 import {
   AD_SPEND_TREATMENTS,
@@ -188,9 +195,13 @@ export function ContractBuilderForm({ client }: { client: Client }) {
           <div>
             <dt className="opacity-60">Business address</dt>
             <dd>
-              {[client.street_address, client.address_line_2, [client.city, client.state, client.zip_code].filter(Boolean).join(", ")]
-                .filter(Boolean)
-                .join(", ") || "—"}
+              {formatAddress({
+                street_address: client.street_address,
+                address_line_2: client.address_line_2,
+                city: client.city,
+                state: client.state,
+                zip_code: client.zip_code,
+              })}
             </dd>
           </div>
           <div>
@@ -198,7 +209,30 @@ export function ContractBuilderForm({ client }: { client: Client }) {
             <dd>
               {contactName}
               {client.contact_job_title ? ` · ${client.contact_job_title}` : ""}
-              <div className="opacity-70">{client.contact_email}</div>
+              {mailtoHref(client.contact_email) ? (
+                <div className="opacity-70">
+                  <a
+                    href={mailtoHref(client.contact_email)!}
+                    className="link link-hover"
+                  >
+                    {formatEmail(client.contact_email)}
+                  </a>
+                </div>
+              ) : null}
+              {client.contact_phone ? (
+                <div className="opacity-70">
+                  {telHref(client.contact_phone) ? (
+                    <a
+                      href={telHref(client.contact_phone)!}
+                      className="link link-hover"
+                    >
+                      {formatPhone(client.contact_phone)}
+                    </a>
+                  ) : (
+                    formatPhone(client.contact_phone)
+                  )}
+                </div>
+              ) : null}
             </dd>
           </div>
           <div>

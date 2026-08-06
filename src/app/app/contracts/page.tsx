@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ContractsTable } from "@/components/ContractsTable";
+import { ListExportButton } from "@/components/exports/ListExportButton";
 import { CreateContractForm } from "@/components/forms";
 import { EmptyState, PageHeader } from "@/components/ui";
 import {
@@ -22,7 +23,9 @@ export default async function ContractsPage() {
   const [{ data: contracts }, { data: clients }] = await Promise.all([
     supabase
       .from("contracts")
-      .select("*, clients(client_name)")
+      .select(
+        "*, clients(client_name, contact_name, contact_email, contact_phone)",
+      )
       .order("start_date", { ascending: false }),
     supabase.from("clients").select("id, client_name").order("client_name"),
   ]);
@@ -36,18 +39,29 @@ export default async function ContractsPage() {
 
   const tableRows = list.map((c) => {
     const clientsRel = (c as {
-      clients?: { client_name: string } | { client_name: string }[] | null;
+      clients?:
+        | {
+            client_name?: string;
+            contact_name?: string;
+            contact_email?: string;
+            contact_phone?: string;
+          }
+        | {
+            client_name?: string;
+            contact_name?: string;
+            contact_email?: string;
+            contact_phone?: string;
+          }[]
+        | null;
     }).clients;
-    const clientName = Array.isArray(clientsRel)
-      ? clientsRel[0]?.client_name
-      : clientsRel?.client_name;
+    const clientObj = Array.isArray(clientsRel) ? clientsRel[0] : clientsRel;
 
     return {
       id: c.id as string,
       contract_name: c.contract_name as string,
       contract_number: c.contract_number as string,
       client_id: c.client_id as string,
-      client_name: clientName ?? "—",
+      client_name: clientObj?.client_name ?? "—",
       contract_status: c.contract_status as string,
       billing_method: c.billing_method as string,
       monthly_retainer: Number(c.monthly_retainer ?? 0),
@@ -55,6 +69,15 @@ export default async function ContractsPage() {
       campaign_budget: Number(c.campaign_budget ?? 0),
       start_date: (c.start_date as string) ?? "",
       end_date: (c.end_date as string) ?? "",
+      payment_terms: (c.payment_terms as string | null) ?? null,
+      deposit_amount: Number(c.deposit_amount ?? 0),
+      auto_renew: Boolean(
+        (c as { auto_renew?: boolean | null }).auto_renew ??
+          (c as { renewal_option?: boolean | null }).renewal_option,
+      ),
+      contact_name: clientObj?.contact_name ?? "",
+      contact_email: clientObj?.contact_email ?? "",
+      contact_phone: clientObj?.contact_phone ?? "",
     };
   });
 
@@ -64,11 +87,71 @@ export default async function ContractsPage() {
         title="Contracts"
         subtitle="Commercial terms, billing methods, and budgets"
         actions={
-          showForm ? (
-            <Link href="/app/contracts/builder" className="btn btn-primary btn-sm">
-              Create Marketing Contract
-            </Link>
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            <ListExportButton
+              title="Export contracts"
+              description="Filter by client, status, and dates, then download CSV or PDF."
+              filenameBase="contracts"
+              matchLabel="contracts"
+              headers={[
+                "Contract",
+                "Contract #",
+                "Client",
+                "Status",
+                "Billing Method",
+                "Retainer",
+                "Project Fee",
+                "Budget",
+                "Start",
+                "End",
+                "Payment Terms",
+                "Deposit",
+                "Auto Renew",
+              ]}
+              items={tableRows.map((r) => ({
+                _clientId: r.client_id,
+                _status: r.contract_status,
+                _date: r.start_date || r.end_date,
+                Contract: r.contract_name,
+                "Contract #": r.contract_number,
+                Client: r.client_name,
+                Status: r.contract_status,
+                "Billing Method": r.billing_method,
+                Retainer: r.monthly_retainer.toFixed(2),
+                "Project Fee": r.project_fee.toFixed(2),
+                Budget: r.campaign_budget.toFixed(2),
+                Start: r.start_date || "—",
+                End: r.end_date || "—",
+                "Payment Terms": r.payment_terms || "—",
+                Deposit: (r.deposit_amount ?? 0).toFixed(2),
+                "Auto Renew": r.auto_renew ? "Yes" : "No",
+              }))}
+              filterConfig={{
+                clientKey: "_clientId",
+                clients: [
+                  ...new Map(
+                    tableRows.map((r) => [r.client_id, r.client_name] as const),
+                  ).entries(),
+                ]
+                  .map(([id, name]) => ({ id, name }))
+                  .sort((a, b) => a.name.localeCompare(b.name)),
+                statusKey: "_status",
+                statuses: [
+                  ...new Set(tableRows.map((r) => r.contract_status)),
+                ].sort(),
+                dateKey: "_date",
+                showDates: true,
+              }}
+            />
+            {showForm ? (
+              <Link
+                href="/app/contracts/builder"
+                className="btn btn-primary btn-sm"
+              >
+                Create Marketing Contract
+              </Link>
+            ) : null}
+          </div>
         }
       />
 
