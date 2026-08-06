@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Bell } from "lucide-react";
 import {
   listNotifications,
@@ -15,11 +15,15 @@ export function NotificationsBell() {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     const rows = await listNotifications(15);
     setItems(rows);
     setLoaded(true);
-  }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   async function toggle() {
     const next = !open;
@@ -34,12 +38,19 @@ export function NotificationsBell() {
       <button
         type="button"
         className="btn btn-ghost btn-sm btn-square"
-        aria-label="Notifications"
+        aria-label={
+          loaded && unread > 0
+            ? `Notifications, ${unread} unread`
+            : "Notifications"
+        }
         onClick={() => void toggle()}
       >
         <Bell className="h-4 w-4" />
         {loaded && unread > 0 ? (
-          <span className="badge badge-primary badge-xs absolute right-0 top-0">{unread}</span>
+          <span
+            className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-base-100"
+            aria-hidden
+          />
         ) : null}
       </button>
       {open ? (
@@ -76,7 +87,9 @@ export function NotificationsBell() {
                     }}
                   >
                     <div className="font-medium">{n.title}</div>
-                    {n.body ? <div className="text-xs opacity-70">{n.body}</div> : null}
+                    {n.body ? (
+                      <div className="text-xs opacity-70">{n.body}</div>
+                    ) : null}
                     <div className="mt-1 text-[10px] opacity-50">
                       {new Date(n.created_at).toLocaleString()}
                     </div>
