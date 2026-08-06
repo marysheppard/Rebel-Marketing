@@ -393,7 +393,7 @@ export const DEMO_ACCOUNTS = [
   },
 ] as const;
 
-/** Demo employee IDs ? auth credentials (password is DemoPass123!) */
+/** Demo employee IDs → auth credentials (password is DemoPass123!) */
 export const EMPLOYEE_LOGIN_IDS: Record<
   string,
   { email: string; password: string; label: string }
