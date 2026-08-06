@@ -656,6 +656,7 @@ async function CustomerDashboard() {
       remaining,
       overdue,
       dueSoon,
+      disputed: Boolean(i.disputed),
     };
   });
 

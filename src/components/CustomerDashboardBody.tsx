@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { payAccountBalance, payInvoiceBalance } from "@/app/actions/pay-invoice-balance";
 import {
   CustomizeLayoutButton,
   DashboardCustomizePanel,
@@ -38,6 +41,7 @@ export type CustomerInvoiceRow = {
   remaining: number;
   overdue: boolean;
   dueSoon: boolean;
+  disputed: boolean;
 };
 
 export type CustomerApprovalRow = {
@@ -293,9 +297,24 @@ function BalanceSection({
   openInvoices: CustomerInvoiceRow[];
   invoiceCount: number;
 }) {
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
   return (
     <div className="rounded-box border border-base-300 bg-base-100 p-5">
-      <h2 className="mb-1 text-xl font-bold text-[#0b1f3a]">Amount you owe</h2>
+      <div className="mb-1 flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-xl font-bold text-[#0b1f3a]">Amount you owe</h2>
+        {balance > 0 ? (
+          <PayAccountButton
+            balance={openInvoices
+              .filter((i) => !i.disputed)
+              .reduce((s, i) => s + i.remaining, 0)}
+            onResult={setMessage}
+          />
+        ) : null}
+      </div>
       <p className="mb-4 text-sm opacity-70">
         Total remaining on open invoices after payments.
       </p>
@@ -325,6 +344,16 @@ function BalanceSection({
           You&apos;re all caught up — nothing outstanding right now.
         </p>
       )}
+      {message ? (
+        <div
+          className={`mb-4 alert text-sm ${
+            message.type === "success" ? "alert-success" : "alert-error"
+          }`}
+          role="status"
+        >
+          {message.text}
+        </div>
+      ) : null}
       {balance > 0 ? (
         <div className="overflow-x-auto">
           <table className="table table-sm">
@@ -336,6 +365,7 @@ function BalanceSection({
                 <th className="text-right">Total</th>
                 <th className="text-right">Paid</th>
                 <th className="text-right">Remaining</th>
+                <th className="text-right">Pay</th>
               </tr>
             </thead>
             <tbody>
@@ -356,21 +386,388 @@ function BalanceSection({
                   </td>
                   <td>
                     <StatusBadge status={i.status} />
+                    {i.disputed ? (
+                      <span className="badge badge-warning badge-sm mt-1 block w-fit">
+                        Disputed
+                      </span>
+                    ) : null}
                   </td>
                   <td className="text-right">{money(i.total)}</td>
                   <td className="text-right">{money(i.paid)}</td>
                   <td className="text-right font-medium">
                     {money(i.remaining)}
                   </td>
+                  <td className="text-right">
+                    <PayInvoiceButton invoice={i} onResult={setMessage} />
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <p className="mt-2 text-xs opacity-60">
+            Use Pay at the top for your full account balance, or pay a single
+            invoice. Demo only — no real card charge.
+          </p>
         </div>
       ) : invoiceCount === 0 ? (
         <p className="text-sm opacity-60">No invoices on file.</p>
       ) : null}
     </div>
+  );
+}
+
+function PayAccountButton({
+  balance,
+  onResult,
+}: {
+  balance: number;
+  onResult: (msg: { type: "success" | "error"; text: string } | null) => void;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [dialogError, setDialogError] = useState<string | null>(null);
+  const [amountInput, setAmountInput] = useState(balance.toFixed(2));
+  const titleId = "pay-account-balance";
+  const amountId = `${titleId}-amount`;
+
+  if (balance <= 0) {
+    return (
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        disabled
+        title="No payable (non-disputed) balance"
+      >
+        Pay
+      </button>
+    );
+  }
+
+  function closeDialog() {
+    if (pending) return;
+    setOpen(false);
+    setDialogError(null);
+  }
+
+  function openDialog() {
+    onResult(null);
+    setDialogError(null);
+    setAmountInput(balance.toFixed(2));
+    setOpen(true);
+  }
+
+  function confirmPay() {
+    const amount = Number(amountInput);
+    if (!(amount > 0)) {
+      setDialogError("Payment amount must be greater than zero.");
+      return;
+    }
+    if (amount > balance + 1e-9) {
+      setDialogError(
+        `Payment cannot exceed account balance of ${money(balance)}.`,
+      );
+      return;
+    }
+
+    setDialogError(null);
+    onResult(null);
+    startTransition(async () => {
+      const result = await payAccountBalance(amount);
+      if (!result.ok) {
+        setDialogError(result.error);
+        onResult({ type: "error", text: result.error });
+        return;
+      }
+      const successText =
+        result.accountRemaining <= 0
+          ? `Account payment of ${money(result.amountApplied)} received. You're all caught up!`
+          : `Account payment of ${money(result.amountApplied)} applied across ${result.invoicesPaid} invoice${result.invoicesPaid === 1 ? "" : "s"}. Remaining ${money(result.accountRemaining)}.`;
+      onResult({ type: "success", text: successText });
+      router.refresh();
+      setOpen(false);
+    });
+  }
+
+  const parsedAmount = Number(amountInput);
+  const canSubmit =
+    !pending &&
+    balance > 0 &&
+    parsedAmount > 0 &&
+    parsedAmount <= balance + 1e-9;
+
+  return (
+    <>
+      <button
+        type="button"
+        className="btn btn-primary btn-sm"
+        disabled={balance <= 0}
+        onClick={openDialog}
+      >
+        Pay
+      </button>
+
+      {open ? (
+        <dialog className="modal modal-open" aria-labelledby={titleId}>
+          <div className="modal-box max-w-md bg-white text-[#0b1f3a]">
+            <h3 id={titleId} className="text-lg font-bold">
+              Pay account balance
+            </h3>
+            <p className="mt-2 text-sm opacity-70">
+              Apply a payment toward your total open balance. Funds are applied
+              to invoices oldest due date first. Demo only — no real card charge.
+            </p>
+            <dl className="mt-4 space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="opacity-70">Account balance</dt>
+                <dd className="font-semibold">{money(balance)}</dd>
+              </div>
+            </dl>
+            <label className="mt-4 block" htmlFor={amountId}>
+              <span className="mb-1 block text-sm font-medium">
+                Amount to pay
+              </span>
+              <input
+                id={amountId}
+                type="number"
+                inputMode="decimal"
+                min={0.01}
+                max={balance}
+                step="0.01"
+                className="input input-bordered w-full"
+                value={amountInput}
+                disabled={pending}
+                onChange={(e) => setAmountInput(e.target.value)}
+              />
+            </label>
+            <p className="mt-1 text-xs opacity-60">
+              Maximum {money(balance)}. Leave as-is to pay the full account.
+            </p>
+            {dialogError ? (
+              <p className="mt-3 text-sm text-error" role="alert">
+                {dialogError}
+              </p>
+            ) : null}
+            <div className="modal-action">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={pending}
+                onClick={closeDialog}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!canSubmit}
+                onClick={confirmPay}
+              >
+                {pending
+                  ? "Paying…"
+                  : `Pay ${Number.isFinite(parsedAmount) && parsedAmount > 0 ? money(parsedAmount) : money(0)}`}
+              </button>
+            </div>
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button
+              type="button"
+              aria-label="Close account payment dialog"
+              disabled={pending}
+              onClick={closeDialog}
+            >
+              close
+            </button>
+          </form>
+        </dialog>
+      ) : null}
+    </>
+  );
+}
+
+function PayInvoiceButton({
+  invoice,
+  onResult,
+}: {
+  invoice: CustomerInvoiceRow;
+  onResult: (msg: { type: "success" | "error"; text: string } | null) => void;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [dialogError, setDialogError] = useState<string | null>(null);
+  const [dialogSuccess, setDialogSuccess] = useState<string | null>(null);
+  const [amountInput, setAmountInput] = useState(
+    invoice.remaining.toFixed(2),
+  );
+  const titleId = `pay-invoice-${invoice.id}`;
+  const amountId = `${titleId}-amount`;
+
+  function closeDialog() {
+    if (pending) return;
+    setOpen(false);
+    setDialogError(null);
+    setDialogSuccess(null);
+  }
+
+  function openDialog() {
+    onResult(null);
+    setDialogError(null);
+    setDialogSuccess(null);
+    setAmountInput(invoice.remaining.toFixed(2));
+    setOpen(true);
+  }
+
+  function confirmPay() {
+    const amount = Number(amountInput);
+    if (!(amount > 0)) {
+      setDialogError("Payment amount must be greater than zero.");
+      return;
+    }
+    if (amount > invoice.remaining + 1e-9) {
+      setDialogError(
+        `Payment cannot exceed remaining balance of ${money(invoice.remaining)}.`,
+      );
+      return;
+    }
+
+    setDialogError(null);
+    setDialogSuccess(null);
+    onResult(null);
+    startTransition(async () => {
+      const result = await payInvoiceBalance(invoice.id, amount);
+      if (!result.ok) {
+        setDialogError(result.error);
+        onResult({ type: "error", text: result.error });
+        return;
+      }
+      const successText =
+        result.newStatus === "Paid"
+          ? `Payment received for ${invoice.invoice_number}. Invoice is paid in full. Thank you!`
+          : `Partial payment of ${money(amount)} applied to ${invoice.invoice_number}. Remaining ${money(result.remaining)}.`;
+      setDialogSuccess(successText);
+      onResult({ type: "success", text: successText });
+      router.refresh();
+      setOpen(false);
+      setDialogSuccess(null);
+    });
+  }
+
+  if (invoice.disputed) {
+    return (
+      <button
+        type="button"
+        className="btn btn-ghost btn-xs"
+        disabled
+        title="Disputed invoices cannot be paid online"
+      >
+        Pay
+      </button>
+    );
+  }
+
+  const parsedAmount = Number(amountInput);
+  const canSubmit =
+    !pending &&
+    invoice.remaining > 0 &&
+    parsedAmount > 0 &&
+    parsedAmount <= invoice.remaining + 1e-9;
+
+  return (
+    <>
+      <button
+        type="button"
+        className="btn btn-primary btn-xs"
+        disabled={invoice.remaining <= 0}
+        onClick={openDialog}
+      >
+        Pay
+      </button>
+
+      {open ? (
+        <dialog className="modal modal-open" aria-labelledby={titleId}>
+          <div className="modal-box max-w-md bg-white text-[#0b1f3a]">
+            <h3 id={titleId} className="text-lg font-bold">
+              Confirm payment
+            </h3>
+            <p className="mt-2 text-sm opacity-70">
+              Pay any amount up to the remaining balance. This demo payment
+              stays in your customer portal — no real card is charged.
+            </p>
+            <dl className="mt-4 space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="opacity-70">Invoice</dt>
+                <dd className="font-medium">{invoice.invoice_number}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="opacity-70">Amount due</dt>
+                <dd className="font-semibold">{money(invoice.remaining)}</dd>
+              </div>
+            </dl>
+            <label className="mt-4 block" htmlFor={amountId}>
+              <span className="mb-1 block text-sm font-medium">
+                Amount to pay
+              </span>
+              <input
+                id={amountId}
+                type="number"
+                inputMode="decimal"
+                min={0.01}
+                max={invoice.remaining}
+                step="0.01"
+                className="input input-bordered w-full"
+                value={amountInput}
+                disabled={pending}
+                onChange={(e) => setAmountInput(e.target.value)}
+              />
+            </label>
+            <p className="mt-1 text-xs opacity-60">
+              Maximum {money(invoice.remaining)}. Leave as-is to pay in full.
+            </p>
+            {dialogError ? (
+              <p className="mt-3 text-sm text-error" role="alert">
+                {dialogError}
+              </p>
+            ) : null}
+            {dialogSuccess ? (
+              <p className="mt-3 text-sm text-success" role="status">
+                {dialogSuccess}
+              </p>
+            ) : null}
+            <div className="modal-action">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={pending}
+                onClick={closeDialog}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!canSubmit}
+                onClick={confirmPay}
+              >
+                {pending
+                  ? "Paying…"
+                  : `Pay ${Number.isFinite(parsedAmount) && parsedAmount > 0 ? money(parsedAmount) : money(0)}`}
+              </button>
+            </div>
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button
+              type="button"
+              aria-label="Close payment dialog"
+              disabled={pending}
+              onClick={closeDialog}
+            >
+              close
+            </button>
+          </form>
+        </dialog>
+      ) : null}
+    </>
   );
 }
 
