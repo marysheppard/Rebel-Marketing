@@ -27,7 +27,7 @@ import {
   Activity,
   ScrollText,
 } from "lucide-react";
-import { NotificationBell } from "@/components/NotificationBell";
+import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { RebelLogo } from "@/components/RebelLogo";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -359,19 +359,12 @@ export function AppShell({
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden text-right sm:block">
               <div className="text-sm font-medium">{profile.full_name}</div>
-              <div className="badge badge-primary badge-sm">
-                {ROLE_LABELS[profile.role]}
-              </div>
+              <DemoRoleSwitcher profile={profile} />
             </div>
-            <span className="badge badge-primary badge-sm sm:hidden">
-              {ROLE_LABELS[profile.role]}
-            </span>
-            {profile.role === "marketing" ? <NotificationBell /> : null}
-            {profile.role === "client" ||
-            profile.role === "agency_manager" ||
-            profile.role === "account_manager" ? (
-              <NotificationsBell />
-            ) : null}
+            <div className="sm:hidden">
+              <DemoRoleSwitcher profile={profile} />
+            </div>
+            <NotificationsBell />
             <button className="btn btn-ghost btn-sm" onClick={logout}>
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Log out</span>
