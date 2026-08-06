@@ -89,6 +89,7 @@ export function ChartCard({
   tall,
   fluid,
   footer,
+  toolbar,
 }: {
   title: string;
   children: React.ReactNode;
@@ -98,12 +99,15 @@ export function ChartCard({
   /** Grow with content instead of a fixed viewport height. */
   fluid?: boolean;
   footer?: React.ReactNode;
+  /** Controls under the title (sort, filters). Hidden when empty. */
+  toolbar?: React.ReactNode;
 }) {
   const heightClass = compact ? "h-48" : tall ? "h-80" : "h-64";
   const emptyHeight = compact ? "h-40" : tall ? "h-72" : "h-56";
   return (
     <div className="rounded-box border border-base-300 bg-base-100 p-4 shadow-sm">
       <h3 className="mb-3 font-semibold">{title}</h3>
+      {!empty && toolbar ? <div className="mb-3">{toolbar}</div> : null}
       {empty ? (
         <div
           className={`flex items-center justify-center text-sm opacity-60 ${emptyHeight}`}
@@ -408,6 +412,75 @@ type CampaignVolumeRow = {
   ctr: number;
 };
 
+type RankingSort =
+  | "metric_desc"
+  | "metric_asc"
+  | "name_asc"
+  | "name_desc"
+  | "ctr_desc"
+  | "ctr_asc";
+
+function RankingSortSelect({
+  value,
+  onChange,
+  metricLabel,
+  includeCtr = true,
+}: {
+  value: RankingSort;
+  onChange: (v: RankingSort) => void;
+  metricLabel: string;
+  includeCtr?: boolean;
+}) {
+  return (
+    <label className="flex max-w-xs flex-col gap-1">
+      <span className="text-xs opacity-70">Sort</span>
+      <select
+        className="select select-bordered select-sm w-full"
+        value={value}
+        onChange={(e) => onChange(e.target.value as RankingSort)}
+        aria-label="Sort chart"
+      >
+        <option value="metric_desc">{metricLabel}: high to low</option>
+        <option value="metric_asc">{metricLabel}: low to high</option>
+        {includeCtr ? (
+          <>
+            <option value="ctr_desc">CTR: high to low</option>
+            <option value="ctr_asc">CTR: low to high</option>
+          </>
+        ) : null}
+        <option value="name_asc">Name: A to Z</option>
+        <option value="name_desc">Name: Z to A</option>
+      </select>
+    </label>
+  );
+}
+
+function compareRanking(
+  a: CampaignVolumeRow,
+  b: CampaignVolumeRow,
+  sort: RankingSort,
+  metric: "clicks" | "impressions" | "ctr",
+) {
+  const metricVal = (r: CampaignVolumeRow) =>
+    metric === "ctr" ? r.ctr : r[metric];
+  switch (sort) {
+    case "metric_asc":
+      return metricVal(a) - metricVal(b);
+    case "metric_desc":
+      return metricVal(b) - metricVal(a);
+    case "ctr_asc":
+      return a.ctr - b.ctr;
+    case "ctr_desc":
+      return b.ctr - a.ctr;
+    case "name_asc":
+      return a.name.localeCompare(b.name);
+    case "name_desc":
+      return b.name.localeCompare(a.name);
+    default:
+      return 0;
+  }
+}
+
 /** Horizontal clicks or impressions ranking with volume context. */
 export function CampaignVolumeRankingChart({
   data,
@@ -418,12 +491,21 @@ export function CampaignVolumeRankingChart({
   metric: "clicks" | "impressions";
   periodLabel?: string;
 }) {
-  const rows = data.slice(0, 25);
+  const [sort, setSort] = useState<RankingSort>("metric_desc");
   const isClicks = metric === "clicks";
   const titleBase = isClicks ? "Clicks by campaign" : "Impressions by campaign";
   const title = periodLabel ? `${titleBase} (${periodLabel})` : titleBase;
   const dataKey = isClicks ? "clicks" : "impressions";
   const fill = isClicks ? "#0284c7" : "#94a3b8";
+  const metricLabel = isClicks ? "Clicks" : "Impressions";
+
+  const rows = useMemo(() => {
+    const list = [...data].sort((a, b) =>
+      compareRanking(a, b, sort, metric),
+    );
+    return list.slice(0, 25);
+  }, [data, sort, metric]);
+
   const chartHeight = Math.max(280, rows.length * 42 + 32);
 
   function VolumeTooltip({
@@ -450,12 +532,19 @@ export function CampaignVolumeRankingChart({
   return (
     <ChartCard
       title={title}
-      empty={!rows.length}
+      empty={!data.length}
       fluid
+      toolbar={
+        <RankingSortSelect
+          value={sort}
+          onChange={setSort}
+          metricLabel={metricLabel}
+        />
+      }
       footer={
         rows.length < data.length ? (
           <p className="text-xs opacity-60">
-            Showing top {rows.length} of {data.length} campaigns
+            Showing {rows.length} of {data.length} campaigns
           </p>
         ) : null
       }
@@ -799,14 +888,22 @@ export function CampaignCtrRankingChart({
   periodLabel?: string;
   averageCtr?: number;
 }) {
-  const rows = data.slice(0, 25);
+  const [sort, setSort] = useState<RankingSort>("metric_desc");
+
   const avg =
     averageCtr ??
     (() => {
-      const imp = rows.reduce((s, r) => s + r.impressions, 0);
-      const clk = rows.reduce((s, r) => s + r.clicks, 0);
+      const imp = data.reduce((s, r) => s + r.impressions, 0);
+      const clk = data.reduce((s, r) => s + r.clicks, 0);
       return imp > 0 ? Math.round((clk / imp) * 10000) / 100 : 0;
     })();
+
+  const rows = useMemo(() => {
+    const list = [...data].sort((a, b) =>
+      compareRanking(a, b, sort, "ctr"),
+    );
+    return list.slice(0, 25);
+  }, [data, sort]);
 
   const title = periodLabel
     ? `CTR by campaign (${periodLabel})`
@@ -849,14 +946,22 @@ export function CampaignCtrRankingChart({
   return (
     <ChartCard
       title={title}
-      empty={!rows.length}
+      empty={!data.length}
       fluid
+      toolbar={
+        <RankingSortSelect
+          value={sort}
+          onChange={setSort}
+          metricLabel="CTR"
+          includeCtr={false}
+        />
+      }
       footer={
         <p className="text-xs opacity-70">
           Portfolio avg CTR {avg}% · bars colored above/below average · only
           campaigns with impressions in this period
           {rows.length < data.length
-            ? ` · showing top ${rows.length} of ${data.length}`
+            ? ` · showing ${rows.length} of ${data.length}`
             : ""}
         </p>
       }
@@ -2199,20 +2304,78 @@ export function StrategyConversionsBarChart({
 }: {
   data: { name: string; conversions: number }[];
 }) {
-  const hasAny = data.some((d) => d.conversions > 0);
+  const [sort, setSort] = useState<"metric_desc" | "metric_asc" | "name_asc" | "name_desc">(
+    "metric_desc",
+  );
+
+  const rows = useMemo(() => {
+    const list = [...data];
+    list.sort((a, b) => {
+      switch (sort) {
+        case "metric_asc":
+          return a.conversions - b.conversions;
+        case "metric_desc":
+          return b.conversions - a.conversions;
+        case "name_asc":
+          return a.name.localeCompare(b.name);
+        case "name_desc":
+          return b.name.localeCompare(a.name);
+        default:
+          return 0;
+      }
+    });
+    return list;
+  }, [data, sort]);
+
+  const hasAny = rows.some((d) => d.conversions > 0);
+  const colorByName = useMemo(() => {
+    const map = new Map<string, string>();
+    data.forEach((entry, i) => {
+      map.set(entry.name, STRATEGY_COLORS[i % STRATEGY_COLORS.length]!);
+    });
+    return map;
+  }, [data]);
+
   return (
-    <ChartCard title="Conversions by strategy" empty={!hasAny}>
+    <ChartCard
+      title="Conversions by strategy"
+      empty={!hasAny}
+      toolbar={
+        <label className="flex max-w-xs flex-col gap-1">
+          <span className="text-xs opacity-70">Sort</span>
+          <select
+            className="select select-bordered select-sm w-full"
+            value={sort}
+            onChange={(e) =>
+              setSort(
+                e.target.value as
+                  | "metric_desc"
+                  | "metric_asc"
+                  | "name_asc"
+                  | "name_desc",
+              )
+            }
+            aria-label="Sort conversions by strategy"
+          >
+            <option value="metric_desc">Conversions: high to low</option>
+            <option value="metric_asc">Conversions: low to high</option>
+            <option value="name_asc">Name: A to Z</option>
+            <option value="name_desc">Name: Z to A</option>
+          </select>
+        </label>
+      }
+    >
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data}>
+        <BarChart data={rows}>
           <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
           <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
           <YAxis allowDecimals={false} />
           <Tooltip />
           <Bar dataKey="conversions" fill="#a78bfa" name="Conversions">
-            {data.map((entry, i) => (
+            {rows.map((entry) => (
               <Cell
                 key={entry.name}
-                fill={STRATEGY_COLORS[i % STRATEGY_COLORS.length]}
+                fill={colorByName.get(entry.name) ?? "#94a3b8"}
               />
             ))}
           </Bar>
