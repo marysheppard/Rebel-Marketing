@@ -276,6 +276,10 @@ export function DonutBreakdownViz({
   onSelectKey,
   onClearSelection,
   clearFilterLabel = "Clear Filter",
+  /** split = pie beside legend (default). stacked = pie with legend under it in one column. */
+  layout = "split",
+  /** Insight card under the legend; off for compact stacked report cards. */
+  showDetailsCard = true,
 }: {
   title: string;
   subtitle?: string;
@@ -295,6 +299,8 @@ export function DonutBreakdownViz({
   onSelectKey?: (key: string) => void;
   onClearSelection?: () => void;
   clearFilterLabel?: string;
+  layout?: "split" | "stacked";
+  showDetailsCard?: boolean;
 }) {
   const isControlled = controlledSelectedKey !== undefined;
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -427,10 +433,20 @@ export function DonutBreakdownViz({
         </div>
       ) : (
         <div
-          className="flex flex-col items-center gap-8 lg:flex-row lg:items-stretch lg:justify-center"
+          className={
+            layout === "stacked"
+              ? "flex flex-col gap-4"
+              : "flex flex-col items-center gap-8 lg:flex-row lg:items-stretch lg:justify-center"
+          }
           onMouseLeave={clearHover}
         >
-          <div className="relative mx-auto w-full max-w-[560px] shrink-0">
+          <div
+            className={
+              layout === "stacked"
+                ? "relative mx-auto w-full max-w-[280px] shrink-0"
+                : "relative mx-auto w-full max-w-[560px] shrink-0"
+            }
+          >
             <BreakdownDonut
               slices={slices}
               focusIndex={hoverIndex}
@@ -482,7 +498,13 @@ export function DonutBreakdownViz({
             </div>
           </div>
 
-          <div className="flex w-full min-w-0 flex-1 flex-col gap-4 lg:max-w-md">
+          <div
+            className={
+              layout === "stacked"
+                ? "flex w-full min-w-0 flex-col gap-2 border-t border-base-300 pt-3"
+                : "flex w-full min-w-0 flex-1 flex-col gap-4 lg:max-w-md"
+            }
+          >
             <div
               className={`grid ${gridCols} gap-3 px-3 text-[10px] uppercase tracking-wide opacity-50`}
             >
@@ -542,7 +564,7 @@ export function DonutBreakdownViz({
               })}
             </ul>
 
-            {detailsSlice ? (
+            {showDetailsCard && detailsSlice ? (
               <div aria-live="polite">
                 <MemoDetailsCard
                   slice={detailsSlice}
