@@ -22,7 +22,7 @@ export function invoiceStatusAfterPayment(remainingAfter: number): string {
 }
 
 /**
- * Insert a payment and update invoice status.
+ * Insert a payment and update invoice status to Paid or Partially Paid.
  * Caller must enforce auth / ownership; this only performs the writes.
  */
 export async function applyPayment(
@@ -53,21 +53,38 @@ export async function applyPayment(
   });
 
   if (payError) {
-    return { ok: false, error: "Could not record payment." };
+    return {
+      ok: false,
+      error: payError.message
+        ? `Could not record payment: ${payError.message}`
+        : "Could not record payment.",
+    };
   }
 
   const remaining = Math.max(0, remainingBefore - amount);
   const newStatus = invoiceStatusAfterPayment(remaining);
 
-  const { error: invError } = await supabase
+  const { data: updated, error: invError } = await supabase
     .from("invoices")
     .update({ status: newStatus })
-    .eq("id", input.invoiceId);
+    .eq("id", input.invoiceId)
+    .select("id, status")
+    .maybeSingle();
 
   if (invError) {
     return {
       ok: false,
-      error: "Payment saved, but invoice status could not be updated.",
+      error: invError.message
+        ? `Payment saved, but invoice status could not be updated: ${invError.message}`
+        : "Payment saved, but invoice status could not be updated.",
+    };
+  }
+
+  if (!updated || updated.status !== newStatus) {
+    return {
+      ok: false,
+      error:
+        "Payment saved, but invoice status did not change. Please contact support.",
     };
   }
 

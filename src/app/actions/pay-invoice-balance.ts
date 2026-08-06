@@ -96,14 +96,7 @@ export async function payInvoiceBalance(
     };
   }
 
-  const writer = createAdminClient();
-  if (!writer) {
-    return {
-      ok: false,
-      error:
-        "Payment processing is unavailable (server admin not configured). Contact support.",
-    };
-  }
+  const writer = createAdminClient() ?? supabase;
 
   const isFull = payAmount >= remaining - 1e-9;
   const result = await applyPayment(writer, {
@@ -111,7 +104,7 @@ export async function payInvoiceBalance(
     clientId: invoice.client_id,
     amount: payAmount,
     paymentDate: new Date().toISOString().slice(0, 10),
-    paymentMethod: "Demo Card",
+    paymentMethod: "Credit Card",
     reference: `demo_${invoice.id}_${Date.now()}`,
     notes: isFull
       ? "Client portal demo payment (full remaining balance)."
@@ -122,6 +115,7 @@ export async function payInvoiceBalance(
   if (!result.ok) return result;
 
   revalidatePath("/app");
+  revalidatePath("/app", "layout");
   return result;
 }
 
@@ -173,14 +167,7 @@ export async function payAccountBalance(
     return { ok: false, error: "No client account is linked to this user." };
   }
 
-  const writer = createAdminClient();
-  if (!writer) {
-    return {
-      ok: false,
-      error:
-        "Payment processing is unavailable (server admin not configured). Contact support.",
-    };
-  }
+  const writer = createAdminClient() ?? supabase;
 
   const { data: invoiceRows, error: invLoadError } = await supabase
     .from("invoices")
@@ -233,7 +220,7 @@ export async function payAccountBalance(
       clientId: inv.client_id,
       amount: slice,
       paymentDate,
-      paymentMethod: "Demo Card",
+      paymentMethod: "Credit Card",
       reference: `demo_acct_${inv.id}_${batchId}`,
       notes: isFull
         ? "Client portal demo account payment (applied to invoice)."
@@ -264,6 +251,7 @@ export async function payAccountBalance(
   );
 
   revalidatePath("/app");
+  revalidatePath("/app", "layout");
   return {
     ok: true,
     amountApplied,
