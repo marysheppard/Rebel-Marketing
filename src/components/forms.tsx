@@ -896,7 +896,7 @@ export function CreateCostForm({
           <option>Ad spend</option>
           <option>Vendor/freelancer costs</option>
           <option>Employee labor cost</option>
-          <option>Reimbursable/pass-through expenses</option>
+          <option>Other Reimbursable/pass-through expenses</option>
           <option>Software/tool subscription costs</option>
           <option>Stock media licensing</option>
           <option>Production costs</option>

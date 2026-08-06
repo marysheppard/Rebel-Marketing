@@ -305,7 +305,7 @@ export const COST_CATEGORIES = [
   "Ad spend",
   "Vendor/freelancer costs",
   "Employee labor cost",
-  "Reimbursable/pass-through expenses",
+  "Other Reimbursable/pass-through expenses",
   "Software/tool subscription costs",
   "Stock media licensing",
   "Production costs",

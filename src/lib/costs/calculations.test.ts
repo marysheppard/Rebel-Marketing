@@ -37,7 +37,7 @@ describe("sumByCategory and totals", () => {
     cost({ id: "1", cost_type: "Ad spend", amount: 1000, cost_date: "2026-01-15" }),
     cost({ id: "2", cost_type: "Vendor/freelancer costs", amount: 500, cost_date: "2026-01-16" }),
     cost({ id: "3", cost_type: "Employee labor cost", amount: 200, cost_date: "2026-01-17" }),
-    cost({ id: "4", cost_type: "Reimbursable/pass-through expenses", amount: 300, cost_date: "2026-01-18" }),
+    cost({ id: "4", cost_type: "Other Reimbursable/pass-through expenses", amount: 300, cost_date: "2026-01-18" }),
     cost({
       id: "5",
       cost_type: "Ad spend",

@@ -13,7 +13,7 @@ export const COST_CATEGORY_LABELS: Record<CostCategory, string> = {
   advertising: "Advertising Spend",
   vendor_freelancer: "Vendor/Freelancer Cost",
   employee_labor: "Employee Labor Cost",
-  pass_through: "Reimbursable/Pass-Through Expense",
+  pass_through: "Other Reimbursable/Pass-Through Expense",
 };
 
 /** Stable theme colors for charts/cards — same token per category everywhere. */
@@ -29,6 +29,8 @@ const TYPE_TO_CATEGORY: Record<string, CostCategory> = {
   "Ad spend": "advertising",
   "Vendor/freelancer costs": "vendor_freelancer",
   "Employee labor cost": "employee_labor",
+  "Other Reimbursable/pass-through expenses": "pass_through",
+  // Legacy alias (pre-rename)
   "Reimbursable/pass-through expenses": "pass_through",
   "Software/tool subscription costs": "vendor_freelancer",
   "Stock media licensing": "vendor_freelancer",

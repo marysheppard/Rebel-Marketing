@@ -56,15 +56,15 @@ INSERT INTO public.costs (
 
 -- Reimbursable / Pass-Through (cost_type category)
 ('66666666-6666-6666-6666-666666666630', '44444444-4444-4444-4444-444444444415', '22222222-2222-2222-2222-222222222203',
- 'Reimbursable/pass-through expenses', 'Client-approved creator gifts', 2200, '2026-02-14', 'Creator Desk', true, 'Approved', true),
+ 'Other Reimbursable/pass-through expenses', 'Client-approved creator gifts', 2200, '2026-02-14', 'Creator Desk', true, 'Approved', true),
 ('66666666-6666-6666-6666-666666666631', '44444444-4444-4444-4444-444444444405', '22222222-2222-2222-2222-222222222203',
- 'Reimbursable/pass-through expenses', 'Launch event venue deposit', 5500, '2026-03-18', 'VenueHub', true, 'Approved', true),
+ 'Other Reimbursable/pass-through expenses', 'Launch event venue deposit', 5500, '2026-03-18', 'VenueHub', true, 'Approved', true),
 ('66666666-6666-6666-6666-666666666632', '44444444-4444-4444-4444-444444444411', '22222222-2222-2222-2222-222222222207',
- 'Reimbursable/pass-through expenses', 'Festival booth materials', 1800, '2026-05-08', 'ExpoSupply', false, 'Pending', true),
+ 'Other Reimbursable/pass-through expenses', 'Festival booth materials', 1800, '2026-05-08', 'ExpoSupply', false, 'Pending', true),
 ('66666666-6666-6666-6666-666666666633', '44444444-4444-4444-4444-444444444402', '22222222-2222-2222-2222-222222222201',
- 'Reimbursable/pass-through expenses', 'Local print flyers (ready to bill)', 950, '2026-07-12', 'PrintHouse', true, 'Approved', true),
+ 'Other Reimbursable/pass-through expenses', 'Local print flyers (ready to bill)', 950, '2026-07-12', 'PrintHouse', true, 'Approved', true),
 ('66666666-6666-6666-6666-666666666634', '44444444-4444-4444-4444-444444444413', '22222222-2222-2222-2222-222222222208',
- 'Reimbursable/pass-through expenses', 'Client software seats — Aug', 1400, '2026-08-03', 'SaaS Direct', true, 'Approved', true);
+ 'Other Reimbursable/pass-through expenses', 'Client software seats — Aug', 1400, '2026-08-03', 'SaaS Direct', true, 'Approved', true);
 
 -- Draft invoice with pass-through for billing-status approx demo
 DELETE FROM public.invoices WHERE id = '66666666-6666-6666-6666-666666666690';

@@ -27,6 +27,9 @@ describe("normalizeCostCategory", () => {
   });
 
   it("maps pass-through type (type wins; not from boolean)", () => {
+    expect(normalizeCostCategory("Other Reimbursable/pass-through expenses")).toBe(
+      "pass_through",
+    );
     expect(normalizeCostCategory("Reimbursable/pass-through expenses")).toBe(
       "pass_through",
     );
@@ -43,6 +46,8 @@ describe("normalizeCostCategory", () => {
     expect(COST_CATEGORY_LABELS.advertising).toBe("Advertising Spend");
     expect(COST_CATEGORY_LABELS.vendor_freelancer).toContain("Vendor");
     expect(COST_CATEGORY_LABELS.employee_labor).toContain("Labor");
-    expect(COST_CATEGORY_LABELS.pass_through).toContain("Pass-Through");
+    expect(COST_CATEGORY_LABELS.pass_through).toBe(
+      "Other Reimbursable/Pass-Through Expense",
+    );
   });
 });
