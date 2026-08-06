@@ -123,3 +123,52 @@ body {
 .public-role-preview-panel {
   animation: loginFadeIn 320ms ease-out both;
 }
+
+/* —— AI Help Assistant —— */
+.ai-chat-fab {
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.ai-chat-fab:hover {
+  transform: translateY(-2px) scale(1.03);
+}
+
+.ai-chat-window {
+  animation: aiChatRise 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes aiChatRise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ai-typing-dot {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.45;
+  animation: aiTypingPulse 1s ease-in-out infinite;
+}
+
+@keyframes aiTypingPulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 0.9;
+    transform: translateY(-3px);
+  }
+}

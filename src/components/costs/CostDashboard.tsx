@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/ui";
+import { ListExportButton } from "@/components/exports/ListExportButton";
 import { CostFilterBar } from "@/components/costs/CostFilterBar";
 import { CostSummaryCards } from "@/components/costs/CostSummaryCards";
 import {
@@ -11,11 +12,16 @@ import {
 } from "@/components/costs/CostCharts";
 import { CostsByCategoryChart } from "@/components/costs/CostsByCategoryViz";
 import { CostDetailsTable } from "@/components/costs/CostDetailsTable";
-import type { CostCategory } from "@/lib/costs/categories";
+import {
+  COST_CATEGORY_LABELS,
+  normalizeCostCategory,
+  type CostCategory,
+} from "@/lib/costs/categories";
 import {
   buildCampaignBudgetRows,
   buildSummary,
   buildTrendSeries,
+  clientNameFromCost,
   earliestCostDate,
   filterCosts,
   passThroughStatusBreakdown,
@@ -111,20 +117,27 @@ export function CostDashboard({
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
 
+  // Depend on the query string, not the searchParams object identity.
+  const searchKey = searchParams.toString();
+
   const filters = useMemo(
-    () => parseFilters(new URLSearchParams(searchParams.toString())),
-    [searchParams],
+    () => parseFilters(new URLSearchParams(searchKey)),
+    [searchKey],
   );
 
-  const campaignSort = (searchParams.get("campSort") as CampaignSort) || "highest_cost";
-  const trendGroupParam = searchParams.get("trendGroup") as TrendGroupBy | null;
+  const campaignSort =
+    (new URLSearchParams(searchKey).get("campSort") as CampaignSort) ||
+    "highest_cost";
+  const trendGroupParam = new URLSearchParams(searchKey).get(
+    "trendGroup",
+  ) as TrendGroupBy | null;
   const trendGroup: TrendGroupBy =
     trendGroupParam && TREND_GROUP_VALUES.includes(trendGroupParam)
       ? trendGroupParam
       : DEFAULT_TREND_GROUP;
   const trendCategories = useMemo(
-    () => parseTrendCategories(searchParams.get("trendCat")),
-    [searchParams],
+    () => parseTrendCategories(new URLSearchParams(searchKey).get("trendCat")),
+    [searchKey],
   );
 
   function withExtras(params: URLSearchParams) {
@@ -302,11 +315,48 @@ export function CostDashboard({
         title="Costs"
         subtitle="Track advertising spend, vendor and freelancer costs, employee labor, and reimbursable campaign expenses."
         actions={
-          showRecordCost ? (
-            <a href="#record-cost" className="btn btn-primary btn-sm">
-              Record Cost
-            </a>
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            <ListExportButton
+              className="btn btn-outline btn-sm gap-1"
+              title="Export costs"
+              description="Downloads cost rows matching your current Costs filters."
+              filenameBase="costs"
+              matchLabel="costs"
+              headers={[
+                "Date",
+                "Client",
+                "Campaign",
+                "Category",
+                "Type",
+                "Vendor",
+                "Description",
+                "Amount",
+                "Approved",
+                "Pass-through",
+              ]}
+              items={filtered.map((r) => {
+                const cat = normalizeCostCategory(r.cost_type);
+                return {
+                  Date: r.cost_date,
+                  Client: clientNameFromCost(r),
+                  Campaign: r.campaigns?.campaign_name ?? "—",
+                  Category: cat ? COST_CATEGORY_LABELS[cat] : r.cost_type,
+                  Type: r.cost_type,
+                  Vendor: r.vendor_name || "—",
+                  Description: r.description || "—",
+                  Amount: Number(r.amount).toFixed(2),
+                  Approved: r.approved ? "Yes" : "No",
+                  "Pass-through": r.pass_through ? "Yes" : "No",
+                };
+              })}
+              filterConfig={{ showDates: false }}
+            />
+            {showRecordCost ? (
+              <a href="#record-cost" className="btn btn-primary btn-sm">
+                Record Cost
+              </a>
+            ) : null}
+          </div>
         }
       />
 

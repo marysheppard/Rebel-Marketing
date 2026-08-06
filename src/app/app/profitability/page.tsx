@@ -3,6 +3,7 @@ import {
   ProfitabilityExplorer,
   type ProfitabilitySource,
 } from "@/components/dashboards/ProfitabilityExplorer";
+import { ProfitabilityExportButton } from "@/components/dashboards/ProfitabilityExportButton";
 import { loadFinanceBundle } from "@/lib/finance-data";
 import { requireRoles } from "@/lib/page-auth";
 import { parsePeriodParam } from "@/lib/period-url";
@@ -60,24 +61,28 @@ export default async function ProfitabilityPage({
     })),
   };
 
+  const isAgency = profile.role === "agency_manager";
+
   return (
     <div className="space-y-8">
       <PageHeader
-        title={
-          profile.role === "agency_manager"
-            ? "Firm Profitability"
-            : "Client Profitability"
-        }
+        title={isAgency ? "Firm Profitability" : "Client Profitability"}
         subtitle={
-          profile.role === "agency_manager"
+          isAgency
             ? "Money view — filter by period, client, campaign, or account manager"
             : "Money view for your managed clients"
+        }
+        actions={
+          <ProfitabilityExportButton
+            source={source}
+            showAccountManagers={isAgency}
+          />
         }
       />
 
       <ProfitabilityExplorer
         source={source}
-        showAccountManagers={profile.role === "agency_manager"}
+        showAccountManagers={isAgency}
         initialPeriod={parsePeriodParam(sp.period)}
         initialClientId={sp.client}
       />

@@ -307,9 +307,23 @@ export function CampaignBudgetChart({
 
   useEffect(() => {
     setSelectedIds((prev) => {
-      if (!userFiltered.current || prev.length === 0) return campaignIds;
+      const sameAsAll =
+        prev.length === campaignIds.length &&
+        prev.every((id, i) => id === campaignIds[i]);
+
+      if (!userFiltered.current || prev.length === 0) {
+        // Avoid new array identity when contents already match (prevents update loops).
+        return sameAsAll ? prev : campaignIds;
+      }
       const kept = campaignIds.filter((id) => prev.includes(id));
-      return kept.length > 0 ? kept : campaignIds;
+      const next = kept.length > 0 ? kept : campaignIds;
+      if (
+        next.length === prev.length &&
+        next.every((id, i) => id === prev[i])
+      ) {
+        return prev;
+      }
+      return next;
     });
   }, [campaignIds]);
 

@@ -12,20 +12,25 @@ export function usePeriodParam(fallback: PeriodKey = "ytd") {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchKey = searchParams.toString();
   const period = useMemo(
-    () => parsePeriodParam(searchParams.get("period"), fallback),
-    [searchParams, fallback],
+    () =>
+      parsePeriodParam(
+        new URLSearchParams(searchKey).get("period"),
+        fallback,
+      ),
+    [searchKey, fallback],
   );
 
   const setPeriod = useCallback(
     (next: PeriodKey) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(searchKey);
       if (next === fallback) params.delete("period");
       else params.set("period", next);
       const q = params.toString();
       router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
     },
-    [router, pathname, searchParams, fallback],
+    [router, pathname, searchKey, fallback],
   );
 
   return { period, setPeriod };

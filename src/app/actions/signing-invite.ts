@@ -10,9 +10,10 @@ import {
 } from "@/lib/signing-invite-session";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeContractStatus } from "@/lib/contract-status";
+import { SUPPORT_CONTACT } from "@/data/supportContact";
 
 const AGENCY_NAME = "Rebel Marketing";
-const AGENCY_FALLBACK_EMAIL = "hello@rebel.demo";
+const AGENCY_FALLBACK_EMAIL = SUPPORT_CONTACT.email;
 
 function appBaseUrl() {
   return (

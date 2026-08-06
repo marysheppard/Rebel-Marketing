@@ -157,7 +157,11 @@ export async function AccountManagerDashboard({
   );
   return (
     <Suspense fallback={<DashboardFallback />}>
-      <PortfolioDashboardClient source={source} variant="account_manager" />
+      <PortfolioDashboardClient
+        source={source}
+        variant="account_manager"
+        userId={userId}
+      />
     </Suspense>
   );
 }
@@ -179,7 +183,11 @@ export async function AgencyExecutiveDashboard({
   );
   return (
     <Suspense fallback={<DashboardFallback />}>
-      <PortfolioDashboardClient source={source} variant="agency" />
+      <PortfolioDashboardClient
+        source={source}
+        variant="agency"
+        userId={userId}
+      />
     </Suspense>
   );
 }

@@ -1,0 +1,110 @@
+[
+  {
+    "id": "nav-clients-create",
+    "question": "How do I create a client?",
+    "keywords": ["create client", "add client", "new client", "how client"],
+    "answer": "Go to **Clients** → fill out the New Client form (name, industry, contact) → click **Create client**.",
+    "href": "/app/clients",
+    "navLabel": "Open Clients",
+    "page": "Clients"
+  },
+  {
+    "id": "nav-clients-where",
+    "question": "Where do I manage clients?",
+    "keywords": ["where clients", "clients page", "client management", "manage clients"],
+    "answer": "Open **Clients** in the left sidebar to view accounts, profitability context, and outstanding balances.",
+    "href": "/app/clients",
+    "navLabel": "Go to Clients",
+    "page": "Clients"
+  },
+  {
+    "id": "nav-dashboard",
+    "question": "What does the dashboard do?",
+    "keywords": ["what does the dashboard", "dashboard page", "explain dashboard", "dashboard do"],
+    "answer": "The **Dashboard** is your home screen. Employees see assignments and operational snapshots; clients see the Customer Dashboard only.",
+    "href": "/app",
+    "navLabel": "Dashboard",
+    "page": "Dashboard"
+  },
+  {
+    "id": "nav-page-clients",
+    "question": "What does the Clients page do?",
+    "keywords": ["clients page", "page clients"],
+    "answer": "Clients is where you manage agency accounts, contacts, status, and balance context before contracts and campaigns are created.",
+    "href": "/app/clients",
+    "navLabel": "Open Clients",
+    "page": "Clients"
+  },
+  {
+    "id": "nav-page-contracts",
+    "question": "What does the Contracts page do?",
+    "keywords": ["contracts page", "page contracts"],
+    "answer": "Contracts holds commercial agreements: retainers, project fees, campaign budgets, billing methods, and renewal terms.",
+    "href": "/app/contracts",
+    "navLabel": "Open Contracts",
+    "page": "Contracts"
+  },
+  {
+    "id": "nav-page-campaigns",
+    "question": "What does the Campaigns page do?",
+    "keywords": ["campaigns page", "page campaigns"],
+    "answer": "Campaigns tracks marketing delivery tied to clients and contracts, including status and live budget health.",
+    "href": "/app/campaigns",
+    "navLabel": "Open Campaigns",
+    "page": "Campaigns"
+  },
+  {
+    "id": "nav-page-work",
+    "question": "What does the Work page do?",
+    "keywords": ["work page", "page work"],
+    "answer": "Work is where you log billable and non-billable hours against campaigns to track delivery and support invoicing.",
+    "href": "/app/work",
+    "navLabel": "Open Work",
+    "page": "Work"
+  },
+  {
+    "id": "nav-page-costs",
+    "question": "What does the Costs page do?",
+    "keywords": ["costs page", "page costs"],
+    "answer": "Costs records advertising spend, vendors, and pass-through expenses so budget variance and profitability stay accurate.",
+    "href": "/app/costs",
+    "navLabel": "Open Costs",
+    "page": "Costs"
+  },
+  {
+    "id": "nav-page-billing",
+    "question": "What does the Billing page do?",
+    "keywords": ["billing page", "page billing"],
+    "answer": "Billing is where you generate invoices and review revenue recognition context for clients and campaigns.",
+    "href": "/app/billing",
+    "navLabel": "Open Billing",
+    "page": "Billing"
+  },
+  {
+    "id": "nav-page-ar",
+    "question": "What does Accounts Receivable do?",
+    "keywords": ["ar page", "accounts receivable page"],
+    "answer": "Accounts Receivable monitors unpaid invoices, aging, and payment recording after invoices are sent.",
+    "href": "/app/ar",
+    "navLabel": "Open AR",
+    "page": "Accounts Receivable"
+  },
+  {
+    "id": "nav-page-reports",
+    "question": "What does the Reports page do?",
+    "keywords": ["reports page", "page reports", "analytics"],
+    "answer": "Reports shows profitability, campaign budget performance, billing, and operational metrics in one place.",
+    "href": "/app/reports",
+    "navLabel": "Open Reports",
+    "page": "Reports"
+  },
+  {
+    "id": "nav-page-approvals",
+    "question": "What does the Approvals page do?",
+    "keywords": ["approvals page", "approval center"],
+    "answer": "Approvals is the client sign-off center for creative, budget, and launch decisions before work proceeds or is billed.",
+    "href": "/app/approvals",
+    "navLabel": "Open Approvals",
+    "page": "Approvals"
+  }
+]

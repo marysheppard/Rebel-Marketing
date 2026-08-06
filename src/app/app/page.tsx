@@ -1,17 +1,14 @@
-﻿import Link from "next/link";
-import { ClicksByCampaignChart } from "@/components/Charts";
-import { ClientMapDynamic } from "@/components/ClientMapDynamic";
-import { DashboardCalendar } from "@/components/DashboardCalendar";
+import { CustomerDashboardBody } from "@/components/CustomerDashboardBody";
+import { EmployeeDashboardBody } from "@/components/EmployeeDashboardBody";
 import {
   AccountManagerDashboard,
   AgencyExecutiveDashboard,
 } from "@/components/dashboards/RoleDashboards";
-import { UpdateApprovalStatusForm } from "@/components/forms";
-import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
-import { WelcomeMessage } from "@/components/WelcomeMessage";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { paidAmount, remainingBalance } from "@/lib/finance";
 import { money, num } from "@/lib/format";
 import { getProfile, isClientRole, isMarketingRole } from "@/lib/page-auth";
+import { startOfWeek, toDateStr } from "@/lib/time";
 import type { Campaign, Client, Invoice, Profile } from "@/lib/types";
 
 type ApprovalRow = {
@@ -109,6 +106,7 @@ async function EmployeeDashboard({
     { data: assignments },
     { data: taskRows },
     { data: eventRows },
+    { data: timeEntryRows },
   ] = await Promise.all([
     supabase
       .from("clients")
@@ -133,6 +131,11 @@ async function EmployeeDashboard({
       .select("id, title, event_date, clients(client_name)")
       .eq("user_id", userId)
       .order("event_date", { ascending: true }),
+    supabase
+      .from("time_entries")
+      .select("work_date, total_hours")
+      .eq("employee_id", userId)
+      .gte("work_date", toDateStr(startOfWeek(today))),
   ]);
 
   const assignedCampaignIds = [
@@ -416,162 +419,109 @@ async function EmployeeDashboard({
 
   const totalsByCampaign = new Map<
     string,
-    { name: string; clicks: number }
+    { name: string; clicks: number; impressions: number }
   >();
+  const byDate = new Map<string, { impressions: number; clicks: number }>();
 
   for (const m of metricRows ?? []) {
     const cid = String(m.campaign_id);
     const name = campaignNameById.get(cid) ?? "Campaign";
-    const prev = totalsByCampaign.get(cid) ?? { name, clicks: 0 };
+    const prev = totalsByCampaign.get(cid) ?? {
+      name,
+      clicks: 0,
+      impressions: 0,
+    };
     prev.clicks += num(m.clicks);
+    prev.impressions += num(m.impressions);
     totalsByCampaign.set(cid, prev);
+
+    const d = String(m.metric_date ?? "");
+    if (d) {
+      const day = byDate.get(d) ?? { impressions: 0, clicks: 0 };
+      day.impressions += num(m.impressions);
+      day.clicks += num(m.clicks);
+      byDate.set(d, day);
+    }
   }
 
   const clicksByCampaign = [...totalsByCampaign.values()]
     .map((r) => ({ name: r.name, clicks: r.clicks }))
     .sort((a, b) => b.clicks - a.clicks);
 
-  const hasPerformance = clicksByCampaign.length > 0;
+  const ctrByCampaign = [...totalsByCampaign.values()]
+    .map((r) => ({
+      name: r.name,
+      ctr:
+        r.impressions > 0
+          ? Math.round((r.clicks / r.impressions) * 10000) / 100
+          : 0,
+    }))
+    .sort((a, b) => b.ctr - a.ctr);
+
+  const metricsTrend = [...byDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, v]) => ({
+      date: date.slice(5),
+      impressions: v.impressions,
+      clicks: v.clicks,
+    }));
+
+  const statusCounts = new Map<string, number>();
+  const priorityCounts = new Map<string, number>();
+  for (const t of tasks) {
+    statusCounts.set(t.status, (statusCounts.get(t.status) ?? 0) + 1);
+    priorityCounts.set(t.priority, (priorityCounts.get(t.priority) ?? 0) + 1);
+  }
+  const taskMix = [...statusCounts.entries()]
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+  const PRIORITY_ORDER = ["Urgent", "High", "Medium", "Low"];
+  const taskPriority = PRIORITY_ORDER.map((priority) => ({
+    priority,
+    count: priorityCounts.get(priority) ?? 0,
+  }));
+
+  const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekStart = startOfWeek(today);
+  const weeklyHours = dayLabels.map((day, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    const key = toDateStr(d);
+    const hours = (timeEntryRows ?? [])
+      .filter((e) => String(e.work_date) === key)
+      .reduce((s, e) => s + num(e.total_hours), 0);
+    return { day, hours: Math.round(hours * 100) / 100 };
+  });
 
   return (
-    <div>
-      <PageHeader
-        title={`Welcome back, ${profile.full_name}`}
-        subtitle={<WelcomeMessage />}
-      />
-
-      {(overdueTasks.length > 0 || awaitingApproval.length > 0) && (
-        <div className="mb-4 flex flex-wrap gap-2">
-          {overdueTasks.length > 0 ? (
-            <span className="badge badge-error badge-outline">
-              {overdueTasks.length} overdue task
-              {overdueTasks.length === 1 ? "" : "s"}
-            </span>
-          ) : null}
-          {awaitingApproval.length > 0 ? (
-            <span className="badge badge-warning badge-outline">
-              {awaitingApproval.length} awaiting approval
-            </span>
-          ) : null}
-        </div>
-      )}
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard
-          label="Clients you're on"
-          value={String(workingClients.length)}
-        />
-        <StatCard
-          label="Open tasks"
-          value={String(openTasks.length)}
-          tone={overdueTasks.length ? "warn" : undefined}
-        />
-        <StatCard
-          label="Overdue tasks"
-          value={String(overdueTasks.length)}
-          tone={overdueTasks.length ? "warn" : undefined}
-        />
-      </div>
-
-      <section className="mt-8 grid gap-4 lg:grid-cols-2">
-        <div>
-          <div className="mb-3 flex items-end justify-between gap-3">
-            <h2 className="text-xl font-bold text-[#0b1f3a]">Pressing tasks</h2>
-            <Link href="/app/tasks" className="link link-hover text-sm">
-              View all
-            </Link>
-          </div>
-          {openTasks.length === 0 ? (
-            <EmptyState
-              title="No open tasks"
-              description="Your highest-priority work will show up here."
-            />
-          ) : (
-            <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-              <table className="table table-sm">
-                <thead>
-                  <tr>
-                    <th>Task</th>
-                    <th>Due</th>
-                    <th>Priority</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {openTasks.slice(0, 3).map((t) => {
-                    const overdue =
-                      t.due_date &&
-                      t.due_date < todayStr &&
-                      t.status !== "Submitted";
-                    return (
-                      <tr key={t.id}>
-                        <td>
-                          <Link
-                            href={`/app/tasks/${t.id}`}
-                            className="link link-hover font-medium"
-                          >
-                            {t.title}
-                          </Link>
-                        </td>
-                        <td
-                          className={
-                            overdue
-                              ? "font-medium text-error"
-                              : "whitespace-nowrap"
-                          }
-                        >
-                          {t.due_date ?? "—"}
-                        </td>
-                        <td>
-                          <StatusBadge status={t.priority} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        <ClientMapDynamic
-          markers={mapMarkers}
-          missingCount={missingMapCount}
-        />
-      </section>
-
-      <section className="mt-8">
-        <div className="mb-3 flex items-end justify-between gap-3">
-          <h2 className="text-xl font-bold text-[#0b1f3a]">
-            Campaign performance
-          </h2>
-          <Link href="/app/analytics" className="link link-hover text-sm">
-            View client analytics
-          </Link>
-        </div>
-        {!hasPerformance ? (
-          <EmptyState
-            title="No performance data yet"
-            description="Clicks for your assigned campaigns will appear here."
-          />
-        ) : (
-          <ClicksByCampaignChart data={clicksByCampaign} />
-        )}
-      </section>
-
-      <section className="mt-8">
-        <div className="mb-3 flex items-end justify-between gap-3">
-          <h2 className="text-xl font-bold text-[#0b1f3a]">Schedule</h2>
-          <Link href="/app/calendar" className="link link-hover text-sm">
-            Open calendar
-          </Link>
-        </div>
-        <DashboardCalendar
-          tasks={calendarTasks}
-          campaigns={calendarCampaigns}
-          events={calendarEvents}
-          todayStr={todayStr}
-        />
-      </section>
-    </div>
+    <EmployeeDashboardBody
+      userId={userId}
+      fullName={profile.full_name}
+      todayStr={todayStr}
+      overdueCount={overdueTasks.length}
+      awaitingApprovalCount={awaitingApproval.length}
+      clientCount={workingClients.length}
+      openTaskCount={openTasks.length}
+      overdueTaskCount={overdueTasks.length}
+      tasks={openTasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        due_date: t.due_date,
+        priority: t.priority,
+        status: t.status,
+      }))}
+      mapMarkers={mapMarkers}
+      missingMapCount={missingMapCount}
+      clicksByCampaign={clicksByCampaign}
+      calendarTasks={calendarTasks}
+      calendarCampaigns={calendarCampaigns}
+      calendarEvents={calendarEvents}
+      taskMix={taskMix}
+      taskPriority={taskPriority}
+      weeklyHours={weeklyHours}
+      metricsTrend={metricsTrend}
+      ctrByCampaign={ctrByCampaign}
+    />
   );
 }
 
@@ -650,245 +600,82 @@ async function CustomerDashboard() {
   const pending = approvals.filter((a) => a.approval_status === "Pending");
   const awaitingSignature = pendingSignatures?.length ?? 0;
 
+  const campaignRows = campaigns.map((c) => {
+    const spent = costsByCampaign.get(c.id) ?? 0;
+    const budget = num(c.campaign_budget);
+    const pctUsed =
+      budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
+    const start = new Date(c.start_date).getTime();
+    const end = new Date(c.end_date).getTime();
+    const now = Date.now();
+    const timePct =
+      end > start
+        ? Math.max(
+            0,
+            Math.min(100, Math.round(((now - start) / (end - start)) * 100)),
+          )
+        : 0;
+    return {
+      id: c.id,
+      campaign_name: c.campaign_name,
+      campaign_type: c.campaign_type,
+      campaign_status: c.campaign_status,
+      start_date: c.start_date,
+      end_date: c.end_date,
+      spent,
+      budget,
+      timePct,
+      pctUsed,
+    };
+  });
+
+  const openInvoiceRows = openInvoices.map((i) => {
+    const remaining = remainingBalance(i);
+    const paid = paidAmount(i);
+    const overdue = i.due_date < todayStr;
+    const dueSoon =
+      !overdue && i.due_date <= dueSoonStr && i.due_date >= todayStr;
+    return {
+      id: i.id,
+      invoice_number: i.invoice_number,
+      due_date: i.due_date,
+      status: i.status,
+      total: num(i.total_amount),
+      paid,
+      remaining,
+      overdue,
+      dueSoon,
+    };
+  });
+
   return (
-    <div>
-      <PageHeader
-        title="Customer Dashboard"
-        subtitle={`Welcome, ${profile.full_name}. Track campaigns, balances, and deliverables.`}
-      />
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Active campaigns" value={String(
-          campaigns.filter((c) => c.campaign_status === "Active").length,
-        )} />
-        <StatCard
-          label="Total invoiced"
-          value={money(totalInvoiced)}
-        />
-        <StatCard
-          label="Amount you owe"
-          value={money(balance)}
-          tone={balance > 0 ? "warn" : "good"}
-        />
-        <StatCard
-          label="Deliverables awaiting decision"
-          value={String(pending.length)}
-          tone={pending.length ? "warn" : undefined}
-        />
-        <Link href="/app/contracts/documents" className="block">
-          <StatCard
-            label="Contracts awaiting signature"
-            value={String(awaitingSignature)}
-            tone={awaitingSignature ? "warn" : "good"}
-            hint="Open Contracts & Documents"
-          />
-        </Link>
-      </div>
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-xl font-bold text-[#0b1f3a]">
-          Campaign progress
-        </h2>
-        {campaigns.length === 0 ? (
-          <EmptyState
-            title="No campaigns yet"
-            description="When Rebel Marketing launches work for your account, progress will appear here."
-          />
-        ) : (
-          <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Campaign</th>
-                  <th>Status</th>
-                  <th>Timeline</th>
-                  <th>Budget used</th>
-                  <th>Progress</th>
-                </tr>
-              </thead>
-              <tbody>
-                {campaigns.map((c) => {
-                  const spent = costsByCampaign.get(c.id) ?? 0;
-                  const budget = num(c.campaign_budget);
-                  const pctUsed =
-                    budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
-                  const start = new Date(c.start_date).getTime();
-                  const end = new Date(c.end_date).getTime();
-                  const now = Date.now();
-                  const timePct =
-                    end > start
-                      ? Math.max(
-                          0,
-                          Math.min(100, Math.round(((now - start) / (end - start)) * 100)),
-                        )
-                      : 0;
-                  return (
-                    <tr key={c.id}>
-                      <td>
-                        <div className="font-medium">{c.campaign_name}</div>
-                        <div className="text-xs opacity-60">{c.campaign_type}</div>
-                      </td>
-                      <td>
-                        <StatusBadge status={c.campaign_status} />
-                      </td>
-                      <td className="text-sm whitespace-nowrap opacity-80">
-                        {c.start_date} → {c.end_date}
-                      </td>
-                      <td className="text-sm">
-                        {money(spent)}
-                        {budget > 0 ? (
-                          <span className="opacity-60"> / {money(budget)}</span>
-                        ) : null}
-                      </td>
-                      <td className="min-w-[10rem]">
-                        <div className="mb-1 flex justify-between text-xs opacity-70">
-                          <span>Timeline {timePct}%</span>
-                          <span>Spend {pctUsed}%</span>
-                        </div>
-                        <progress
-                          className="progress progress-primary w-full"
-                          value={timePct}
-                          max={100}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section className="mt-8 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-box border border-base-300 bg-base-100 p-5">
-          <h2 className="mb-1 text-xl font-bold text-[#0b1f3a]">
-            Amount you owe
-          </h2>
-          <p className="mb-4 text-sm opacity-70">
-            Total remaining on open invoices after payments.
-          </p>
-          <div className="mb-2 text-3xl font-bold text-[#0b1f3a]">
-            {money(balance)}
-          </div>
-          <p className="mb-4 text-sm opacity-70">
-            Total invoiced:{" "}
-            <span className="font-medium text-[#0b1f3a]">
-              {money(totalInvoiced)}
-            </span>
-          </p>
-          {balance > 0 ? (
-            <div className="mb-4 space-y-1 text-sm">
-              {nextDue ? (
-                <p>
-                  <span className="opacity-70">Next due: </span>
-                  <span className="font-medium">
-                    {nextDue.invoice_number} · {nextDue.due_date} ·{" "}
-                    {money(remainingBalance(nextDue))}
-                  </span>
-                </p>
-              ) : null}
-              <p className={overdueTotal > 0 ? "text-error" : "opacity-70"}>
-                Overdue:{" "}
-                <span className="font-medium">{money(overdueTotal)}</span>
-              </p>
-            </div>
-          ) : (
-            <p className="mb-4 text-sm text-success">
-              You&apos;re all caught up — nothing outstanding right now.
-            </p>
-          )}
-          {balance > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="table table-sm">
-                <thead>
-                  <tr>
-                    <th>Invoice</th>
-                    <th>Due</th>
-                    <th>Status</th>
-                    <th className="text-right">Total</th>
-                    <th className="text-right">Paid</th>
-                    <th className="text-right">Remaining</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {openInvoices.slice(0, 8).map((i) => {
-                    const remaining = remainingBalance(i);
-                    const paid = paidAmount(i);
-                    const overdue = i.due_date < todayStr;
-                    const dueSoon =
-                      !overdue &&
-                      i.due_date <= dueSoonStr &&
-                      i.due_date >= todayStr;
-                    return (
-                      <tr key={i.id}>
-                        <td className="font-medium">{i.invoice_number}</td>
-                        <td className="whitespace-nowrap">
-                          <div>{i.due_date}</div>
-                          {overdue ? (
-                            <span className="badge badge-error badge-sm mt-1">
-                              Overdue
-                            </span>
-                          ) : dueSoon ? (
-                            <span className="badge badge-warning badge-sm mt-1">
-                              Due soon
-                            </span>
-                          ) : null}
-                        </td>
-                        <td>
-                          <StatusBadge status={i.status} />
-                        </td>
-                        <td className="text-right">{money(num(i.total_amount))}</td>
-                        <td className="text-right">{money(paid)}</td>
-                        <td className="text-right font-medium">
-                          {money(remaining)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : invoices.length === 0 ? (
-            <p className="text-sm opacity-60">No invoices on file.</p>
-          ) : null}
-        </div>
-
-        <div className="rounded-box border border-base-300 bg-base-100 p-5">
-          <h2 className="mb-1 text-xl font-bold text-[#0b1f3a]">
-            Approve or reject deliverables
-          </h2>
-          <p className="mb-4 text-sm opacity-70">
-            Review creative and campaign deliverables waiting on your decision.
-          </p>
-          {pending.length === 0 ? (
-            <p className="text-sm opacity-60">
-              Nothing waiting for approval right now.
-            </p>
-          ) : (
-            <ul className="space-y-4">
-              {pending.map((a) => (
-                <li
-                  key={a.id}
-                  className="rounded-xl border border-[#0b1f3a14] bg-[#f7f9fc] p-4"
-                >
-                  <div className="mb-1 text-sm font-semibold text-[#0b1f3a]">
-                    {a.campaigns?.campaign_name ?? "Campaign"}
-                  </div>
-                  <div className="mb-1 text-xs uppercase tracking-wide opacity-60">
-                    {a.approval_type} · requested {a.requested_date}
-                  </div>
-                  <p className="mb-3 text-sm">{a.description}</p>
-                  <UpdateApprovalStatusForm
-                    approvalId={a.id}
-                    currentStatus={a.approval_status}
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-    </div>
+    <CustomerDashboardBody
+      userId={profile.id}
+      fullName={profile.full_name}
+      activeCampaignCount={
+        campaigns.filter((c) => c.campaign_status === "Active").length
+      }
+      totalInvoiced={totalInvoiced}
+      balance={balance}
+      pendingCount={pending.length}
+      awaitingSignature={awaitingSignature}
+      campaigns={campaignRows}
+      openInvoices={openInvoiceRows}
+      nextDueLabel={
+        nextDue
+          ? `${nextDue.invoice_number} · ${nextDue.due_date} · ${money(remainingBalance(nextDue))}`
+          : null
+      }
+      overdueTotal={overdueTotal}
+      invoiceCount={invoices.length}
+      pendingApprovals={pending.map((a) => ({
+        id: a.id,
+        approval_type: a.approval_type,
+        description: a.description,
+        requested_date: a.requested_date,
+        approval_status: a.approval_status,
+        campaign_name: a.campaigns?.campaign_name ?? "Campaign",
+      }))}
+    />
   );
 }

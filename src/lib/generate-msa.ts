@@ -1,4 +1,5 @@
 import { money } from "@/lib/format";
+import { formatAddress, formatEmail, formatPhone } from "@/lib/contact-format";
 import type { Client, Contract } from "@/lib/types";
 
 type AgreementInput = {
@@ -18,12 +19,18 @@ function esc(value: string | number | null | undefined) {
 }
 
 function addressBlock(client: Client) {
-  const lines = [
-    client.street_address,
-    client.address_line_2,
-    [client.city, client.state, client.zip_code].filter(Boolean).join(", "),
-  ].filter(Boolean);
-  return lines.map(esc).join("<br/>");
+  const formatted = formatAddress(
+    {
+      street_address: client.street_address,
+      address_line_2: client.address_line_2,
+      city: client.city,
+      state: client.state,
+      zip_code: client.zip_code,
+    },
+    "multiline",
+  );
+  if (formatted === "—") return "—";
+  return formatted.split("\n").map(esc).join("<br/>");
 }
 
 export function generateMarketingServicesAgreement(input: AgreementInput) {
@@ -78,7 +85,8 @@ export function generateMarketingServicesAgreement(input: AgreementInput) {
     <tr><td>Client legal name</td><td>${esc(legalName)}</td></tr>
     <tr><td>Business address</td><td>${addressBlock(client) || "—"}</td></tr>
     <tr><td>Primary contact</td><td>${esc(contactName)}${client.contact_job_title ? `, ${esc(client.contact_job_title)}` : ""}</td></tr>
-    <tr><td>Primary contact email</td><td>${esc(client.contact_email || "—")}</td></tr>
+    <tr><td>Primary contact email</td><td>${esc(formatEmail(client.contact_email))}</td></tr>
+    <tr><td>Primary contact phone</td><td>${esc(formatPhone(client.contact_phone))}</td></tr>
     <tr><td>Authorized to approve deliverables</td><td>${client.authorized_approver ? "Yes" : "Not designated"}</td></tr>
   </table>
 

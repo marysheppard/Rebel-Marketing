@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { ClientsExplorer } from "@/components/ClientsExplorer";
-import { PageHeader } from "@/components/ui";
 import { canManageClients, getProfile } from "@/lib/page-auth";
 
 export default async function ClientsPage() {
@@ -22,27 +21,8 @@ export default async function ClientsPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Clients"
-        subtitle="One account per company — contracts and engagements attach here"
-        actions={
-          showForm ? (
-            <div className="flex flex-wrap gap-2">
-              <Link href="/app/clients/intake" className="btn btn-primary btn-sm">
-                New Client Intake
-              </Link>
-              <Link
-                href="/app/contracts/builder"
-                className="btn btn-outline btn-sm"
-              >
-                New contract
-              </Link>
-            </div>
-          ) : null
-        }
-      />
-
       <ClientsExplorer
+        canManage={showForm}
         source={{
           clients: list.map((c) => ({
             id: c.id,

@@ -30,6 +30,7 @@ import {
 import { NotificationBell } from "@/components/NotificationBell";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { RebelLogo } from "@/components/RebelLogo";
+import { SiteFooter } from "@/components/SiteFooter";
 import { createClient } from "@/lib/supabase/client";
 import { ROLE_LABELS, type Profile, type UserRole } from "@/lib/types";
 
@@ -381,6 +382,13 @@ export function AppShell({
           </Suspense>
           {children}
         </main>
+        <SiteFooter
+          variant="app"
+          links={forRole.map((item) => ({
+            href: item.href,
+            label: item.label,
+          }))}
+        />
       </div>
       <div className="drawer-side z-30">
         <label htmlFor="app-drawer" className="drawer-overlay" />
@@ -430,6 +438,10 @@ export function AppShell({
           </div>
         </aside>
       </div>
+      {/* Assistant temporarily disabled — re-enable with:
+          import { ChatWidget } from "@/components/AIChat";
+          <ChatWidget userId={profile.id} role={profile.role} />
+      */}
     </div>
   );
 }

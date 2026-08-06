@@ -7,6 +7,7 @@ import {
   CampaignStatusPieChart,
 } from "@/components/Charts";
 import { CreateCampaignForm } from "@/components/forms";
+import { CampaignExportButton } from "@/components/campaigns/CampaignExportButton";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { money } from "@/lib/format";
 
@@ -223,15 +224,18 @@ export function CampaignsBoard({
         title="Campaigns"
         subtitle="Delivery tracking with live budget health"
         actions={
-          showCreate ? (
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => setShowForm((v) => !v)}
-            >
-              {showForm ? "Cancel" : "New campaign"}
-            </button>
-          ) : undefined
+          <div className="flex flex-wrap gap-2">
+            <CampaignExportButton items={items} />
+            {showCreate ? (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setShowForm((v) => !v)}
+              >
+                {showForm ? "Cancel" : "New campaign"}
+              </button>
+            ) : null}
+          </div>
         }
       />
 

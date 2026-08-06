@@ -34,6 +34,9 @@ const markerIcon = L.icon({
 
 function FitMarkers({ markers }: { markers: ClientMapMarker[] }) {
   const map = useMap();
+  const markerKey = markers
+    .map((m) => `${m.id}:${m.lat}:${m.lng}`)
+    .join("|");
 
   useEffect(() => {
     if (markers.length === 0) {
@@ -48,7 +51,9 @@ function FitMarkers({ markers }: { markers: ClientMapMarker[] }) {
       markers.map((m) => [m.lat, m.lng] as [number, number]),
     );
     map.fitBounds(bounds, { padding: [40, 40], maxZoom: 11 });
-  }, [map, markers]);
+    // markerKey captures coordinate identity; avoid depending on array reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, markerKey]);
 
   return null;
 }

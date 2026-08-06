@@ -3,12 +3,14 @@
 import { useCallback, useMemo, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/ui";
+import { ListExportButton } from "@/components/exports/ListExportButton";
 import { ArFilterBar } from "@/components/ar/ArFilterBar";
 import { ArSummaryCards } from "@/components/ar/ArSummaryCards";
 import { ArCharts } from "@/components/ar/ArCharts";
 import { ArDetailsTable } from "@/components/ar/ArDetailsTable";
 import {
   buildArDashboardModel,
+  PAYMENT_STATUS_LABELS,
   type ArInvoiceRow,
   type PaymentStatusKey,
 } from "@/lib/ar/calculations";
@@ -127,19 +129,24 @@ export function ArDashboard({
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
 
+  const searchKey = searchParams.toString();
+
   const filters = useMemo(
-    () => parseFilters(new URLSearchParams(searchParams.toString())),
-    [searchParams],
+    () => parseFilters(new URLSearchParams(searchKey)),
+    [searchKey],
   );
 
-  const trendGroupParam = searchParams.get("trendGroup") as ArTrendGroupBy | null;
+  const trendGroupParam = new URLSearchParams(searchKey).get(
+    "trendGroup",
+  ) as ArTrendGroupBy | null;
   const trendGroup: ArTrendGroupBy =
     trendGroupParam && TREND_GROUP_VALUES.includes(trendGroupParam)
       ? trendGroupParam
       : DEFAULT_AR_TREND_GROUP;
   const trendSeries = useMemo(
-    () => parseArTrendSeries(searchParams.get("trendSeries")),
-    [searchParams],
+    () =>
+      parseArTrendSeries(new URLSearchParams(searchKey).get("trendSeries")),
+    [searchKey],
   );
 
   function withExtras(params: URLSearchParams) {
@@ -232,11 +239,50 @@ export function ArDashboard({
         title="Accounts Receivable"
         subtitle="Collections, aging, and payment recording"
         actions={
-          showRecordPayment ? (
-            <a href="#record-payment" className="btn btn-primary btn-sm">
-              Record Payment
-            </a>
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            <ListExportButton
+              className="btn btn-outline btn-sm gap-1"
+              title="Export AR invoices"
+              description="Downloads the invoices matching your current AR filters."
+              filenameBase="accounts-receivable"
+              matchLabel="invoices"
+              headers={[
+                "Invoice #",
+                "Client",
+                "Invoice Date",
+                "Due Date",
+                "Total",
+                "Paid",
+                "Remaining",
+                "Status",
+                "Payment Status",
+                "Aging",
+                "Days Out",
+                "Disputed",
+              ]}
+              items={model.filtered.map((r) => ({
+                "Invoice #": r.invoice_number,
+                Client: r.clientName,
+                "Invoice Date": r.invoice_date,
+                "Due Date": r.due_date,
+                Total: Number(r.total_amount).toFixed(2),
+                Paid: r.paid.toFixed(2),
+                Remaining: r.remaining.toFixed(2),
+                Status: r.status,
+                "Payment Status":
+                  PAYMENT_STATUS_LABELS[r.paymentStatus] ?? r.paymentStatus,
+                Aging: r.agingBucket,
+                "Days Out": r.daysOut == null ? "—" : String(r.daysOut),
+                Disputed: r.disputed ? "Yes" : "No",
+              }))}
+              filterConfig={{ showDates: false }}
+            />
+            {showRecordPayment ? (
+              <a href="#record-payment" className="btn btn-primary btn-sm">
+                Record Payment
+              </a>
+            ) : null}
+          </div>
         }
       />
 

@@ -1,3 +1,4 @@
+import { ListExportButton } from "@/components/exports/ListExportButton";
 import { PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import {
   buildRevenueRecognitionRows,
@@ -24,11 +25,68 @@ export default async function AccountingPage() {
   });
   const sums = sumRecognition(rows);
 
+  const clientOptions = [
+    ...new Map(rows.map((r) => [r.clientId, r.clientName] as const)).entries(),
+  ]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const paymentStatuses = [
+    ...new Set(rows.map((r) => r.paymentStatus)),
+  ].sort();
+
   return (
     <div className="space-y-8">
       <PageHeader
         title="Revenue & Accounting"
         subtitle="Management / accounting reporting — estimates from contracts, invoices, and work (not GAAP financial statements)"
+        actions={
+          <ListExportButton
+            title="Export accounting report"
+            description="Filter by client and payment status, then download CSV or PDF."
+            filenameBase="accounting-revenue"
+            matchLabel="contracts"
+            className="btn btn-primary btn-sm gap-1"
+            headers={[
+              "Client",
+              "Contract",
+              "Contract #",
+              "Contract Value",
+              "Billing Period",
+              "Amount Billed",
+              "Revenue Recognized",
+              "Deferred",
+              "Unbilled",
+              "AR",
+              "Payment Status",
+              "Contract Status",
+            ]}
+            items={rows.map((r) => ({
+              _clientId: r.clientId,
+              _status: r.paymentStatus,
+              Client: r.clientName,
+              Contract: r.contractName,
+              "Contract #": r.contractNumber,
+              "Contract Value": r.contractValue.toFixed(2),
+              "Billing Period": r.billingPeriod,
+              "Amount Billed": r.amountBilled.toFixed(2),
+              "Revenue Recognized": r.revenueRecognized.toFixed(2),
+              Deferred: r.deferredRevenue.toFixed(2),
+              Unbilled: r.unbilledRevenue.toFixed(2),
+              AR: r.accountsReceivable.toFixed(2),
+              "Payment Status": r.paymentStatus,
+              "Contract Status": r.contractStatus,
+            }))}
+            filterConfig={{
+              clientKey: "_clientId",
+              clients: clientOptions,
+              statusKey: "_status",
+              statuses: paymentStatuses,
+              statusLabel: "Payment status",
+              showDates: false,
+            }}
+          />
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">

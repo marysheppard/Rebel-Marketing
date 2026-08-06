@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ExceptionStatusForm } from "@/components/dashboards/ExceptionStatusForm";
 import { SeverityBadge } from "@/components/dashboards/AlertPanel";
+import { ListExportButton } from "@/components/exports/ListExportButton";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { buildControlAlerts, SEVERITY_LABELS } from "@/lib/controls";
 import { loadFinanceBundle } from "@/lib/finance-data";
@@ -98,6 +99,49 @@ export default async function ControlsPage() {
       <PageHeader
         title="Controls & Exceptions"
         subtitle="Agency control exceptions — mark Open, Under Review, or Resolved"
+        actions={
+          <ListExportButton
+            className="btn btn-primary btn-sm gap-1"
+            title="Export exceptions"
+            description="Filter by status, severity, and date, then download CSV or PDF."
+            filenameBase="control-exceptions"
+            matchLabel="exceptions"
+            headers={[
+              "Type",
+              "Client",
+              "Detected",
+              "Severity",
+              "Description",
+              "Status",
+              "Reviewer",
+            ]}
+            items={exceptions.map((ex) => ({
+              _status: ex.status,
+              _type: ex.severity,
+              _date: ex.detected_at?.slice(0, 10) ?? "",
+              Type: ex.exception_type,
+              Client:
+                (ex.clients as { client_name?: string } | null)?.client_name ??
+                "—",
+              Detected: ex.detected_at?.slice(0, 10) ?? "—",
+              Severity: ex.severity,
+              Description: ex.description,
+              Status: ex.status,
+              Reviewer:
+                (ex.profiles as { full_name?: string } | null)?.full_name ??
+                "—",
+            }))}
+            filterConfig={{
+              statusKey: "_status",
+              statuses: [...new Set(exceptions.map((e) => e.status))].sort(),
+              typeKey: "_type",
+              types: [...new Set(exceptions.map((e) => e.severity))].sort(),
+              typeLabel: "Severity",
+              dateKey: "_date",
+              showDates: true,
+            }}
+          />
+        }
       />
 
       {!exceptions.length ? (

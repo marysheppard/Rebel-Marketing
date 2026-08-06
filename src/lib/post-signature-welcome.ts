@@ -6,9 +6,10 @@ import {
 } from "@/lib/email/welcome-activation-template";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { SUPPORT_CONTACT } from "@/data/supportContact";
 
 const AGENCY_NAME = "Rebel Marketing";
-const AGENCY_FALLBACK_EMAIL = "hello@rebel.demo";
+const AGENCY_FALLBACK_EMAIL = SUPPORT_CONTACT.email;
 
 function appBaseUrl() {
   return (

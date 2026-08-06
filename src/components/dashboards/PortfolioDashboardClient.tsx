@@ -8,6 +8,10 @@ import {
   EmployeeTrackChart,
   MonthlySeriesChart,
 } from "@/components/Charts";
+import {
+  CustomizeLayoutButton,
+  DashboardCustomizePanel,
+} from "@/components/dashboards/DashboardCustomizePanel";
 import { StatusBadge, StatCard } from "@/components/ui";
 import { budgetHealth, remainingBalance } from "@/lib/finance";
 import { money, num, pct } from "@/lib/format";
@@ -19,6 +23,15 @@ import {
   type PeriodKey,
 } from "@/lib/period";
 import { withPeriod } from "@/lib/period-url";
+import {
+  AGENCY_PORTFOLIO_SECTIONS,
+  AGENCY_PORTFOLIO_STORAGE,
+  AM_PORTFOLIO_SECTIONS,
+  AM_PORTFOLIO_STORAGE,
+  type AgencyPortfolioSectionId,
+  type AmPortfolioSectionId,
+} from "@/lib/portfolio-dashboard-layout";
+import { useDashboardLayout } from "@/lib/use-dashboard-layout";
 import { usePeriodParam } from "@/lib/use-period-param";
 
 export type PortfolioDashboardSource = {
@@ -107,14 +120,28 @@ function laborByClient(
 export function PortfolioDashboardClient({
   source,
   variant = "agency",
+  userId,
 }: {
   source: PortfolioDashboardSource;
   variant?: PortfolioDashboardVariant;
+  userId: string;
 }) {
   const isAm = variant === "account_manager";
   const { period, setPeriod } = usePeriodParam("ytd");
   const range = useMemo(() => resolvePeriod(period, "", ""), [period]);
   const p = (href: string) => withPeriod(href, period);
+
+  const agencyLayout = useDashboardLayout({
+    userId,
+    storagePrefix: AGENCY_PORTFOLIO_STORAGE,
+    sections: AGENCY_PORTFOLIO_SECTIONS,
+  });
+  const amLayout = useDashboardLayout({
+    userId,
+    storagePrefix: AM_PORTFOLIO_STORAGE,
+    sections: AM_PORTFOLIO_SECTIONS,
+  });
+  const layout = isAm ? amLayout : agencyLayout;
 
   const periodInvoices = useMemo(
     () =>
@@ -402,130 +429,11 @@ export function PortfolioDashboardClient({
     },
   ];
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {isAm ? "My portfolio" : "Executive overview"}
-          </h1>
-          <p className="mt-1 text-sm opacity-70">
-            {isAm
-              ? `What needs you today · ${source.fullName} · ${source.clients.length} client${source.clients.length === 1 ? "" : "s"}`
-              : `Where the business is unhealthy · ${source.fullName}`}
-          </p>
-          <p className="text-xs opacity-50">
-            Figures use {range.label}
-            {range.start || range.end
-              ? ` (${range.start ?? "…"} → ${range.end ?? "…"})`
-              : ""}
-            {isAm ? "." : ". AR is current open balance."}
-          </p>
-        </div>
-        <label className="form-control w-full min-w-0 max-w-xs">
-          <span className="label-text text-xs opacity-70">Time period</span>
-          <select
-            className="select select-bordered select-sm w-full max-w-full"
-            value={period}
-            onChange={(e) => setPeriod(e.target.value as PeriodKey)}
-          >
-            {DASH_PERIODS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      {attention.length ? (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-base-300 pb-4 text-sm">
-          <span className="font-medium opacity-70">Needs attention</span>
-          {attention.map((a) => (
-            <Link
-              key={a.href + a.label}
-              href={a.href}
-              className="link link-hover text-error/90"
-            >
-              {a.label}
-            </Link>
-          ))}
-          <Link href="/app/alerts" className="link link-hover text-sm opacity-60">
-            All alerts
-          </Link>
-        </div>
-      ) : (
-        <p className="border-b border-base-300 pb-4 text-sm opacity-60">
-          {isAm
-            ? "Nothing urgent on your book right now."
-            : "No urgent exceptions right now."}{" "}
-          <Link href="/app/alerts" className="link link-hover">
-            View alerts
-          </Link>
-        </p>
-      )}
-
-      {isAm ? (
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">
-            Delivery today
-          </h2>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {deliveryLinks.map((d) => (
-              <Link
-                key={d.href}
-                href={d.href}
-                className="rounded-box border border-base-300 bg-base-100 px-4 py-3 transition hover:border-primary/40 hover:bg-base-200/40"
-              >
-                <div className="font-semibold">{d.label}</div>
-                <div
-                  className={`text-sm ${d.tone === "warn" ? "text-warning" : "opacity-60"}`}
-                >
-                  {d.hint}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {isAm ? (
-          <>
-            <StatCard
-              label="Pending approvals"
-              value={String(source.pendingApprovals)}
-              hint="Needs decision"
-              tone={source.pendingApprovals > 0 ? "warn" : "good"}
-              href="/app/approvals"
-            />
-            <StatCard
-              label="Clients"
-              value={String(source.clients.length)}
-              hint="In your book"
-              href={p("/app/clients")}
-            />
-            <StatCard
-              label="Campaigns at risk"
-              value={String(campsOver)}
-              hint="Over budget"
-              tone={campsOver > 0 ? "bad" : "good"}
-              href={p("/app/campaigns")}
-            />
-            <StatCard
-              label="Book revenue"
-              value={money(revenue)}
-              hint={range.label}
-              href={p("/app/profitability")}
-            />
-            <StatCard
-              label="Book margin"
-              value={pct(margin)}
-              href={p("/app/profitability")}
-            />
-          </>
-        ) : (
-          <>
+  function renderAgencySection(id: AgencyPortfolioSectionId) {
+    switch (id) {
+      case "kpis":
+        return (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <StatCard
               label="Open exceptions"
               value={String(source.openExceptions)}
@@ -559,216 +467,431 @@ export function PortfolioDashboardClient({
               hint={range.label}
               href={p("/app/profitability")}
             />
-          </>
-        )}
-      </div>
+          </div>
+        );
+      case "firm_metrics":
+        return (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatCard
+              label="Revenue"
+              value={money(revenue)}
+              hint={range.label}
+              href="/app/accounting"
+            />
+            <StatCard
+              label="Profit"
+              value={money(profit)}
+              tone={profit >= 0 ? "good" : "bad"}
+              hint={range.label}
+              href={p("/app/profitability")}
+            />
+            <StatCard
+              label="Open invoices"
+              value={String(outstandingCount)}
+              href="/app/billing"
+            />
+          </div>
+        );
+      case "profit_charts":
+        return (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="min-w-0">
+              <ClientProfitChart
+                title="Profitability by customer"
+                compact
+                filterable
+                href={p("/app/profitability")}
+                data={byClient.map((r) => ({
+                  name: r.name,
+                  revenue: r.revenue,
+                  costs: r.costs,
+                  profit: r.profit,
+                }))}
+              />
+            </div>
+            <Link
+              href={p("/app/profitability")}
+              className="block min-w-0 transition hover:opacity-95"
+            >
+              <MonthlySeriesChart
+                title="Gross profit"
+                data={profitSeries}
+                dataKey="profit"
+                color="#4ade80"
+              />
+            </Link>
+          </div>
+        );
+      case "health_charts":
+        return (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <EmployeeTrackChart data={onTrackData} />
+            <Link
+              href={p("/app/campaigns")}
+              className="block min-w-0 transition hover:opacity-95"
+            >
+              <EmployeeBudgetChart data={onBudgetData} />
+            </Link>
+          </div>
+        );
+      case "team_capacity":
+        return (
+          <section className="space-y-3">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Team capacity</h2>
+                <p className="text-xs opacity-60">
+                  Open and overdue tasks by person — who is stretched
+                </p>
+              </div>
+              <Link href="/app/employees" className="link link-primary text-sm">
+                Employees
+              </Link>
+            </div>
+            <div className="overflow-x-auto rounded-box border border-base-300/80">
+              <table className="table table-sm">
+                <thead className="sticky top-0 z-10 bg-base-100">
+                  <tr>
+                    <th>Person</th>
+                    <th className="text-right">Open tasks</th>
+                    <th className="text-right">Overdue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {capacityRows.slice(0, 8).map((r) => (
+                    <tr key={r.id} className="hover">
+                      <td className="font-medium">{r.name}</td>
+                      <td className="text-right">{r.open}</td>
+                      <td
+                        className={`text-right ${r.overdue > 0 ? "text-error font-medium" : ""}`}
+                      >
+                        {r.overdue}
+                      </td>
+                    </tr>
+                  ))}
+                  {!capacityRows.length ? (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        className="py-6 text-center text-sm opacity-60"
+                      >
+                        No open staff tasks to show.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      default:
+        return null;
+    }
+  }
 
-      {!isAm ? (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <StatCard
-            label="Revenue"
-            value={money(revenue)}
-            hint={range.label}
-            href="/app/accounting"
-          />
-          <StatCard
-            label="Profit"
-            value={money(profit)}
-            tone={profit >= 0 ? "good" : "bad"}
-            hint={range.label}
-            href={p("/app/profitability")}
-          />
-          <StatCard
-            label="Open invoices"
-            value={String(outstandingCount)}
-            href="/app/billing"
-          />
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="min-w-0">
-          <ClientProfitChart
-            title={isAm ? "Profit by client (your book)" : "Profitability by customer"}
-            compact
-            filterable
-            href={p("/app/profitability")}
-            data={byClient.map((r) => ({
-              name: r.name,
-              revenue: r.revenue,
-              costs: r.costs,
-              profit: r.profit,
-            }))}
-          />
-        </div>
-        <Link
-          href={p("/app/profitability")}
-          className="block min-w-0 transition hover:opacity-95"
-        >
-          <MonthlySeriesChart
-            title="Gross profit"
-            data={profitSeries}
-            dataKey="profit"
-            color="#4ade80"
-          />
-        </Link>
-      </div>
-
-      {isAm ? (
-        <Link
-          href={p("/app/campaigns")}
-          className="block min-w-0 max-w-xl transition hover:opacity-95"
-        >
-          <EmployeeBudgetChart data={onBudgetData} />
-        </Link>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <EmployeeTrackChart data={onTrackData} />
+  function renderAmSection(id: AmPortfolioSectionId) {
+    switch (id) {
+      case "delivery":
+        return (
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">
+              Delivery today
+            </h2>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {deliveryLinks.map((d) => (
+                <Link
+                  key={d.href}
+                  href={d.href}
+                  className="rounded-box border border-base-300 bg-base-100 px-4 py-3 transition hover:border-primary/40 hover:bg-base-200/40"
+                >
+                  <div className="font-semibold">{d.label}</div>
+                  <div
+                    className={`text-sm ${d.tone === "warn" ? "text-warning" : "opacity-60"}`}
+                  >
+                    {d.hint}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        );
+      case "kpis":
+        return (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <StatCard
+              label="Pending approvals"
+              value={String(source.pendingApprovals)}
+              hint="Needs decision"
+              tone={source.pendingApprovals > 0 ? "warn" : "good"}
+              href="/app/approvals"
+            />
+            <StatCard
+              label="Clients"
+              value={String(source.clients.length)}
+              hint="In your book"
+              href={p("/app/clients")}
+            />
+            <StatCard
+              label="Campaigns at risk"
+              value={String(campsOver)}
+              hint="Over budget"
+              tone={campsOver > 0 ? "bad" : "good"}
+              href={p("/app/campaigns")}
+            />
+            <StatCard
+              label="Book revenue"
+              value={money(revenue)}
+              hint={range.label}
+              href={p("/app/profitability")}
+            />
+            <StatCard
+              label="Book margin"
+              value={pct(margin)}
+              href={p("/app/profitability")}
+            />
+          </div>
+        );
+      case "profit_charts":
+        return (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="min-w-0">
+              <ClientProfitChart
+                title="Profit by client (your book)"
+                compact
+                filterable
+                href={p("/app/profitability")}
+                data={byClient.map((r) => ({
+                  name: r.name,
+                  revenue: r.revenue,
+                  costs: r.costs,
+                  profit: r.profit,
+                }))}
+              />
+            </div>
+            <Link
+              href={p("/app/profitability")}
+              className="block min-w-0 transition hover:opacity-95"
+            >
+              <MonthlySeriesChart
+                title="Gross profit"
+                data={profitSeries}
+                dataKey="profit"
+                color="#4ade80"
+              />
+            </Link>
+          </div>
+        );
+      case "budget_chart":
+        return (
           <Link
             href={p("/app/campaigns")}
-            className="block min-w-0 transition hover:opacity-95"
+            className="block min-w-0 max-w-xl transition hover:opacity-95"
           >
             <EmployeeBudgetChart data={onBudgetData} />
           </Link>
+        );
+      case "my_clients":
+        return (
+          <section className="space-y-3">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">My Clients</h2>
+                <p className="text-xs opacity-60">
+                  Open a client hub for campaigns, approvals, and costs
+                </p>
+              </div>
+              <Link
+                href={p("/app/clients")}
+                className="link link-primary text-sm"
+              >
+                View all
+              </Link>
+            </div>
+            <div className="overflow-x-auto rounded-box border border-base-300/80">
+              <table className="table table-sm">
+                <thead className="sticky top-0 z-10 bg-base-100">
+                  <tr>
+                    <th>Client</th>
+                    <th className="text-right">Revenue</th>
+                    <th className="text-right">Profit</th>
+                    <th className="text-right">Margin</th>
+                    <th>Status</th>
+                    <th>Hub</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byClient.slice(0, 5).map((r) => (
+                    <tr key={r.clientId} className="hover">
+                      <td>
+                        <Link
+                          href={`/app/clients/${r.clientId}`}
+                          className="link link-hover font-medium"
+                        >
+                          {r.name}
+                        </Link>
+                      </td>
+                      <td className="text-right">{money(r.revenue)}</td>
+                      <td
+                        className={`text-right ${r.profit < 0 ? "text-error" : ""}`}
+                      >
+                        {money(r.profit)}
+                      </td>
+                      <td className="text-right">{pct(r.margin)}</td>
+                      <td>
+                        <StatusBadge status={r.status} />
+                      </td>
+                      <td>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <Link
+                            href={`/app/campaigns?client=${r.clientId}`}
+                            className="link link-hover opacity-70"
+                          >
+                            Campaigns
+                          </Link>
+                          <Link
+                            href={`/app/approvals?client=${r.clientId}`}
+                            className="link link-hover opacity-70"
+                          >
+                            Approvals
+                          </Link>
+                          <Link
+                            href={`/app/costs?client=${r.clientId}`}
+                            className="link link-hover opacity-70"
+                          >
+                            Costs
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {!byClient.length ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="py-6 text-center text-sm opacity-60"
+                      >
+                        No client activity in this period.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      default:
+        return null;
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {isAm ? "My portfolio" : "Executive overview"}
+          </h1>
+          <p className="mt-1 text-sm opacity-70">
+            {isAm
+              ? `What needs you today · ${source.fullName} · ${source.clients.length} client${source.clients.length === 1 ? "" : "s"}`
+              : `Where the business is unhealthy · ${source.fullName}`}
+          </p>
+          <p className="text-xs opacity-50">
+            Figures use {range.label}
+            {range.start || range.end
+              ? ` (${range.start ?? "…"} → ${range.end ?? "…"})`
+              : ""}
+            {isAm ? "." : ". AR is current open balance."}
+          </p>
         </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <CustomizeLayoutButton onClick={() => layout.setPanelOpen(true)} />
+          <label className="form-control w-full min-w-0 max-w-xs">
+            <span className="label-text text-xs opacity-70">Time period</span>
+            <select
+              className="select select-bordered select-sm w-full max-w-full"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value as PeriodKey)}
+            >
+              {DASH_PERIODS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      {attention.length ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-base-300 pb-4 text-sm">
+          <span className="font-medium opacity-70">Needs attention</span>
+          {attention.map((a) => (
+            <Link
+              key={a.href + a.label}
+              href={a.href}
+              className="link link-hover text-error/90"
+            >
+              {a.label}
+            </Link>
+          ))}
+          <Link href="/app/alerts" className="link link-hover text-sm opacity-60">
+            All alerts
+          </Link>
+        </div>
+      ) : (
+        <p className="border-b border-base-300 pb-4 text-sm opacity-60">
+          {isAm
+            ? "Nothing urgent on your book right now."
+            : "No urgent exceptions right now."}{" "}
+          <Link href="/app/alerts" className="link link-hover">
+            View alerts
+          </Link>
+        </p>
       )}
 
-      {isAm ? (
-        <section className="space-y-3">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">My Clients</h2>
-              <p className="text-xs opacity-60">
-                Open a client hub for campaigns, approvals, and costs
-              </p>
-            </div>
-            <Link
-              href={p("/app/clients")}
-              className="link link-primary text-sm"
-            >
-              View all
-            </Link>
-          </div>
-          <div className="overflow-x-auto rounded-box border border-base-300/80">
-            <table className="table table-sm">
-              <thead className="sticky top-0 z-10 bg-base-100">
-                <tr>
-                  <th>Client</th>
-                  <th className="text-right">Revenue</th>
-                  <th className="text-right">Profit</th>
-                  <th className="text-right">Margin</th>
-                  <th>Status</th>
-                  <th>Hub</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byClient.slice(0, 5).map((r) => (
-                  <tr key={r.clientId} className="hover">
-                    <td>
-                      <Link
-                        href={`/app/clients/${r.clientId}`}
-                        className="link link-hover font-medium"
-                      >
-                        {r.name}
-                      </Link>
-                    </td>
-                    <td className="text-right">{money(r.revenue)}</td>
-                    <td
-                      className={`text-right ${r.profit < 0 ? "text-error" : ""}`}
-                    >
-                      {money(r.profit)}
-                    </td>
-                    <td className="text-right">{pct(r.margin)}</td>
-                    <td>
-                      <StatusBadge status={r.status} />
-                    </td>
-                    <td>
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        <Link
-                          href={`/app/campaigns?client=${r.clientId}`}
-                          className="link link-hover opacity-70"
-                        >
-                          Campaigns
-                        </Link>
-                        <Link
-                          href={`/app/approvals?client=${r.clientId}`}
-                          className="link link-hover opacity-70"
-                        >
-                          Approvals
-                        </Link>
-                        <Link
-                          href={`/app/costs?client=${r.clientId}`}
-                          className="link link-hover opacity-70"
-                        >
-                          Costs
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {!byClient.length ? (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="py-6 text-center text-sm opacity-60"
-                    >
-                      No client activity in this period.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
+      {layout.visible.length === 0 ? (
+        <div className="rounded-box border border-dashed border-base-300 bg-base-200/40 p-10 text-center">
+          <p className="font-semibold">All sections are hidden</p>
+          <p className="mt-1 text-sm opacity-60">
+            Use Customize layout to show dashboard sections again.
+          </p>
+          <CustomizeLayoutButton
+            className="btn btn-primary btn-sm mt-4 gap-2"
+            onClick={() => layout.setPanelOpen(true)}
+          />
+        </div>
+      ) : isAm ? (
+        (layout.visible as AmPortfolioSectionId[]).map((id) => (
+          <div key={id}>{renderAmSection(id)}</div>
+        ))
       ) : (
-        <section className="space-y-3">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Team capacity</h2>
-              <p className="text-xs opacity-60">
-                Open and overdue tasks by person — who is stretched
-              </p>
-            </div>
-            <Link href="/app/employees" className="link link-primary text-sm">
-              Employees
-            </Link>
-          </div>
-          <div className="overflow-x-auto rounded-box border border-base-300/80">
-            <table className="table table-sm">
-              <thead className="sticky top-0 z-10 bg-base-100">
-                <tr>
-                  <th>Person</th>
-                  <th className="text-right">Open tasks</th>
-                  <th className="text-right">Overdue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {capacityRows.slice(0, 8).map((r) => (
-                  <tr key={r.id} className="hover">
-                    <td className="font-medium">{r.name}</td>
-                    <td className="text-right">{r.open}</td>
-                    <td
-                      className={`text-right ${r.overdue > 0 ? "text-error font-medium" : ""}`}
-                    >
-                      {r.overdue}
-                    </td>
-                  </tr>
-                ))}
-                {!capacityRows.length ? (
-                  <tr>
-                    <td
-                      colSpan={3}
-                      className="py-6 text-center text-sm opacity-60"
-                    >
-                      No open staff tasks to show.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        (layout.visible as AgencyPortfolioSectionId[]).map((id) => (
+          <div key={id}>{renderAgencySection(id)}</div>
+        ))
       )}
+
+      {layout.panelOpen ? (
+        isAm ? (
+          <DashboardCustomizePanel
+            prefs={amLayout.prefs}
+            sections={AM_PORTFOLIO_SECTIONS}
+            onClose={() => amLayout.setPanelOpen(false)}
+            onToggle={amLayout.toggleHidden}
+            onMove={amLayout.move}
+            onRestore={amLayout.restoreDefaults}
+          />
+        ) : (
+          <DashboardCustomizePanel
+            prefs={agencyLayout.prefs}
+            sections={AGENCY_PORTFOLIO_SECTIONS}
+            onClose={() => agencyLayout.setPanelOpen(false)}
+            onToggle={agencyLayout.toggleHidden}
+            onMove={agencyLayout.move}
+            onRestore={agencyLayout.restoreDefaults}
+          />
+        )
+      ) : null}
     </div>
   );
 }
@@ -776,8 +899,16 @@ export function PortfolioDashboardClient({
 /** @deprecated Prefer PortfolioDashboardClient */
 export function AgencyDashboardClient({
   source,
+  userId,
 }: {
   source: PortfolioDashboardSource;
+  userId: string;
 }) {
-  return <PortfolioDashboardClient source={source} variant="agency" />;
+  return (
+    <PortfolioDashboardClient
+      source={source}
+      variant="agency"
+      userId={userId}
+    />
+  );
 }

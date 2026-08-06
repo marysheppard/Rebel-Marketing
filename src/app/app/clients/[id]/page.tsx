@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader, StatCard, StatusBadge } from "@/components/ui";
+import {
+  formatAddress,
+  formatEmail,
+  formatPhone,
+  mailtoHref,
+  telHref,
+} from "@/lib/contact-format";
 import { money, num } from "@/lib/format";
 import { remainingBalance } from "@/lib/finance";
 import { getProfile } from "@/lib/page-auth";
@@ -66,10 +73,25 @@ export default async function ClientDetailPage({
         {client.customer_id ? (
           <span className="badge badge-neutral badge-sm font-mono">{client.customer_id}</span>
         ) : null}
-        {client.contact_email ? (
-          <a href={`mailto:${client.contact_email}`} className="badge badge-outline badge-sm">
-            {client.contact_email}
+        {mailtoHref(client.contact_email) ? (
+          <a
+            href={mailtoHref(client.contact_email)!}
+            className="badge badge-outline badge-sm"
+          >
+            {formatEmail(client.contact_email)}
           </a>
+        ) : null}
+        {telHref(client.contact_phone) ? (
+          <a
+            href={telHref(client.contact_phone)!}
+            className="badge badge-outline badge-sm"
+          >
+            {formatPhone(client.contact_phone)}
+          </a>
+        ) : client.contact_phone ? (
+          <span className="badge badge-outline badge-sm">
+            {formatPhone(client.contact_phone)}
+          </span>
         ) : null}
       </div>
 
@@ -88,9 +110,39 @@ export default async function ClientDetailPage({
           </p>
           <p>
             <span className="opacity-60">Address:</span>{" "}
-            {[client.street_address, client.city, client.state, client.zip_code]
-              .filter(Boolean)
-              .join(", ") || "—"}
+            {formatAddress({
+              street_address: client.street_address,
+              address_line_2: client.address_line_2,
+              city: client.city,
+              state: client.state,
+              zip_code: client.zip_code,
+            })}
+          </p>
+          <p>
+            <span className="opacity-60">Phone:</span>{" "}
+            {telHref(client.business_phone || client.contact_phone) ? (
+              <a
+                href={telHref(client.business_phone || client.contact_phone)!}
+                className="link link-hover"
+              >
+                {formatPhone(client.business_phone || client.contact_phone)}
+              </a>
+            ) : (
+              formatPhone(client.business_phone || client.contact_phone)
+            )}
+          </p>
+          <p>
+            <span className="opacity-60">Email:</span>{" "}
+            {mailtoHref(client.contact_email) ? (
+              <a
+                href={mailtoHref(client.contact_email)!}
+                className="link link-hover"
+              >
+                {formatEmail(client.contact_email)}
+              </a>
+            ) : (
+              formatEmail(client.contact_email)
+            )}
           </p>
           <p>
             <span className="opacity-60">Website:</span> {client.website || "—"}
