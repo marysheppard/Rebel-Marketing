@@ -57,7 +57,7 @@ export const DEFAULT_FILTERS: CostFilterState = {
   clientId: null,
   campaignId: null,
   category: null,
-  approval: "all",
+  approval: "approved",
   passThrough: "all",
   billing: "all",
   search: "",

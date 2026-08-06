@@ -1,9 +1,15 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { CreateCostForm } from "@/components/forms";
+import { CostApprovalQueue } from "@/components/costs/CostApprovalQueue";
 import { CostDashboard } from "@/components/costs/CostDashboard";
 import { joinOne, num } from "@/lib/format";
-import { canManageCosts, getProfile, isClientRole } from "@/lib/page-auth";
+import {
+  canApproveCosts,
+  canManageCosts,
+  getProfile,
+  isClientRole,
+} from "@/lib/page-auth";
 import type { CostRow, InvoicePassThroughRow } from "@/lib/costs/calculations";
 
 export default async function CostsPage() {
@@ -13,6 +19,8 @@ export default async function CostsPage() {
   if (isClientRole(profile.role) || !canManageCosts(profile.role)) {
     redirect("/app");
   }
+
+  const canApprove = canApproveCosts(profile.role);
 
   const [
     { data: costs },
@@ -40,12 +48,35 @@ export default async function CostsPage() {
   ]);
 
   const showForm = canManageCosts(profile.role) && !isClientRole(profile.role);
-
   const costRows = (costs ?? []) as CostRow[];
   const invoiceRows = (invoices ?? []) as InvoicePassThroughRow[];
 
+  const pendingItems = costRows
+    .filter(
+      (c) =>
+        !c.approved &&
+        String(c.approval_status || "Pending").toLowerCase() === "pending",
+    )
+    .map((c) => {
+      const camp = joinOne(c.campaigns);
+      const client = joinOne(camp?.clients);
+      return {
+        id: String(c.id),
+        cost_date: String(c.cost_date),
+        cost_type: String(c.cost_type),
+        description: String(c.description || ""),
+        amount: num(c.amount),
+        vendor_name: String(c.vendor_name || ""),
+        campaign_name: camp?.campaign_name || "—",
+        client_name: client?.client_name || "—",
+        pass_through: Boolean(c.pass_through),
+      };
+    });
+
   return (
     <div>
+      {canApprove ? <CostApprovalQueue items={pendingItems} /> : null}
+
       <Suspense
         fallback={
           <div className="space-y-4">
@@ -81,6 +112,7 @@ export default async function CostsPage() {
         >
           <h2 className="mb-4 text-xl font-bold">Record cost</h2>
           <CreateCostForm
+            canSelfApprove={canApprove}
             campaigns={(campaigns ?? []).map((c) => {
               const contract = joinOne(
                 (

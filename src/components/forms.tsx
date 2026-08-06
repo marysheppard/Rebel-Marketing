@@ -747,8 +747,11 @@ type CostCampaignOption = Option & {
 
 export function CreateCostForm({
   campaigns,
+  canSelfApprove = false,
 }: {
   campaigns: CostCampaignOption[];
+  /** Agency managers may mark Approved at entry; AM/Marketing always submit Pending. */
+  canSelfApprove?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -773,9 +776,9 @@ export function CreateCostForm({
     const fd = new FormData(e.currentTarget);
     const amt = num(fd.get("amount"));
     const isPassThrough = fd.get("pass_through") === "on";
-    const isApproved = fd.get("approved") === "on";
     const costType = String(fd.get("cost_type"));
     const camp = campaigns.find((c) => c.id === String(fd.get("campaign_id")));
+    const selfApproved = canSelfApprove && fd.get("approved") === "on";
 
     if (amt < 0) {
       setError("Amount cannot be negative.");
@@ -803,21 +806,11 @@ export function CreateCostForm({
       return;
     }
 
-    if (
-      camp?.approval_required &&
-      threshold > 0 &&
-      amt >= threshold &&
-      !isApproved
-    ) {
-      setError(
-        `MSA requires client approval for spend of ${money(threshold)} or more. Check Approved or submit an approval request first.`,
-      );
-      setLoading(false);
-      return;
-    }
-
     const supabase = createClient();
-    const approved = fd.get("approved") === "on";
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     const { error: insertError } = await supabase.from("costs").insert({
       campaign_id: String(fd.get("campaign_id")),
       contract_id: camp?.contract_id || null,
@@ -826,15 +819,33 @@ export function CreateCostForm({
       amount: amt,
       cost_date: String(fd.get("cost_date")),
       vendor_name: String(fd.get("vendor_name") ?? "").trim(),
-      approved,
-      approval_status: approved ? "Approved" : "Pending",
-      pass_through: fd.get("pass_through") === "on",
+      approved: selfApproved,
+      approval_status: selfApproved ? "Approved" : "Pending",
+      pass_through: isPassThrough,
+      entered_by: user?.id ?? null,
     });
-    setLoading(false);
     if (insertError) {
+      setLoading(false);
       setError("Could not record cost. Please check the details and try again.");
       return;
     }
+
+    if (!selfApproved) {
+      try {
+        const { notifyAgencyAfterCostRecorded } = await import(
+          "@/lib/cost-notifications"
+        );
+        await notifyAgencyAfterCostRecorded(supabase, {
+          amount: amt,
+          campaignName: camp?.label || "Campaign",
+          costType,
+        });
+      } catch {
+        // Cost remains valid if notification fails.
+      }
+    }
+
+    setLoading(false);
     (e.target as HTMLFormElement).reset();
     setCampaignId("");
     setAmount("");
@@ -871,7 +882,10 @@ export function CreateCostForm({
             : `allowed${markup > 0 ? ` · ${markup}% markup` : " · no markup"}`}
           {treatment ? ` · Ad spend: ${treatment}` : ""}
           {selected.approval_required && threshold > 0
-            ? ` · Approval required at ${money(threshold)}+`
+            ? ` · Agency approval required at ${money(threshold)}+`
+            : ""}
+          {!canSelfApprove
+            ? " · Submits for agency manager approval"
             : ""}
         </div>
       ) : null}
@@ -938,16 +952,22 @@ export function CreateCostForm({
         />
         <span className="text-sm font-medium">Pass-through to client</span>
       </label>
-      <label className="flex-row items-center gap-2">
-        <input
-          name="approved"
-          type="checkbox"
-          className="checkbox"
-          checked={approved}
-          onChange={(e) => setApproved(e.target.checked)}
-        />
-        <span className="text-sm font-medium">Approved</span>
-      </label>
+      {canSelfApprove ? (
+        <label className="flex-row items-center gap-2">
+          <input
+            name="approved"
+            type="checkbox"
+            className="checkbox"
+            checked={approved}
+            onChange={(e) => setApproved(e.target.checked)}
+          />
+          <span className="text-sm font-medium">Approved</span>
+        </label>
+      ) : (
+        <p className="text-sm opacity-70 sm:col-span-1">
+          This cost will be sent to an agency manager for approval.
+        </p>
+      )}
       <div className="sm:col-span-2">
         <button type="submit" className="btn btn-primary" disabled={loading}>
           {loading ? "Saving…" : "Record cost"}

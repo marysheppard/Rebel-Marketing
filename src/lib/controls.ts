@@ -305,7 +305,7 @@ export function buildControlAlerts(data: ControlInput): ControlAlert[] {
             ? ` and exceeds the $${threshold.toLocaleString()} approval threshold.`
             : "."
         }`,
-        href: "/app/costs",
+        href: "/app/costs?approval=pending",
         clientId: cost.client_id ?? camp?.client_id ?? null,
         exceptionType: "Unapproved cost",
       });

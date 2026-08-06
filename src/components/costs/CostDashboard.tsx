@@ -64,6 +64,8 @@ const TREND_GROUP_VALUES: TrendGroupBy[] = ["month", "quarter", "year"];
 function parseFilters(params: URLSearchParams): CostFilterState {
   const preset = (params.get("preset") as DatePreset) || DEFAULT_FILTERS.preset;
   const category = params.get("category") as CostCategory | null;
+  const approvalParam = params.get("approval") as ApprovalFilter | null;
+  const approvalValues: ApprovalFilter[] = ["all", "approved", "pending"];
   return {
     preset: PRESET_VALUES.includes(preset) ? preset : DEFAULT_FILTERS.preset,
     startDate: params.get("start") || null,
@@ -77,7 +79,10 @@ function parseFilters(params: URLSearchParams): CostFilterState {
       )
         ? category
         : null,
-    approval: (params.get("approval") as ApprovalFilter) || "all",
+    approval:
+      approvalParam && approvalValues.includes(approvalParam)
+        ? approvalParam
+        : DEFAULT_FILTERS.approval,
     passThrough: (params.get("passThrough") as PassThroughFilter) || "all",
     billing: (params.get("billing") as BillingFilter) || "all",
     search: params.get("q") || "",
@@ -92,7 +97,9 @@ function filtersToParams(filters: CostFilterState): URLSearchParams {
   if (filters.clientId) p.set("client", filters.clientId);
   if (filters.campaignId) p.set("campaign", filters.campaignId);
   if (filters.category) p.set("category", filters.category);
-  if (filters.approval !== "all") p.set("approval", filters.approval);
+  if (filters.approval !== DEFAULT_FILTERS.approval) {
+    p.set("approval", filters.approval);
+  }
   if (filters.passThrough !== "all") p.set("passThrough", filters.passThrough);
   if (filters.billing !== "all") p.set("billing", filters.billing);
   if (filters.search.trim()) p.set("q", filters.search.trim());

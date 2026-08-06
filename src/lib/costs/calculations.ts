@@ -33,6 +33,7 @@ export type CostRow = {
   cost_date: string;
   vendor_name: string;
   approved: boolean;
+  approval_status?: string | null;
   pass_through: boolean;
   campaigns?: {
     campaign_name: string;

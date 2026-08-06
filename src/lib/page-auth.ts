@@ -132,6 +132,11 @@ export function canManageCosts(role: UserRole) {
   );
 }
 
+/** Approve / reject recorded costs — agency managers only (SoD). */
+export function canApproveCosts(role: UserRole) {
+  return role === "agency_manager";
+}
+
 export function canCreateApprovals(role: UserRole) {
   return (
     role === "agency_manager" ||

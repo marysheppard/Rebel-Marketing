@@ -47,7 +47,7 @@ const AGENCY_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
   },
   {
     label: "Finance",
-    hrefs: ["/app/accounting", "/app/ar", "/app/billing"],
+    hrefs: ["/app/accounting", "/app/ar", "/app/billing", "/app/costs"],
   },
   {
     label: "People",
@@ -215,7 +215,7 @@ const NAV: {
     href: "/app/costs",
     label: "Costs",
     icon: DollarSign,
-    roles: ["marketing", "account_manager"],
+    roles: ["marketing", "account_manager", "agency_manager"],
   },
   {
     href: "/app/employees",
