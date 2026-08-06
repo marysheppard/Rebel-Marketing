@@ -77,6 +77,32 @@ const AM_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
   },
 ];
 
+const MARKETING_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
+  {
+    label: "Portfolio",
+    hrefs: ["/app/campaigns", "/app/analytics", "/app/calendar"],
+  },
+  {
+    label: "Delivery",
+    hrefs: ["/app/approvals", "/app/tasks", "/app/costs", "/app/work"],
+  },
+];
+
+const BILLING_NAV_GROUPS: { label: string; hrefs: string[] }[] = [
+  {
+    label: "Portfolio",
+    hrefs: ["/app/clients", "/app/contracts"],
+  },
+  {
+    label: "Finance",
+    hrefs: ["/app/billing", "/app/ar", "/app/reports"],
+  },
+  {
+    label: "People",
+    hrefs: ["/app/work"],
+  },
+];
+
 const NAV: {
   href: string;
   label: string;
@@ -239,6 +265,8 @@ function dashboardTitle(role: UserRole) {
   if (role === "client") return "Customer Dashboard";
   if (role === "agency_manager") return "Agency Portal";
   if (role === "account_manager") return "Account Manager Portal";
+  if (role === "marketing") return "Marketing Portal";
+  if (role === "billing") return "Billing Portal";
   return "Employee Dashboard";
 }
 
@@ -289,7 +317,11 @@ export function AppShell({
     ? AGENCY_NAV_GROUPS
     : isAm
       ? AM_NAV_GROUPS
-      : null;
+      : profile.role === "marketing"
+        ? MARKETING_NAV_GROUPS
+        : profile.role === "billing"
+          ? BILLING_NAV_GROUPS
+          : null;
 
   const navSections: { label: string | null; items: NavItem[] }[] = groups
     ? (() => {
