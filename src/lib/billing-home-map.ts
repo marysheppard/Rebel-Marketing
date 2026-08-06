@@ -69,16 +69,16 @@ export function mapUnbilledWork(
           campaign_name?: string;
           client_id?: string;
           clients?:
-            | { client_name?: string }
-            | { client_name?: string }[]
+            | { client_name?: string; industry?: string }
+            | { client_name?: string; industry?: string }[]
             | null;
         }
       | Array<{
           campaign_name?: string;
           client_id?: string;
           clients?:
-            | { client_name?: string }
-            | { client_name?: string }[]
+            | { client_name?: string; industry?: string }
+            | { client_name?: string; industry?: string }[]
             | null;
         }>
       | null;
@@ -100,6 +100,7 @@ export function mapUnbilledWork(
       campaign_name: camps?.campaign_name ?? "Campaign",
       client_id: String(camps?.client_id ?? ""),
       client_name: clientObj?.client_name ?? "Client",
+      company_type: String(clientObj?.industry ?? "").trim() || "Unspecified",
       estimated_rate: rate,
       estimated_amount: estimateEntryAmount(hours, rate),
     };

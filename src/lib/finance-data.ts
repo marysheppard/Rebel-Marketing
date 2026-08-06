@@ -21,6 +21,7 @@ export async function loadFinanceBundle(
     metricsRes,
     approvalsRes,
     profilesRes,
+    milestonesRes,
   ] = await Promise.all([
     supabase.from("clients").select("*").order("client_name"),
     supabase
@@ -38,6 +39,7 @@ export async function loadFinanceBundle(
       .from("profiles")
       .select("id, full_name, email, role, department, internal_cost_rate")
       .neq("role", "client"),
+    supabase.from("campaign_milestones").select("*").order("sequence"),
   ]);
 
   let clients = clientsRes.data ?? [];
@@ -76,6 +78,11 @@ export async function loadFinanceBundle(
   const approvals = (approvalsRes.data ?? []).filter((a) =>
     scope === "all" ? true : clientIdSet.has(a.client_id),
   );
+  const milestones = milestonesRes.error
+    ? []
+    : (milestonesRes.data ?? []).filter((m) =>
+        scope === "all" ? true : campaignIds.has(m.campaign_id),
+      );
 
   return {
     scope,
@@ -88,6 +95,7 @@ export async function loadFinanceBundle(
     payments,
     metrics,
     approvals,
+    milestones,
     profiles: profilesRes.data ?? [],
   };
 }

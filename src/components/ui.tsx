@@ -53,12 +53,16 @@ export function StatCard({
   hint,
   tone = "neutral",
   href,
+  onClick,
+  selected,
 }: {
   label: string;
   value: string;
   hint?: string;
   tone?: "neutral" | "good" | "bad" | "warn";
   href?: string;
+  onClick?: () => void;
+  selected?: boolean;
 }) {
   const toneClass =
     tone === "good"
@@ -68,6 +72,10 @@ export function StatCard({
         : tone === "warn"
           ? "border-warning/30"
           : "border-base-300/80";
+  const interactive = Boolean(href || onClick);
+  const selectedClass = selected
+    ? "border-primary ring-2 ring-primary/25 bg-base-100"
+    : "";
   const inner = (
     <>
       <div className="text-xs uppercase leading-snug tracking-wide break-words opacity-60">
@@ -83,9 +91,9 @@ export function StatCard({
       ) : null}
     </>
   );
-  const className = `min-w-0 rounded-box border bg-base-100/80 p-4 ${toneClass} ${
-    href
-      ? "transition hover:border-primary/40 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+  const className = `min-w-0 rounded-box border bg-base-100/80 p-4 text-left ${toneClass} ${selectedClass} ${
+    interactive
+      ? "cursor-pointer transition hover:border-primary/40 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       : ""
   }`;
   if (href) {
@@ -93,6 +101,13 @@ export function StatCard({
       <Link href={href} className={`block ${className}`}>
         {inner}
       </Link>
+    );
+  }
+  if (onClick) {
+    return (
+      <button type="button" className={`block w-full ${className}`} onClick={onClick}>
+        {inner}
+      </button>
     );
   }
   return <div className={className}>{inner}</div>;
@@ -231,10 +246,17 @@ export function StatusBadge({
     Active: "badge-success",
     Paid: "badge-success",
     Approved: "badge-success",
+    Complete: "badge-info",
+    Planned: "badge-ghost",
+    Waived: "badge-ghost",
     Completed: "badge-success",
     Done: "badge-success",
     Pending: "badge-warning",
+    Partial: "badge-warning",
     "Partially Paid": "badge-warning",
+    Open: "badge-info",
+    Unbilled: "badge-ghost",
+    None: "badge-ghost",
     "In Progress": "badge-info",
     "Not Started": "badge-ghost",
     "To Do": "badge-ghost",

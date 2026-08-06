@@ -4,6 +4,7 @@ import {
   estimateEntryAmount,
   partitionInvoices,
   type BillingInvoiceRow,
+  type ReadyMilestone,
   type UnbilledEntry,
 } from "@/lib/billing";
 import { contractBillRate, remainingBalance } from "@/lib/finance";
@@ -22,7 +23,7 @@ export default async function BillingPage() {
 
   const canManage = canManageBilling(profile.role);
 
-  const [{ data: invoicesRaw }, { data: unbilledWork }, { data: campaignsMeta }] =
+  const [{ data: invoicesRaw }, { data: unbilledWork }, { data: campaignsMeta }, readyMsRes] =
     await Promise.all([
       supabase
         .from("invoices")
@@ -33,13 +34,22 @@ export default async function BillingPage() {
       supabase
         .from("work_entries")
         .select(
-          "id, campaign_id, hours, work_date, work_type, description, campaigns(campaign_name, client_id, contract_id, clients(client_name))",
+          "id, campaign_id, hours, work_date, work_type, description, campaigns(campaign_name, client_id, contract_id, clients(client_name, industry))",
         )
         .eq("billable", true)
         .eq("billed", false)
         .eq("approval_status", "Approved")
         .order("work_date", { ascending: false }),
       supabase.from("campaigns").select("id, campaign_name, contract_id"),
+      supabase
+        .from("campaign_milestones")
+        .select(
+          "id, campaign_id, contract_id, sequence, name, recognition_amount, target_date, approved_at, status, billable, billed, campaigns(campaign_name, client_id, clients(client_name))",
+        )
+        .eq("status", "Approved")
+        .eq("billable", true)
+        .eq("billed", false)
+        .order("approved_at", { ascending: true }),
     ]);
 
   const contractIds = [
@@ -82,8 +92,8 @@ export default async function BillingPage() {
           client_id?: string;
           contract_id?: string;
           clients?:
-            | { client_name?: string }
-            | { client_name?: string }[]
+            | { client_name?: string; industry?: string }
+            | { client_name?: string; industry?: string }[]
             | null;
         }
       | Array<{
@@ -91,8 +101,8 @@ export default async function BillingPage() {
           client_id?: string;
           contract_id?: string;
           clients?:
-            | { client_name?: string }
-            | { client_name?: string }[]
+            | { client_name?: string; industry?: string }
+            | { client_name?: string; industry?: string }[]
             | null;
         }>
       | null;
@@ -118,6 +128,7 @@ export default async function BillingPage() {
         "Campaign",
       client_id: String(camp?.client_id ?? ""),
       client_name: clientObj?.client_name ?? "Client",
+      company_type: String(clientObj?.industry ?? "").trim() || "Unspecified",
       estimated_rate: rate,
       estimated_amount: estimateEntryAmount(hours, rate),
       contract_id: contractId,
@@ -182,9 +193,50 @@ export default async function BillingPage() {
 
   const { drafts, active, history } = partitionInvoices(invoiceRows);
 
+  const readyMilestones: ReadyMilestone[] = (readyMsRes.data ?? []).map((m) => {
+    const camps = m.campaigns as
+      | {
+          campaign_name?: string;
+          client_id?: string;
+          clients?:
+            | { client_name?: string }
+            | { client_name?: string }[]
+            | null;
+        }
+      | {
+          campaign_name?: string;
+          client_id?: string;
+          clients?:
+            | { client_name?: string }
+            | { client_name?: string }[]
+            | null;
+        }[]
+      | null;
+    const camp = Array.isArray(camps) ? camps[0] : camps;
+    const clientsRel = camp?.clients;
+    const clientObj = Array.isArray(clientsRel) ? clientsRel[0] : clientsRel;
+    return {
+      id: String(m.id),
+      campaign_id: String(m.campaign_id),
+      campaign_name: camp?.campaign_name ?? "Campaign",
+      contract_id: m.contract_id ? String(m.contract_id) : null,
+      client_id: String(camp?.client_id ?? ""),
+      client_name: clientObj?.client_name ?? "Client",
+      name: String(m.name ?? ""),
+      sequence: Number(m.sequence ?? 0),
+      recognition_amount: num(m.recognition_amount),
+      target_date: m.target_date ? String(m.target_date) : null,
+      approved_at: m.approved_at ? String(m.approved_at) : null,
+      status: String(m.status ?? "Approved"),
+      billable: Boolean(m.billable),
+      billed: Boolean(m.billed),
+    };
+  });
+
   return (
     <BillingPageClient
       unbilled={unbilled}
+      readyMilestones={readyMilestones}
       drafts={drafts}
       active={active}
       history={history}

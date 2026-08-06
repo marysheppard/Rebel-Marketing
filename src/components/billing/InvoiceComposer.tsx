@@ -7,15 +7,18 @@ import {
   DEFAULT_BILL_RATE_USD,
   buildInvoiceSuggestion,
   buildLineItemsFromEntries,
+  buildLineItemsFromMilestones,
   defaultDueDate,
-  encodeWorkEntryMeta,
+  encodeBillingMeta,
   generateInvoiceNumber,
   lineItemsSubtotal,
+  parseMilestoneIdsFromNotes,
   parseWorkEntryIdsFromNotes,
   primaryCampaignId,
-  stripWorkEntryMeta,
+  stripBillingMeta,
   type InvoiceType,
   type LineItem,
+  type ReadyMilestone,
   type UnbilledEntry,
 } from "@/lib/billing";
 import { money, num } from "@/lib/format";
@@ -53,6 +56,7 @@ type ContractOption = {
 export function InvoiceComposer({
   mode,
   entries,
+  milestones = [],
   existing,
   contracts,
   clientName,
@@ -63,6 +67,7 @@ export function InvoiceComposer({
 }: {
   mode: "create" | "edit";
   entries: UnbilledEntry[];
+  milestones?: ReadyMilestone[];
   existing?: ExistingInvoice | null;
   contracts: ContractOption[];
   clientName: string;
@@ -72,17 +77,32 @@ export function InvoiceComposer({
   hasPriorSentInvoice?: boolean;
 }) {
   const router = useRouter();
-  const clientId = existing?.client_id ?? entries[0]?.client_id ?? "";
+  const clientId =
+    existing?.client_id ??
+    entries[0]?.client_id ??
+    milestones[0]?.client_id ??
+    "";
   const workIds = useMemo(() => entries.map((e) => e.id), [entries]);
+  const milestoneIds = useMemo(() => milestones.map((m) => m.id), [milestones]);
 
   const initialContractId =
     existing?.contract_id ||
     defaultContractId ||
     entries.find((e) => e.contract_id)?.contract_id ||
+    milestones.find((m) => m.contract_id)?.contract_id ||
     "";
 
   const initialSuggestion = useMemo(() => {
-    if (mode === "edit" && existing && !entries.length) return null;
+    if (mode === "edit" && existing && !entries.length && !milestones.length)
+      return null;
+    if (milestones.length && !entries.length) {
+      return {
+        invoiceType: "fixed" as InvoiceType,
+        lineItems: buildLineItemsFromMilestones(milestones),
+        markupPct: 0,
+        summary: `${milestones.length} campaign milestone(s)`,
+      };
+    }
     const contract =
       contracts.find((c) => c.id === initialContractId) ??
       contracts.find((c) => c.client_id === clientId);
@@ -106,6 +126,7 @@ export function InvoiceComposer({
     mode,
     existing,
     entries,
+    milestones,
     contracts,
     initialContractId,
     clientId,
@@ -128,6 +149,7 @@ export function InvoiceComposer({
   const [contractId, setContractId] = useState(String(initialContractId || ""));
   const [items, setItems] = useState<LineItem[]>(() => {
     if (initialSuggestion?.lineItems.length) return initialSuggestion.lineItems;
+    if (milestones.length) return buildLineItemsFromMilestones(milestones);
     if (entries.length) return buildLineItemsFromEntries(entries, "campaign");
     if (existing) {
       return [
@@ -153,7 +175,7 @@ export function InvoiceComposer({
       : 15,
   );
   const [notes, setNotes] = useState(
-    stripWorkEntryMeta(existing?.notes ?? ""),
+    stripBillingMeta(existing?.notes ?? ""),
   );
   const [suggestionNote, setSuggestionNote] = useState(
     initialSuggestion?.summary ?? "",
@@ -273,9 +295,16 @@ export function InvoiceComposer({
       return;
     }
 
-    const campaign_id = existing?.campaign_id ?? primaryCampaignId(entries);
-    const fullNotes = encodeWorkEntryMeta(
+    const campaign_id =
+      existing?.campaign_id ??
+      primaryCampaignId(entries) ??
+      milestones[0]?.campaign_id ??
+      null;
+    const fullNotes = encodeBillingMeta(
       workIds.length ? workIds : parseWorkEntryIdsFromNotes(existing?.notes),
+      milestoneIds.length
+        ? milestoneIds
+        : parseMilestoneIdsFromNotes(existing?.notes),
       notes,
     );
 
@@ -295,6 +324,8 @@ export function InvoiceComposer({
       notes: fullNotes,
     };
 
+    let invoiceId = existing?.id ?? null;
+
     if (mode === "edit" && existing?.id) {
       const { error: updErr } = await supabase
         .from("invoices")
@@ -305,6 +336,7 @@ export function InvoiceComposer({
         setError("Could not update invoice.");
         return;
       }
+      invoiceId = existing.id;
     } else {
       const { data: inv, error: insErr } = await supabase
         .from("invoices")
@@ -317,6 +349,29 @@ export function InvoiceComposer({
           "Could not create invoice. Check required fields and permissions.",
         );
         return;
+      }
+      invoiceId = inv.id as string;
+    }
+
+    if (status === "Sent" || status === "Draft") {
+      const msIds =
+        milestoneIds.length > 0
+          ? milestoneIds
+          : parseMilestoneIdsFromNotes(existing?.notes);
+      if (msIds.length && invoiceId) {
+        // Draft or Sent: link invoice; only mark billed when Sent
+        if (status === "Sent") {
+          await supabase
+            .from("campaign_milestones")
+            .update({ billed: true, invoice_id: invoiceId })
+            .in("id", msIds)
+            .eq("billed", false);
+        } else {
+          await supabase
+            .from("campaign_milestones")
+            .update({ invoice_id: invoiceId })
+            .in("id", msIds);
+        }
       }
     }
 
@@ -358,7 +413,9 @@ export function InvoiceComposer({
           <p className="text-sm opacity-70">
             {entries.length
               ? `${entries.length} work entries · bill rate ${money(billRate)}/hr`
-              : "Review amounts and send when ready"}
+              : milestones.length
+                ? `${milestones.length} campaign milestone(s)`
+                : "Review amounts and send when ready"}
           </p>
           {suggestionNote ? (
             <p className="mt-1 text-xs opacity-60">Suggested: {suggestionNote}</p>

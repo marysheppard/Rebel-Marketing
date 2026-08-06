@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CampaignMilestonesPanel } from "@/components/campaigns/CampaignMilestonesPanel";
 import { BudgetHealthBadge, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { money, num, pct } from "@/lib/format";
 import { budgetHealth, budgetVariance, profitMargin, remainingBalance, sumCosts } from "@/lib/finance";
-import { getProfile } from "@/lib/page-auth";
+import { mapMilestoneRow } from "@/lib/milestones";
+import {
+  canApproveTasks,
+  canLogWork,
+  getProfile,
+} from "@/lib/page-auth";
 
 export default async function CampaignDetailPage({
   params,
@@ -11,7 +17,7 @@ export default async function CampaignDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { supabase } = await getProfile();
+  const { supabase, profile } = await getProfile();
 
   const { data: campaign } = await supabase
     .from("campaigns")
@@ -20,7 +26,7 @@ export default async function CampaignDetailPage({
     .single();
   if (!campaign) notFound();
 
-  const [{ data: work }, { data: costs }, { data: approvals }, { data: invoices }] =
+  const [{ data: work }, { data: costs }, { data: approvals }, { data: invoices }, milestonesRes] =
     await Promise.all([
       supabase
         .from("work_entries")
@@ -34,8 +40,16 @@ export default async function CampaignDetailPage({
         .select("*, payments(amount)")
         .eq("campaign_id", id)
         .order("invoice_date", { ascending: false }),
+      supabase
+        .from("campaign_milestones")
+        .select("*")
+        .eq("campaign_id", id)
+        .order("sequence"),
     ]);
 
+  const milestones = (milestonesRes.data ?? []).map((m) =>
+    mapMilestoneRow(m as Record<string, unknown>),
+  );
   const spent = sumCosts(costs ?? []);
   const budget = num(campaign.campaign_budget);
   const variance = budgetVariance(budget, spent);
@@ -110,6 +124,12 @@ export default async function CampaignDetailPage({
           </Link>
         </p>
       ) : null}
+
+      <CampaignMilestonesPanel
+        milestones={milestones}
+        canComplete={profile ? canLogWork(profile.role) : false}
+        canApprove={profile ? canApproveTasks(profile.role) : false}
+      />
 
       <section className="mt-8">
         <h2 className="mb-3 text-xl font-bold">Work entries</h2>

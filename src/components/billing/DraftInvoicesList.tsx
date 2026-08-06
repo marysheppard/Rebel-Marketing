@@ -6,6 +6,7 @@ import { useState } from "react";
 import { BillingStatusBadge } from "@/components/billing/BillingStatusBadge";
 import { InvoicePdfButton } from "@/components/billing/InvoicePdfButton";
 import {
+  parseMilestoneIdsFromNotes,
   parseWorkEntryIdsFromNotes,
   type BillingInvoiceRow,
 } from "@/lib/billing";
@@ -29,7 +30,7 @@ export function DraftInvoicesList({
     if (!canManage) return;
     if (
       !confirm(
-        `Send invoice ${inv.invoice_number}? Linked work entries will be marked billed.`,
+        `Send invoice ${inv.invoice_number}? Linked work or milestones will be marked billed.`,
       )
     ) {
       return;
@@ -56,6 +57,7 @@ export function DraftInvoicesList({
       return;
     }
     const workIds = parseWorkEntryIdsFromNotes(inv.notes);
+    const milestoneIds = parseMilestoneIdsFromNotes(inv.notes);
 
     const { error: updErr } = await supabase
       .from("invoices")
@@ -73,6 +75,13 @@ export function DraftInvoicesList({
         .from("work_entries")
         .update({ billed: true })
         .in("id", workIds)
+        .eq("billed", false);
+    }
+    if (milestoneIds.length) {
+      await supabase
+        .from("campaign_milestones")
+        .update({ billed: true, invoice_id: inv.id })
+        .in("id", milestoneIds)
         .eq("billed", false);
     }
 

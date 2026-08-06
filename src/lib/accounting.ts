@@ -1,6 +1,11 @@
 import { paidAmount, remainingBalance } from "@/lib/finance";
 import { daysBetween, num } from "@/lib/format";
 import { isRecognizedRevenue } from "@/lib/metrics";
+import {
+  milestonesByContract,
+  sumRecognized,
+  type MilestoneLike,
+} from "@/lib/milestones";
 
 export type AccountingContract = {
   id: string;
@@ -73,9 +78,11 @@ function billingPeriodLabel(contract: AccountingContract) {
 
 /**
  * Management revenue recognition estimate (not GAAP):
- * - Retainer: recognize monthly_retainer × elapsed months (capped at contract value)
- * - Plus earned work at overage_hourly_rate for approved billable hours
- * - Never exceed max(contract value, amount billed) as a soft ceiling for recognized
+ * - Retainer: recognize monthly_retainer × elapsed months
+ * - Project fee: approved milestone dollars when milestones exist for the contract’s campaigns;
+ *   otherwise time-progress (elapsed days / total days)
+ * - Plus partial labor recognition for approved billable hours
+ * Soft-capped at max(contract value, amount billed)
  */
 export function buildRevenueRecognitionRows(input: {
   clients: AccountingClient[];
@@ -83,6 +90,7 @@ export function buildRevenueRecognitionRows(input: {
   invoices: AccountingInvoice[];
   work: AccountingWork[];
   campaigns: AccountingCampaign[];
+  milestones?: MilestoneLike[];
   defaultHourlyRate?: number;
 }) {
   const {
@@ -91,6 +99,7 @@ export function buildRevenueRecognitionRows(input: {
     invoices,
     work,
     campaigns,
+    milestones = [],
     defaultHourlyRate = 150,
   } = input;
   const clientName = new Map(clients.map((c) => [c.id, c.client_name]));
@@ -100,6 +109,7 @@ export function buildRevenueRecognitionRows(input: {
     list.push(c.id);
     campaignsByContract.set(c.contract_id, list);
   }
+  const msByContract = milestonesByContract(milestones, campaigns);
 
   return contracts.map((contract) => {
     const value = contractValue(contract);
@@ -120,7 +130,6 @@ export function buildRevenueRecognitionRows(input: {
       .reduce((s, w) => s + num(w.hours), 0);
     const rate = num(contract.overage_hourly_rate) || defaultHourlyRate;
 
-    const start = new Date(contract.start_date);
     const end = new Date(contract.end_date);
     const now = new Date();
     const elapsedEnd = now < end ? now : end;
@@ -132,18 +141,35 @@ export function buildRevenueRecognitionRows(input: {
       ),
     );
     const retainer = num(contract.monthly_retainer);
+    const contractMilestones = msByContract.get(contract.id) ?? [];
+    const hasMilestones = contractMilestones.length > 0;
+    const milestoneRecognized = sumRecognized(contractMilestones);
+
     let recognized = 0;
+    let recognitionMethod: "milestone" | "time" | "retainer" | "mixed" =
+      "time";
+
     if (retainer > 0) {
       recognized += retainer * elapsedMonths;
-    } else if (num(contract.project_fee) > 0) {
+      recognitionMethod = hasMilestones ? "mixed" : "retainer";
+    }
+
+    if (hasMilestones) {
+      recognized += milestoneRecognized;
+      if (retainer <= 0) recognitionMethod = "milestone";
+    } else if (num(contract.project_fee) > 0 && retainer <= 0) {
       const totalDays = Math.max(1, daysBetween(contract.start_date, end));
       const doneDays = Math.min(
         totalDays,
         Math.max(0, daysBetween(contract.start_date, elapsedEnd)),
       );
       recognized += num(contract.project_fee) * (doneDays / totalDays);
+      recognitionMethod = "time";
     }
-    recognized += approvedHours * rate * 0.25; // partial labor recognition alongside retainer
+
+    // Partial labor recognition (lighter when milestones drive project recognition)
+    const laborFactor = hasMilestones ? 0.1 : 0.25;
+    recognized += approvedHours * rate * laborFactor;
     recognized = Math.min(recognized, Math.max(value, amountBilled));
 
     const deferred = Math.max(0, amountBilled - recognized);
@@ -176,6 +202,9 @@ export function buildRevenueRecognitionRows(input: {
       accountsReceivable: ar,
       paymentStatus,
       contractStatus: contract.contract_status,
+      recognitionMethod,
+      milestoneBacked: hasMilestones,
+      milestoneRecognized,
     };
   });
 }

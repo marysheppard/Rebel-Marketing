@@ -8,11 +8,16 @@ import { DraftInvoicesList } from "@/components/billing/DraftInvoicesList";
 import { InvoiceCsvButton } from "@/components/billing/InvoiceCsvButton";
 import { InvoiceStatusBar } from "@/components/billing/InvoiceStatusBar";
 import { PaidHistorySection } from "@/components/billing/PaidHistorySection";
+import { ReadyMilestonesPanel } from "@/components/billing/ReadyMilestonesPanel";
 import { ReadyToInvoicePanel } from "@/components/billing/ReadyToInvoicePanel";
 import { PageHeader } from "@/components/ui";
-import type { BillingInvoiceRow, UnbilledEntry } from "@/lib/billing";
+import type {
+  BillingInvoiceRow,
+  ReadyMilestone,
+  UnbilledEntry,
+} from "@/lib/billing";
 
-type SectionKey = "ready" | "drafts" | "active" | "history";
+type SectionKey = "ready" | "milestones" | "drafts" | "active" | "history";
 
 function CollapsibleSection({
   title,
@@ -74,6 +79,7 @@ function CollapsibleSection({
 
 export function BillingPageClient({
   unbilled,
+  readyMilestones = [],
   drafts,
   active,
   history,
@@ -81,6 +87,7 @@ export function BillingPageClient({
   canManage,
 }: {
   unbilled: UnbilledEntry[];
+  readyMilestones?: ReadyMilestone[];
   drafts: BillingInvoiceRow[];
   active: BillingInvoiceRow[];
   history: BillingInvoiceRow[];
@@ -89,6 +96,7 @@ export function BillingPageClient({
 }) {
   const [open, setOpen] = useState<Record<SectionKey, boolean>>({
     ready: true,
+    milestones: true,
     drafts: true,
     active: true,
     history: false,
@@ -99,11 +107,23 @@ export function BillingPageClient({
   }
 
   function collapseAll() {
-    setOpen({ ready: false, drafts: false, active: false, history: false });
+    setOpen({
+      ready: false,
+      milestones: false,
+      drafts: false,
+      active: false,
+      history: false,
+    });
   }
 
   function expandAll() {
-    setOpen({ ready: true, drafts: true, active: true, history: true });
+    setOpen({
+      ready: true,
+      milestones: true,
+      drafts: true,
+      active: true,
+      history: true,
+    });
   }
 
   return (
@@ -138,20 +158,6 @@ export function BillingPageClient({
 
       <div className="space-y-4">
         <CollapsibleSection
-          title="Ready to Invoice"
-          subtitle="Approved billable work ready to turn into invoices"
-          badge={String(unbilled.length)}
-          open={open.ready}
-          onToggle={() => toggle("ready")}
-        >
-          <ReadyToInvoicePanel
-            entries={unbilled}
-            canManage={canManage}
-            embedded
-          />
-        </CollapsibleSection>
-
-        <CollapsibleSection
           title="Draft invoices"
           subtitle="Continue editing or send when ready"
           badge={String(drafts.length)}
@@ -166,6 +172,34 @@ export function BillingPageClient({
           }
         >
           <DraftInvoicesList drafts={drafts} canManage={canManage} embedded />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          title="Ready to Invoice"
+          subtitle="Approved billable work ready to turn into invoices"
+          badge={String(unbilled.length)}
+          open={open.ready}
+          onToggle={() => toggle("ready")}
+        >
+          <ReadyToInvoicePanel
+            entries={unbilled}
+            canManage={canManage}
+            embedded
+          />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          title="Ready milestones"
+          subtitle="Approved campaign milestones ready to bill and recognize as earned"
+          badge={String(readyMilestones.length)}
+          open={open.milestones}
+          onToggle={() => toggle("milestones")}
+        >
+          <ReadyMilestonesPanel
+            milestones={readyMilestones}
+            canManage={canManage}
+            embedded
+          />
         </CollapsibleSection>
 
         <CollapsibleSection

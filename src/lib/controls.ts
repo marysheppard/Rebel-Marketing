@@ -103,6 +103,17 @@ type ControlInput = {
   }[];
   /** Missing time: assignees with no entries this week on active campaigns */
   missingTime?: { userName: string; detail: string; clientId?: string | null }[];
+  /** Campaign milestone revenue recognition / billing */
+  milestones?: {
+    id: string;
+    campaign_id: string;
+    name: string;
+    status: string;
+    billable?: boolean;
+    billed?: boolean;
+    approved_at?: string | null;
+    recognition_amount?: number | string;
+  }[];
   marginTarget?: number;
   roasTarget?: number;
 };
@@ -512,6 +523,61 @@ export function buildControlAlerts(data: ControlInput): ControlAlert[] {
     });
   }
 
+  const campById = new Map(data.campaigns.map((c) => [c.id, c]));
+  for (const m of data.milestones ?? []) {
+    if (
+      m.status === "Approved" &&
+      m.billable !== false &&
+      !m.billed &&
+      m.approved_at
+    ) {
+      const wait = daysBetween(m.approved_at, new Date());
+      if (wait >= 7) {
+        const camp = campById.get(m.campaign_id);
+        alerts.push({
+          id: `ms-unbilled-${m.id}`,
+          severity: wait >= 14 ? "error" : "warning",
+          risk: "This business faces unbilled earned revenue and cash-flow risk.",
+          control:
+            "Our app reduces the risk by flagging approved milestones that remain unbilled.",
+          title: "Approved milestone unbilled",
+          detail: `${m.name} on ${camp?.campaign_name ?? "campaign"} has been approved ${wait} day(s) without an invoice.`,
+          href: "/app/billing",
+          clientId: camp?.client_id ?? null,
+          exceptionType: "Unbilled milestone",
+        });
+      }
+    }
+  }
+
+  for (const camp of data.campaigns) {
+    if (!["Active", "In Progress", "Late"].includes(camp.campaign_status)) {
+      continue;
+    }
+    const ms = (data.milestones ?? []).filter(
+      (m) => m.campaign_id === camp.id,
+    );
+    if (ms.length < 2) continue;
+    const daysToEnd = daysBetween(new Date(), camp.end_date);
+    if (daysToEnd < 0 || daysToEnd > 21) continue;
+    const approved = ms.filter((m) => m.status === "Approved").length;
+    const revPct = (approved / ms.length) * 100;
+    if (revPct < 50) {
+      alerts.push({
+        id: `ms-behind-${camp.id}`,
+        severity: "warning",
+        risk: "This business faces delivery and revenue timing risk near campaign end.",
+        control:
+          "Our app reduces the risk by flagging campaigns ending soon with low milestone recognition.",
+        title: "Campaign recognition behind schedule",
+        detail: `${camp.campaign_name} ends in ${daysToEnd} day(s) with only ${revPct.toFixed(0)}% of milestones approved.`,
+        href: `/app/campaigns/${camp.id}`,
+        clientId: camp.client_id,
+        exceptionType: "Milestone schedule",
+      });
+    }
+  }
+
   const missed = alerts.filter((a) => a.title === "Work performed but not billed");
   const other = alerts.filter((a) => a.title !== "Work performed but not billed");
   return [...other, ...missed.slice(0, 8)].slice(0, 50);
@@ -524,6 +590,8 @@ export function filterBillingAlerts(alerts: ControlAlert[]) {
     "Disputed invoice",
     "Duplicate billing",
     "Revenue recognition",
+    "Unbilled milestone",
+    "Milestone schedule",
   ]);
   return alerts.filter(
     (a) =>
@@ -534,6 +602,8 @@ export function filterBillingAlerts(alerts: ControlAlert[]) {
         "Disputed invoice",
         "Possible duplicate billing",
         "Revenue recognized without appropriate billing/support",
+        "Approved milestone unbilled",
+        "Campaign recognition behind schedule",
       ].includes(a.title),
   );
 }

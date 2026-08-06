@@ -247,6 +247,36 @@ export type Campaign = {
   contracts?: { contract_name: string; contract_number: string } | null;
 };
 
+export type MilestoneStatus =
+  | "Planned"
+  | "In Progress"
+  | "Complete"
+  | "Approved"
+  | "Waived";
+
+export type CampaignMilestone = {
+  id: string;
+  campaign_id: string;
+  contract_id: string | null;
+  sequence: number;
+  name: string;
+  recognition_amount: number;
+  target_date: string | null;
+  completed_at: string | null;
+  approved_at: string | null;
+  status: MilestoneStatus;
+  billable: boolean;
+  billed: boolean;
+  invoice_id: string | null;
+  notes: string;
+  created_at: string;
+  campaigns?: {
+    campaign_name: string;
+    client_id: string;
+    clients?: { client_name: string } | null;
+  } | null;
+};
+
 export type WorkEntry = {
   id: string;
   campaign_id: string;
