@@ -1121,11 +1121,15 @@ export function ApprovalStatusPieChart({
   selectedKey,
   onSelectKey,
   onClearSelection,
+  layout = "split",
+  showDetailsCard = true,
 }: {
   slices: DonutBreakdownSlice[];
   selectedKey?: string | null;
   onSelectKey?: (key: string) => void;
   onClearSelection?: () => void;
+  layout?: "split" | "stacked";
+  showDetailsCard?: boolean;
 }) {
   return (
     <DonutBreakdownViz
@@ -1141,6 +1145,8 @@ export function ApprovalStatusPieChart({
       selectedKey={selectedKey}
       onSelectKey={onSelectKey}
       onClearSelection={onClearSelection}
+      layout={layout}
+      showDetailsCard={showDetailsCard}
     />
   );
 }
