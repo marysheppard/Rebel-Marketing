@@ -493,10 +493,7 @@ export function ClicksByCampaignChart({
                 position: "right",
                 fontSize: 11,
                 fill: "currentColor",
-                formatter: (v: number) =>
-                  Number(v) >= 1000
-                    ? `${(Number(v) / 1000).toFixed(1)}k`
-                    : String(v),
+                formatter: formatCompactCountLabel,
               }}
             />
           </BarChart>
