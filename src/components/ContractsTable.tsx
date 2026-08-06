@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { ContractPdfButton } from "@/components/contracts/ContractPdfButton";
 import { StatusBadge } from "@/components/ui";
 import { contractLength, formatDate, money } from "@/lib/format";
 
@@ -18,6 +19,12 @@ export type ContractsTableRow = {
   campaign_budget: number;
   start_date: string;
   end_date: string;
+  payment_terms?: string | null;
+  deposit_amount?: number;
+  auto_renew?: boolean | null;
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
 };
 
 export function ContractsTable({ rows }: { rows: ContractsTableRow[] }) {
@@ -124,6 +131,7 @@ export function ContractsTable({ rows }: { rows: ContractsTableRow[] }) {
                 <th className="text-right">Budget</th>
                 <th>Contract length</th>
                 <th>Start date</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -164,6 +172,11 @@ export function ContractsTable({ rows }: { rows: ContractsTableRow[] }) {
                   </td>
                   <td className="text-sm whitespace-nowrap opacity-80">
                     {formatDate(c.start_date)}
+                  </td>
+                  <td className="text-right">
+                    <div className="flex flex-nowrap items-center justify-end whitespace-nowrap">
+                      <ContractPdfButton contract={c} />
+                    </div>
                   </td>
                 </tr>
               ))}

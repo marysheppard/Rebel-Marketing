@@ -1,6 +1,7 @@
 import { AuditTrailExplorer } from "@/components/dashboards/AuditTrailExplorer";
+import { ListExportButton } from "@/components/exports/ListExportButton";
 import { PageHeader } from "@/components/ui";
-import { buildAuditTrail } from "@/lib/audit-trail";
+import { AUDIT_CATEGORIES, buildAuditTrail } from "@/lib/audit-trail";
 import { loadFinanceBundle } from "@/lib/finance-data";
 import { requireRoles } from "@/lib/page-auth";
 import type {
@@ -73,6 +74,47 @@ export default async function AuditTrailPage() {
       <PageHeader
         title="Audit Trail"
         subtitle="Who did what — employee time, tasks, approvals, costs, invoices, payments, and exceptions"
+        actions={
+          <ListExportButton
+            className="btn btn-primary btn-sm gap-1"
+            title="Export audit trail"
+            description="Filter by category, client, and date, then download CSV or PDF."
+            filenameBase="audit-trail"
+            matchLabel="events"
+            headers={[
+              "When",
+              "Category",
+              "Summary",
+              "Detail",
+              "Actor",
+              "Client",
+              "Campaign",
+            ]}
+            items={events.map((r) => ({
+              _clientId: r.clientId ?? "",
+              _type: r.category,
+              _date: r.occurredAt?.slice(0, 10) ?? "",
+              When: r.occurredAt,
+              Category: r.category,
+              Summary: r.summary,
+              Detail: r.detail ?? "—",
+              Actor: r.actorName ?? "—",
+              Client: r.clientName ?? "—",
+              Campaign: r.campaignName ?? "—",
+            }))}
+            filterConfig={{
+              clientKey: "_clientId",
+              clients: clients
+                .map((c) => ({ id: c.id, name: c.client_name }))
+                .sort((a, b) => a.name.localeCompare(b.name)),
+              typeKey: "_type",
+              types: [...AUDIT_CATEGORIES],
+              typeLabel: "Category",
+              dateKey: "_date",
+              showDates: true,
+            }}
+          />
+        }
       />
       <AuditTrailExplorer
         events={events}

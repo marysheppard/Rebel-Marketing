@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { ListExportButton } from "@/components/exports/ListExportButton";
 import { TaskPriorityBarChart, TaskStatusPieChart } from "@/components/Charts";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 
@@ -113,6 +114,46 @@ export function TasksBoard({
       <PageHeader
         title="My Tasks"
         subtitle="Work assigned to you under active contracts and campaigns"
+        actions={
+          <ListExportButton
+            title="Export tasks"
+            description="Filter by status and priority, then download CSV or PDF."
+            filenameBase="my-tasks"
+            matchLabel="tasks"
+            headers={[
+              "Title",
+              "Client",
+              "Campaign",
+              "Status",
+              "Priority",
+              "Due Date",
+              "Overdue",
+              "Description",
+            ]}
+            items={items.map((r) => ({
+              _status: r.status,
+              _type: r.priority,
+              _date: r.due_date ?? "",
+              Title: r.title,
+              Client: r.client_name,
+              Campaign: r.campaign_name,
+              Status: r.status,
+              Priority: r.priority,
+              "Due Date": r.due_date ?? "—",
+              Overdue: r.overdue ? "Yes" : "No",
+              Description: r.description || "—",
+            }))}
+            filterConfig={{
+              statusKey: "_status",
+              statuses: [...new Set(items.map((i) => i.status))].sort(),
+              typeKey: "_type",
+              types: [...new Set(items.map((i) => i.priority))].sort(),
+              typeLabel: "Priority",
+              dateKey: "_date",
+              showDates: true,
+            }}
+          />
+        }
       />
 
       {items.length === 0 ? (

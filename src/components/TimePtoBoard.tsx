@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { CreateWorkForm, PtoRequestForm } from "@/components/forms";
 import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/ui";
+import { TimePtoExportButton } from "@/components/work/TimePtoExportButton";
 import { num } from "@/lib/format";
 
 export type TimeEntryItem = {
@@ -141,30 +142,33 @@ export function TimePtoBoard({
         title="Time & PTO"
         subtitle="Log hours against campaigns and request time off"
         actions={
-          isEmployee ? (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => {
-                  setShowLog((v) => !v);
-                  setShowPto(false);
-                }}
-              >
-                {showLog ? "Cancel" : "Log time"}
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => {
-                  setShowPto((v) => !v);
-                  setShowLog(false);
-                }}
-              >
-                {showPto ? "Cancel" : "Request PTO"}
-              </button>
-            </div>
-          ) : undefined
+          <div className="flex flex-wrap gap-2">
+            <TimePtoExportButton entries={entries} pto={pto} />
+            {isEmployee ? (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => {
+                    setShowLog((v) => !v);
+                    setShowPto(false);
+                  }}
+                >
+                  {showLog ? "Cancel" : "Log time"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => {
+                    setShowPto((v) => !v);
+                    setShowLog(false);
+                  }}
+                >
+                  {showPto ? "Cancel" : "Request PTO"}
+                </button>
+              </>
+            ) : null}
+          </div>
         }
       />
 

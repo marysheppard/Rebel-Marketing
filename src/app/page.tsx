@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { ContactInquiryButton } from "@/components/ContactInquiryModal";
 import { PublicFaqChat } from "@/components/PublicFaqChat";
 import { PublicRolePreview } from "@/components/PublicRolePreview";
 import { PublicSiteHeader } from "@/components/PublicSiteHeader";
 import { RebelLogo } from "@/components/RebelLogo";
+import { SUPPORT_CONTACT } from "@/data/supportContact";
 
 export default function HomePage() {
   return (
@@ -374,12 +376,10 @@ export default function HomePage() {
               follow up shortly.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <a
-                href="mailto:hello@rebel.demo"
+              <ContactInquiryButton
+                label="Email the team"
                 className="btn border-none bg-white font-semibold text-[#0b1f3a] hover:bg-white/90"
-              >
-                Email the team
-              </a>
+              />
               <Link
                 href="/login?portal=admin"
                 className="btn border border-white/30 bg-transparent font-semibold text-white hover:bg-white/10"
@@ -410,19 +410,22 @@ export default function HomePage() {
             <ul className="mt-4 space-y-2 text-sm text-[#0b1f3a]">
               <li>
                 <a
-                  href="mailto:hello@rebelmarketing.demo"
+                  href={SUPPORT_CONTACT.emailHref}
                   className="font-medium hover:underline"
                 >
-                  hello@rebelmarketing.demo
+                  {SUPPORT_CONTACT.email}
                 </a>
               </li>
               <li>
-                <a href="tel:+16625550184" className="font-medium hover:underline">
-                  (662) 555-0184
+                <a
+                  href={SUPPORT_CONTACT.phoneHref}
+                  className="font-medium hover:underline"
+                >
+                  {SUPPORT_CONTACT.phone}
                 </a>
               </li>
               <li className="text-[#1e3a5f]/75">
-                100 Courthouse Square, Oxford, MS 38655
+                {SUPPORT_CONTACT.address}
               </li>
             </ul>
           </div>

@@ -1,0 +1,72 @@
+[
+  {
+    "id": "faq-what-is-app",
+    "question": "What is this application?",
+    "keywords": ["what is", "overview", "about", "system", "application", "rebel"],
+    "answer": "Rebel Marketing’s Contract Engagement and Contract-to-Cash system. It helps the agency manage clients, contracts, campaigns, work hours, costs, approvals, invoices, payments, and profitability in one place.",
+    "href": "/app"
+  },
+  {
+    "id": "faq-assistant",
+    "question": "What can this assistant do?",
+    "keywords": ["assistant", "chatbot", "help", "ai", "what can you"],
+    "answer": "I can help you navigate the app, explain features, and walk through workflows like contracts, invoices, campaigns, and billing.",
+    "href": "/app"
+  },
+  {
+    "id": "faq-roles",
+    "question": "What user roles exist?",
+    "keywords": ["role", "roles", "permission", "agency manager", "billing", "client portal"],
+    "answer": "Roles include Agency Manager, Account Manager, Marketing, Billing, and Client. The sidebar changes by role. Clients only use the Customer Dashboard.",
+    "href": "/app"
+  },
+  {
+    "id": "faq-retainer",
+    "question": "How do retainers work?",
+    "keywords": ["retainer", "retainers", "monthly retainer", "recurring"],
+    "answer": "A retainer is a recurring monthly fee for ongoing services. Create or edit a contract, set Billing method to Monthly Retainer, and enter the Monthly retainer amount. Track delivery under Campaigns and Work, then invoice from Billing.",
+    "href": "/app/contracts"
+  },
+  {
+    "id": "faq-passthrough",
+    "question": "What are pass-through costs?",
+    "keywords": ["pass-through", "passthrough", "pass through", "pass through costs"],
+    "answer": "Pass-through costs are expenses billed through to the client (media buys, production, vendors). On Costs, record the expense and enable Pass-through so it can flow into invoicing.",
+    "href": "/app/costs"
+  },
+  {
+    "id": "faq-profitability",
+    "question": "How do I calculate profitability?",
+    "keywords": ["profitability", "profit", "margin", "calculate profit"],
+    "answer": "Open Reports to review live profitability. Compare revenue (invoices/payments) against costs and labor. You can also review client-level context from Clients.",
+    "href": "/app/reports"
+  },
+  {
+    "id": "faq-engagement",
+    "question": "What is a client engagement?",
+    "keywords": ["engagement", "engagements", "active engagement"],
+    "answer": "An engagement is an active client relationship covered by one or more contracts and campaigns. Start with a client record, add a contract, then run campaigns and bill against that work.",
+    "href": "/app/clients"
+  },
+  {
+    "id": "faq-sow",
+    "question": "What is a SOW?",
+    "keywords": ["sow", "statement of work"],
+    "answer": "A Statement of Work (SOW) is usually captured as a contract: scope, fees, dates, and billing method. Create it under Contracts linked to the client.",
+    "href": "/app/contracts"
+  },
+  {
+    "id": "faq-support",
+    "question": "How do I contact support?",
+    "keywords": ["support", "contact", "phone", "email", "help desk"],
+    "answer": "Please email support at hello@rebelmarketing.demo and our team will help you.",
+    "href": "/app"
+  },
+  {
+    "id": "faq-dark-mode",
+    "question": "How do I change the theme?",
+    "keywords": ["theme", "dark mode", "dark", "appearance"],
+    "answer": "Use the Theme selector in the top header. Options include corporate, business, dark, night, and dim. Your choice is saved for this browser.",
+    "href": "/app"
+  }
+]

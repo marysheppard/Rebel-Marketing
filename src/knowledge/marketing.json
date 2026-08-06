@@ -1,0 +1,82 @@
+[
+  {
+    "id": "mkt-create-campaign",
+    "question": "How do I create a campaign?",
+    "keywords": ["create campaign", "new campaign", "add campaign"],
+    "answer": "Go to **Campaigns** → use **Create campaign** → link a client and contract → set type, dates, budget → save.",
+    "href": "/app/campaigns",
+    "navLabel": "Open Campaigns"
+  },
+  {
+    "id": "mkt-campaign-budget",
+    "question": "What is a campaign budget?",
+    "keywords": ["campaign budget", "budgets", "budget health"],
+    "answer": "A campaign budget is the planned spend envelope for that campaign. Compare it to recorded costs on Costs and review budget health on Campaigns and Reports.",
+    "href": "/app/campaigns",
+    "navLabel": "Campaigns"
+  },
+  {
+    "id": "mkt-ad-spend",
+    "question": "How do I record advertising expenses?",
+    "keywords": ["advertising", "ad spend", "advertising expenses", "media buy", "record expenses", "record expense"],
+    "answer": "Go to **Costs** → set cost type to **Advertising Spend** (or Pass-Through if billed through) → enter amount, vendor, campaign → click **Record cost**.",
+    "href": "/app/costs",
+    "navLabel": "Record Costs"
+  },
+  {
+    "id": "mkt-where-expenses",
+    "question": "Where do I record expenses?",
+    "keywords": ["where expenses", "record expenses", "costs page", "campaign expenses"],
+    "answer": "Use **Costs** for advertising, vendors, production, and pass-through spend. Tie costs to a campaign or contract whenever possible.",
+    "href": "/app/costs",
+    "navLabel": "Open Costs"
+  },
+  {
+    "id": "mkt-log-hours",
+    "question": "How do I log project hours?",
+    "keywords": ["log hours", "log work", "timesheet", "billable hours", "project hours"],
+    "answer": "Go to **Work** → choose the campaign → enter date, work type, hours, and description → click **Log work**. Mark billable when the time should be invoiced.",
+    "href": "/app/work",
+    "navLabel": "Log Work"
+  },
+  {
+    "id": "mkt-project-progress",
+    "question": "How do I track project progress?",
+    "keywords": ["project progress", "delivery", "track progress", "active projects"],
+    "answer": "Track delivery on **Campaigns** (status and budget) and **Work** (hours logged). Reports summarize operational performance across engagements.",
+    "href": "/app/campaigns",
+    "navLabel": "View Campaigns"
+  },
+  {
+    "id": "mkt-campaign-reports",
+    "question": "Where are campaign reports?",
+    "keywords": ["campaign reports", "campaign performance", "show me campaign reports", "reports campaigns"],
+    "answer": "Open **Reports** for campaign performance and budget views, or open an individual campaign under **Campaigns** for detail-level health.",
+    "href": "/app/reports",
+    "navLabel": "Open Reports"
+  },
+  {
+    "id": "mkt-approvals",
+    "question": "How do client approvals work?",
+    "keywords": ["approvals", "client approval", "sign-off", "approve"],
+    "answer": "Use **Approvals** for client sign-off on creative, budget, and launch decisions. Update status and notes as requests move from Pending to Approved or Changes Requested.",
+    "href": "/app/approvals",
+    "navLabel": "Approval Center"
+  },
+  {
+    "id": "mkt-social",
+    "question": "Can I manage social media campaigns?",
+    "keywords": ["social media", "social", "branding", "advertising campaigns"],
+    "answer": "Yes. Create a campaign with the appropriate type (for example Social Media or Advertising), attach the client contract, log work, and record related spend under Costs.",
+    "href": "/app/campaigns",
+    "navLabel": "Campaigns"
+  },
+  {
+    "id": "mkt-staffing",
+    "question": "How are people assigned to campaigns?",
+    "keywords": ["assignment", "staffed", "assigned", "team campaign"],
+    "answer": "Campaign staffing shows up in dashboards and campaign workflows. Account and marketing roles typically work from Campaigns and Work once assignments exist.",
+    "href": "/app/campaigns",
+    "navLabel": "Open Campaigns"
+  }
+]

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PublicSiteHeader } from "@/components/PublicSiteHeader";
 import { RebelLogo } from "@/components/RebelLogo";
+import { SUPPORT_CONTACT } from "@/data/supportContact";
 
 export default function PrivacyPage() {
   return (
@@ -36,10 +37,10 @@ export default function PrivacyPage() {
           <p>
             Questions? Email{" "}
             <a
-              href="mailto:hello@rebelmarketing.demo"
+              href={SUPPORT_CONTACT.emailHref}
               className="font-semibold text-[#0b1f3a] underline"
             >
-              hello@rebelmarketing.demo
+              {SUPPORT_CONTACT.email}
             </a>
             .
           </p>

@@ -1,12 +1,9 @@
 import {
-  CtrByCampaignChart,
-  ImpressionsClicksTrendChart,
-} from "@/components/Charts";
-import { ClientAnalyticsPicker } from "@/components/ClientAnalyticsPicker";
-import { ClientGrowthSection } from "@/components/ClientGrowthSection";
-import { PortfolioGrowthSection } from "@/components/PortfolioGrowthSection";
-import { EmptyState, PageHeader, StatCard } from "@/components/ui";
-import { money, moneyExact, num } from "@/lib/format";
+  AgencyPortfolioAnalytics,
+} from "@/components/dashboards/AgencyPortfolioAnalytics";
+import { MarketingAnalyticsBody } from "@/components/MarketingAnalyticsBody";
+import { EmptyState, PageHeader } from "@/components/ui";
+import { num } from "@/lib/format";
 import {
   getProfile,
   isClientRole,
@@ -41,9 +38,6 @@ export default async function AnalyticsPage({ searchParams }: Search) {
     profile.role === "agency_manager" ||
     profile.role === "account_manager"
   ) {
-    const { AgencyPortfolioAnalytics } = await import(
-      "@/components/dashboards/AgencyPortfolioAnalytics"
-    );
     return (
       <AgencyPortfolioAnalytics
         searchParams={Promise.resolve({ period: params.period })}
@@ -506,124 +500,41 @@ export default async function AnalyticsPage({ searchParams }: Search) {
     scopedClients.find((c) => c.id === selectedId)?.name ?? "Client";
 
   return (
-    <div>
-      <PageHeader
-        title="Analytics"
-        subtitle="Portfolio growth and digital performance by client strategy"
-      />
-
-      <PortfolioGrowthSection
-        activeClients={activeClients}
-        newClientsQuarter={newClientsQuarter}
-        activeCampaigns={activeCampaigns}
-        conversions30d={conversions30d}
-        newClientsByMonth={newClientsByMonth}
-      />
-
-      <div className="mb-6">
-        <ClientAnalyticsPicker
-          clients={scopedClients}
-          selectedId={selectedId}
-        />
-      </div>
-
-      <h2 className="mb-3 text-lg font-bold text-[#0b1f3a]">{selectedName}</h2>
-
-      {clientCampaigns.length === 0 ? (
-        <EmptyState
-          title="No campaigns for this client"
-          description="Staff this client’s campaigns to see performance here."
-        />
-      ) : !hasMetrics ? (
-        <EmptyState
-          title="No metrics yet"
-          description="Impressions, clicks, and conversions will show once campaign metrics are available."
-        />
-      ) : (
-        <>
-          <ClientGrowthSection
-            clicksDeltaPct={clicksDeltaPct}
-            conversionsDeltaPct={conversionsDeltaPct}
-            spendDeltaPct={spendDeltaPct}
-            cpaDeltaPct={cpaDeltaPct}
-            strategySpendPie={strategySpendPie}
-            strategyConversionsBars={strategyConversionsBars}
-            strategyRows={strategyRows}
-          />
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-            <StatCard
-              label="Impressions"
-              value={totalImpressions.toLocaleString()}
-            />
-            <StatCard label="Clicks" value={totalClicks.toLocaleString()} />
-            <StatCard label="CTR" value={`${ctrPct}%`} />
-            <StatCard
-              label="Conversions"
-              value={totalConversions.toLocaleString()}
-            />
-            <StatCard label="Spend" value={money(totalSpend)} />
-            <StatCard label="CPC" value={moneyExact(cpc)} />
-            <StatCard
-              label="Cost / conv."
-              value={totalConversions > 0 ? moneyExact(cpa) : "—"}
-            />
-          </div>
-
-          <div className="mt-8 grid gap-4 lg:grid-cols-2">
-            <div className="lg:col-span-2">
-              <ImpressionsClicksTrendChart data={trendSeries} />
-            </div>
-            <div className="lg:col-span-2">
-              <CtrByCampaignChart data={ctrByCampaign} />
-            </div>
-          </div>
-
-          <section className="mt-8">
-            <h3 className="mb-3 text-lg font-bold">Campaign breakdown</h3>
-            <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Campaign</th>
-                    <th className="text-right">Impressions</th>
-                    <th className="text-right">Clicks</th>
-                    <th className="text-right">CTR</th>
-                    <th className="text-right">Conversions</th>
-                    <th className="text-right">Spend</th>
-                    <th className="text-right">CPC</th>
-                    <th className="text-right">CPA</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableRows.map((r) => (
-                    <tr key={r.id}>
-                      <td className="font-medium">{r.name}</td>
-                      <td className="text-right">
-                        {r.impressions.toLocaleString()}
-                      </td>
-                      <td className="text-right">
-                        {r.clicks.toLocaleString()}
-                      </td>
-                      <td className="text-right">{r.ctr}%</td>
-                      <td className="text-right">
-                        {r.conversions.toLocaleString()}
-                      </td>
-                      <td className="text-right">{money(r.spend)}</td>
-                      <td className="text-right">
-                        {r.clicks > 0 ? moneyExact(r.cpc) : "—"}
-                      </td>
-                      <td className="text-right">
-                        {r.conversions > 0 ? moneyExact(r.cpa) : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </>
-      )}
-    </div>
+    <MarketingAnalyticsBody
+      userId={userId}
+      scopedClients={scopedClients}
+      selectedId={selectedId}
+      selectedName={selectedName}
+      hasCampaigns={clientCampaigns.length > 0}
+      hasMetrics={hasMetrics}
+      portfolio={{
+        activeClients,
+        newClientsQuarter,
+        activeCampaigns,
+        conversions30d,
+        newClientsByMonth,
+      }}
+      growth={{
+        clicksDeltaPct,
+        conversionsDeltaPct,
+        spendDeltaPct,
+        cpaDeltaPct,
+        strategySpendPie,
+        strategyConversionsBars,
+        strategyRows,
+      }}
+      totals={{
+        impressions: totalImpressions,
+        clicks: totalClicks,
+        ctrPct,
+        conversions: totalConversions,
+        spend: totalSpend,
+        cpc,
+        cpa,
+      }}
+      trendSeries={trendSeries}
+      ctrByCampaign={ctrByCampaign}
+      tableRows={tableRows}
+    />
   );
 }

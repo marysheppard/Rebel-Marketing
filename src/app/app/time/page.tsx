@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { TimeEntryForm } from "@/components/tasks/TimeEntryForm";
 import { TimeEntryTable } from "@/components/tasks/TimeEntryTable";
 import { WeeklyHoursChart } from "@/components/tasks/WeeklyHoursChart";
+import { ListExportButton } from "@/components/exports/ListExportButton";
 import { PageHeader } from "@/components/ui";
 import { num } from "@/lib/format";
 import { getProfile, isClientRole } from "@/lib/page-auth";
@@ -19,6 +20,8 @@ export default async function TimePage() {
   const { supabase, profile, userId } = await getProfile();
   if (!profile || !userId) return null;
   if (isClientRole(profile.role)) redirect("/app");
+  // Account managers use Time & PTO instead of this Time Entry board.
+  if (profile.role === "account_manager") redirect("/app/work");
 
   const today = new Date();
   const todayStr = toDateStr(today);
@@ -149,15 +152,88 @@ export default async function TimePage() {
     { label: "This month", hours: hoursMonth },
   ];
 
+  const exportEntries = entries.map((e) => {
+    const task = e.tasks as
+      | {
+          title?: string;
+          campaigns?:
+            | {
+                campaign_name?: string;
+                clients?:
+                  | { client_name?: string }
+                  | { client_name?: string }[]
+                  | null;
+              }
+            | {
+                campaign_name?: string;
+                clients?:
+                  | { client_name?: string }
+                  | { client_name?: string }[]
+                  | null;
+              }[]
+            | null;
+        }
+      | null
+      | undefined;
+    const camps = task?.campaigns;
+    const camp = Array.isArray(camps) ? camps[0] : camps;
+    const clientsRel = camp?.clients;
+    const clientObj = Array.isArray(clientsRel) ? clientsRel[0] : clientsRel;
+    return {
+      id: e.id,
+      work_date: e.work_date,
+      task_title: task?.title ?? "—",
+      campaign_name: camp?.campaign_name ?? "—",
+      client_name: clientObj?.client_name ?? "—",
+      start_time: e.start_time ?? "—",
+      end_time: e.end_time ?? "—",
+      break_minutes: Number(e.break_minutes ?? 0),
+      total_hours: num(e.total_hours),
+      description: e.description ?? "",
+    };
+  });
+
   return (
     <div>
       <PageHeader
         title="Time Entry"
         subtitle="Log hours with start, end, and break. Totals sync to campaign work entries."
         actions={
-          <Link href="/app/work" className="btn btn-ghost btn-sm">
-            Campaign work log
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <ListExportButton
+              title="Export time entries"
+              description="Filter by date range, then download CSV or PDF."
+              filenameBase="time-entries"
+              matchLabel="entries"
+              headers={[
+                "Date",
+                "Client",
+                "Campaign",
+                "Task",
+                "Start",
+                "End",
+                "Break (min)",
+                "Hours",
+                "Description",
+              ]}
+              items={exportEntries.map((r) => ({
+                _date: r.work_date,
+                Date: r.work_date,
+                Client: r.client_name,
+                Campaign: r.campaign_name,
+                Task: r.task_title,
+                Start: r.start_time,
+                End: r.end_time,
+                "Break (min)": String(r.break_minutes),
+                Hours: r.total_hours.toFixed(2),
+                Description: r.description || "—",
+              }))}
+              filterConfig={{ dateKey: "_date", showDates: true }}
+            />
+            <Link href="/app/work" className="btn btn-ghost btn-sm">
+              Campaign work log
+            </Link>
+          </div>
         }
       />
 

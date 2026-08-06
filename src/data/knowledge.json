@@ -1,0 +1,277 @@
+{
+  "pages": [
+    {
+      "id": "dashboard",
+      "path": "/app",
+      "title": "Dashboard",
+      "menu": "Dashboard",
+      "summary": "Your home screen. Employees see assignments, PTO, and operational snapshots. Clients see their customer portal overview only.",
+      "howTo": [
+        "Open Dashboard from the left sidebar.",
+        "Review summary cards and any alerts at the top of the page."
+      ],
+      "actions": ["View assignments", "Request PTO", "Review alerts"]
+    },
+    {
+      "id": "clients",
+      "path": "/app/clients",
+      "title": "Clients",
+      "menu": "Clients",
+      "summary": "Manage agency client accounts, contacts, status, and outstanding balances.",
+      "howTo": [
+        "Go to Clients in the left sidebar.",
+        "Scroll to the New Client form (or use Create client).",
+        "Fill out client name, industry, and contact details.",
+        "Click Create client to save."
+      ],
+      "actions": ["Create client", "Open client detail", "View profitability context"]
+    },
+    {
+      "id": "contracts",
+      "path": "/app/contracts",
+      "title": "Contracts",
+      "menu": "Contracts",
+      "summary": "Create and manage commercial agreements: retainers, project fees, campaign budgets, and billing methods.",
+      "howTo": [
+        "Go to Contracts in the left sidebar.",
+        "Use the New contract form at the bottom of the page.",
+        "Select a client, enter contract name/number, dates, and billing method.",
+        "Click Create contract to save."
+      ],
+      "actions": ["Create contract", "Edit/view contract", "Open related client", "Prepare for invoicing"]
+    },
+    {
+      "id": "campaigns",
+      "path": "/app/campaigns",
+      "title": "Campaigns",
+      "menu": "Campaigns",
+      "summary": "Track marketing campaigns tied to clients and contracts, including budget health and delivery status.",
+      "howTo": [
+        "Go to Campaigns in the left sidebar.",
+        "Use Create campaign to add a campaign linked to a client and contract.",
+        "Monitor status and budget on the campaigns list or detail page."
+      ],
+      "actions": ["Create campaign", "View campaign detail", "Check budget health"]
+    },
+    {
+      "id": "work",
+      "path": "/app/work",
+      "title": "Work",
+      "menu": "Work",
+      "summary": "Log billable and non-billable hours against campaigns (project progress and delivery tracking).",
+      "howTo": [
+        "Go to Work in the left sidebar.",
+        "Fill in campaign, date, work type, hours, and description.",
+        "Click Log work to save the entry."
+      ],
+      "actions": ["Log work", "Review billable hours", "Track approval status"]
+    },
+    {
+      "id": "costs",
+      "path": "/app/costs",
+      "title": "Costs",
+      "menu": "Costs",
+      "summary": "Record advertising spend, vendor costs, and pass-through expenses against campaigns or contracts.",
+      "howTo": [
+        "Go to Costs in the left sidebar.",
+        "Choose cost type (for example Advertising Spend or Pass-Through).",
+        "Enter amount, date, vendor, and whether it is pass-through.",
+        "Click Record cost to save."
+      ],
+      "actions": ["Record cost", "Track advertising expenditures", "Flag pass-through costs"]
+    },
+    {
+      "id": "approvals",
+      "path": "/app/approvals",
+      "title": "Approvals",
+      "menu": "Approvals",
+      "summary": "Client sign-off on creative, budget, and launch decisions before work proceeds or is billed.",
+      "howTo": [
+        "Go to Approvals in the left sidebar.",
+        "Review pending requests and update approval status with notes as needed."
+      ],
+      "actions": ["Review pending approvals", "Approve or request changes"]
+    },
+    {
+      "id": "billing",
+      "path": "/app/billing",
+      "title": "Billing",
+      "menu": "Billing",
+      "summary": "Generate invoices from contracts, campaigns, and unbilled work. Track invoice status and revenue recognition.",
+      "howTo": [
+        "Go to Billing in the left sidebar.",
+        "Use the Create invoice form.",
+        "Select client (and contract/campaign when applicable), amounts, and dates.",
+        "Click Create invoice to save."
+      ],
+      "actions": ["Create invoice", "Review unbilled work", "Open invoice details"]
+    },
+    {
+      "id": "ar",
+      "path": "/app/ar",
+      "title": "Accounts Receivable",
+      "menu": "Accounts Receivable",
+      "summary": "Monitor unpaid invoices, aging, collections, and record customer payments.",
+      "howTo": [
+        "Go to Accounts Receivable in the left sidebar.",
+        "Review outstanding and overdue invoices.",
+        "Use Record payment to log a payment against an invoice."
+      ],
+      "actions": ["View unpaid invoices", "Record payment", "Check aging"]
+    },
+    {
+      "id": "reports",
+      "path": "/app/reports",
+      "title": "Reports",
+      "menu": "Reports",
+      "summary": "Dashboards for profitability, campaign budget performance, billing, and operational metrics.",
+      "howTo": [
+        "Go to Reports in the left sidebar.",
+        "Review profitability, budget, and billing charts and tables."
+      ],
+      "actions": ["Profitability report", "Campaign performance", "Active engagements overview"]
+    }
+  ],
+  "terms": [
+    {
+      "term": "Retainer",
+      "definition": "A recurring monthly fee paid by a client for ongoing marketing services. In Contracts, set Billing method to Monthly Retainer and enter Monthly retainer."
+    },
+    {
+      "term": "Project fee",
+      "definition": "A fixed price for a scoped project (for example a brand refresh). Tracked on contracts and campaigns as Project fee."
+    },
+    {
+      "term": "Campaign budget",
+      "definition": "The planned spend envelope for a marketing campaign, used to compare against recorded costs."
+    },
+    {
+      "term": "Pass-through cost",
+      "definition": "An expense billed to the client at cost (or marked up per contract), such as media buy or production. Flag Pass-through when recording a cost."
+    },
+    {
+      "term": "Advertising spend",
+      "definition": "Paid media costs (ads, boosts, placements). Record under Costs with cost type Advertising Spend."
+    },
+    {
+      "term": "Billable work",
+      "definition": "Hours logged on Work that can be included on an invoice. Mark entries billable when logging work."
+    },
+    {
+      "term": "Invoice",
+      "definition": "A formal request for payment created in Billing. Statuses include Draft, Sent, Partially Paid, Paid, Overdue, and more."
+    },
+    {
+      "term": "Accounts receivable (AR)",
+      "definition": "Money clients owe the agency. Use Accounts Receivable to see unpaid invoices and record payments."
+    },
+    {
+      "term": "Profitability",
+      "definition": "Revenue versus costs for clients, contracts, or campaigns. Review live profitability on Reports and client detail context."
+    },
+    {
+      "term": "Engagement",
+      "definition": "An active client relationship covered by one or more contracts and campaigns."
+    },
+    {
+      "term": "SOW",
+      "definition": "Statement of Work — often captured as a contract record describing scope, fees, and dates."
+    },
+    {
+      "term": "Approval",
+      "definition": "Client or internal sign-off before creative launches or billing. Tracked in Approvals."
+    }
+  ],
+  "workflows": [
+    {
+      "id": "create-client",
+      "title": "Add a new client",
+      "keywords": ["create client", "add client", "new client", "where client"],
+      "path": "/app/clients",
+      "steps": [
+        "Open Clients from the left sidebar.",
+        "Fill out the New Client form (name, industry, contact).",
+        "Click Create client."
+      ]
+    },
+    {
+      "id": "create-contract",
+      "title": "Create a contract",
+      "keywords": ["create contract", "new contract", "where contract", "add contract"],
+      "path": "/app/contracts",
+      "steps": [
+        "Open Contracts from the left sidebar.",
+        "In New contract, select the client and enter contract details.",
+        "Choose billing method (Monthly Retainer, Project Fee, Campaign Billing, Pass-Through, or Mixed).",
+        "Click Create contract."
+      ]
+    },
+    {
+      "id": "create-invoice",
+      "title": "Generate an invoice",
+      "keywords": ["generate invoice", "create invoice", "how invoice", "billing invoice"],
+      "path": "/app/billing",
+      "steps": [
+        "Open Billing from the left sidebar.",
+        "Use Create invoice and select the client.",
+        "Attach contract/campaign context and amounts as needed.",
+        "Click Create invoice."
+      ]
+    },
+    {
+      "id": "unpaid-invoices",
+      "title": "View unpaid invoices",
+      "keywords": ["unpaid", "outstanding invoice", "overdue", "accounts receivable"],
+      "path": "/app/ar",
+      "steps": [
+        "Open Accounts Receivable from the left sidebar.",
+        "Review invoices that are Sent, Partially Paid, or Overdue.",
+        "Use Record payment when a client pays."
+      ]
+    },
+    {
+      "id": "log-hours",
+      "title": "Log project hours",
+      "keywords": ["log hours", "log work", "timesheet", "billable hours", "project progress"],
+      "path": "/app/work",
+      "steps": [
+        "Open Work from the left sidebar.",
+        "Select the campaign and enter date, work type, and hours.",
+        "Click Log work."
+      ]
+    },
+    {
+      "id": "ad-spend",
+      "title": "Record advertising expenses",
+      "keywords": ["advertising", "ad spend", "media buy", "campaign expenses", "record cost"],
+      "path": "/app/costs",
+      "steps": [
+        "Open Costs from the left sidebar.",
+        "Set cost type to Advertising Spend (or Pass-Through if billed through).",
+        "Enter amount, vendor, and campaign/contract.",
+        "Click Record cost."
+      ]
+    },
+    {
+      "id": "profitability",
+      "title": "Track profitability",
+      "keywords": ["profitability", "profit", "margin", "how profitable"],
+      "path": "/app/reports",
+      "steps": [
+        "Open Reports from the left sidebar.",
+        "Review profitability charts and tables for clients and campaigns.",
+        "Compare revenue (invoices/payments) against costs and labor."
+      ]
+    },
+    {
+      "id": "campaign-reports",
+      "title": "View campaign reports",
+      "keywords": ["campaign report", "campaign performance", "budget report"],
+      "path": "/app/reports",
+      "steps": [
+        "Open Reports from the left sidebar for performance and budget views.",
+        "Or open Campaigns to inspect an individual campaign’s budget health."
+      ]
+    }
+  ]
+}

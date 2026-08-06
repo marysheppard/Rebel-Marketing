@@ -1,4 +1,7 @@
+"use client";
+
 import { BillingStatusBadge } from "@/components/billing/BillingStatusBadge";
+import { InvoicePdfButton } from "@/components/billing/InvoicePdfButton";
 import type { BillingInvoiceRow } from "@/lib/billing";
 import { money } from "@/lib/format";
 
@@ -27,6 +30,7 @@ export function PaidHistorySection({
             <th>Date</th>
             <th className="text-right">Total</th>
             <th>Status</th>
+            <th />
           </tr>
         </thead>
         <tbody>
@@ -38,6 +42,9 @@ export function PaidHistorySection({
               <td className="text-right">{money(i.total_amount)}</td>
               <td>
                 <BillingStatusBadge status={i.status} />
+              </td>
+              <td className="text-right">
+                <InvoicePdfButton invoice={i} />
               </td>
             </tr>
           ))}

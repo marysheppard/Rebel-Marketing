@@ -1,4 +1,5 @@
 import { EditableCalendar } from "@/components/EditableCalendar";
+import { ListExportButton } from "@/components/exports/ListExportButton";
 import { PageHeader } from "@/components/ui";
 import {
   getProfile,
@@ -134,11 +135,77 @@ export default async function CalendarPage() {
     };
   });
 
+  const calendarExportRows = [
+    ...tasks.map((t) => ({
+      kind: "Task" as const,
+      title: t.title,
+      date: t.due_date ?? "",
+      status: t.status,
+      priority: t.priority,
+      detail: t.campaign_name,
+      client: "—",
+    })),
+    ...events.map((e) => ({
+      kind: "Event" as const,
+      title: e.title,
+      date: e.event_date,
+      status: "—",
+      priority: "—",
+      detail: e.notes || "—",
+      client: e.client_name ?? "—",
+    })),
+    ...campaigns.map((c) => ({
+      kind: "Campaign end" as const,
+      title: c.title,
+      date: c.date,
+      status: "—",
+      priority: "—",
+      detail: "Campaign end date",
+      client: c.client_name || "—",
+    })),
+  ];
+
   return (
     <div>
       <PageHeader
         title="Calendar"
         subtitle="Add personal events, reschedule tasks, and update status from your schedule"
+        actions={
+          <ListExportButton
+            className="btn btn-primary btn-sm gap-1"
+            title="Export calendar"
+            description="Filter by item type and date, then download CSV or PDF."
+            filenameBase="calendar"
+            matchLabel="items"
+            headers={[
+              "Type",
+              "Title",
+              "Date",
+              "Client",
+              "Status",
+              "Priority",
+              "Detail",
+            ]}
+            items={calendarExportRows.map((r) => ({
+              _type: r.kind,
+              _date: r.date || "",
+              Type: r.kind,
+              Title: r.title,
+              Date: r.date || "—",
+              Client: r.client,
+              Status: r.status,
+              Priority: r.priority,
+              Detail: r.detail,
+            }))}
+            filterConfig={{
+              typeKey: "_type",
+              types: ["Task", "Event", "Campaign end"],
+              typeLabel: "Item type",
+              dateKey: "_date",
+              showDates: true,
+            }}
+          />
+        }
       />
       <EditableCalendar
         tasks={tasks}

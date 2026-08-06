@@ -1,5 +1,6 @@
 import { ApprovalsBoard } from "@/components/ApprovalsBoard";
 import { CreateApprovalForm } from "@/components/forms";
+import { ListExportButton } from "@/components/exports/ListExportButton";
 import { PageHeader } from "@/components/ui";
 import {
   buildAgingBars,
@@ -99,6 +100,57 @@ export default async function ApprovalsPage() {
           profile.role === "account_manager"
             ? "Sign-off analytics for your client book"
             : "Client sign-off on creative, budget, and launch decisions"
+        }
+        actions={
+          <ListExportButton
+            title="Export approvals"
+            description="Filter by client, status, type, and date, then download CSV or PDF."
+            filenameBase="approvals"
+            matchLabel="approvals"
+            headers={[
+              "Client",
+              "Campaign",
+              "Type",
+              "Description",
+              "Requested",
+              "Status",
+              "Waiting Days",
+            ]}
+            items={items.map((r) => ({
+              _clientId: r.client_id,
+              _status: r.approval_status,
+              _type: r.approval_type,
+              _date: r.requested_date,
+              Client: r.client_name,
+              Campaign: r.campaign_name,
+              Type: r.approval_type,
+              Description: r.description || "—",
+              Requested: r.requested_date,
+              Status: r.approval_status,
+              "Waiting Days":
+                r.waitingDays == null ? "—" : String(r.waitingDays),
+            }))}
+            filterConfig={{
+              clientKey: "_clientId",
+              clients: [
+                ...new Map(
+                  items.map((i) => [i.client_id, i.client_name] as const),
+                ).entries(),
+              ]
+                .map(([id, name]) => ({ id, name }))
+                .sort((a, b) => a.name.localeCompare(b.name)),
+              statusKey: "_status",
+              statuses: [
+                ...new Set(items.map((i) => i.approval_status)),
+              ].sort(),
+              statusLabel: "Status",
+              typeKey: "_type",
+              types: [...new Set(items.map((i) => i.approval_type))].sort(),
+              typeLabel: "Type",
+              dateKey: "_date",
+              showDates: true,
+            }}
+          />
         }
       />
 

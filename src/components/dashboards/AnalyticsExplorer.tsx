@@ -12,8 +12,17 @@ import {
   YAxis,
 } from "recharts";
 import { ChartCard } from "@/components/Charts";
+import {
+  CustomizeLayoutButton,
+  DashboardCustomizePanel,
+} from "@/components/dashboards/DashboardCustomizePanel";
 import { NamedBarChart } from "@/components/tasks/NamedBarChart";
 import { FitBadge, StatCard } from "@/components/ui";
+import {
+  ANALYTICS_DASHBOARD_SECTIONS,
+  ANALYTICS_DASHBOARD_STORAGE,
+  type AnalyticsDashboardSectionId,
+} from "@/lib/analytics-dashboard-layout";
 import { money, num, pct } from "@/lib/format";
 import {
   aggregateCampaignMetrics,
@@ -27,6 +36,7 @@ import {
   resolvePeriod,
   type PeriodKey,
 } from "@/lib/period";
+import { useDashboardLayout } from "@/lib/use-dashboard-layout";
 
 export type AnalyticsSource = {
   profiles: {
@@ -103,15 +113,22 @@ type EmployeeRow = {
 export function AnalyticsExplorer({
   source,
   initialPeriod = "ytd",
+  userId,
 }: {
   source: AnalyticsSource;
   initialPeriod?: PeriodKey;
+  userId: string;
 }) {
   const [period, setPeriod] = useState<PeriodKey>(initialPeriod);
   const [sortKey, setSortKey] = useState<
     "clicks" | "impressions" | "conversions" | "hours" | "name"
   >("clicks");
   const range = useMemo(() => resolvePeriod(period, "", ""), [period]);
+  const layout = useDashboardLayout({
+    userId,
+    storagePrefix: ANALYTICS_DASHBOARD_STORAGE,
+    sections: ANALYTICS_DASHBOARD_SECTIONS,
+  });
 
   const periodMetrics = useMemo(
     () =>
@@ -359,235 +376,284 @@ export function AnalyticsExplorer({
             . Campaign metrics are split evenly across assigned employees.
           </p>
         </div>
-        <label className="form-control w-full min-w-0 max-w-xs">
-          <span className="label-text text-xs opacity-70">Time period</span>
-          <select
-            className="select select-bordered select-sm w-full max-w-full"
-            value={period}
-            onChange={(e) => setPeriod(e.target.value as PeriodKey)}
-          >
-            {DASH_PERIODS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Agency overview</h2>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            label="Impressions"
-            value={agencyAgg.impressions.toLocaleString()}
-            hint={range.label}
-          />
-          <StatCard
-            label="Clicks"
-            value={agencyAgg.clicks.toLocaleString()}
-            hint={range.label}
-          />
-          <StatCard
-            label="CTR"
-            value={pct(agencyAgg.ctr)}
-            hint={`${agencyAgg.clicks.toLocaleString()} / ${agencyAgg.impressions.toLocaleString()}`}
-          />
-          <StatCard
-            label="Conversions"
-            value={agencyAgg.conversions.toLocaleString()}
-          />
-          <StatCard
-            label="Ad spend"
-            value={money(agencyAgg.spend)}
-            hint={range.label}
-          />
-          <StatCard
-            label="CPC"
-            value={agencyCpc != null ? money(agencyCpc) : "—"}
-            hint="Cost per click"
-          />
-          <StatCard
-            label="CPA"
-            value={agencyCpa != null ? money(agencyCpa) : "—"}
-            hint="Cost per acquisition"
-          />
-          <StatCard
-            label="ROAS"
-            value={
-              agencyRoas != null ? `${agencyRoas.toFixed(2)}x` : "—"
-            }
-            hint={`Revenue ${money(attributedRevenue)}`}
-            tone={
-              agencyRoas == null
-                ? "neutral"
-                : agencyRoas >= 1
-                  ? "good"
-                  : "bad"
-            }
-          />
-        </div>
-      </section>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <NamedBarChart
-          title="Clicks by campaign"
-          data={campaignBars}
-          color="#0ea5e9"
-        />
-        <ChartCard title="Impressions & clicks trend" empty={!monthlyTrend.length}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={monthlyTrend}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} width={48} />
-              <Tooltip />
-              <Legend />
-              <Bar
-                dataKey="impressions"
-                name="Impressions"
-                fill="#94a3b8"
-                radius={[4, 4, 0, 0]}
-              />
-              <Bar
-                dataKey="clicks"
-                name="Clicks"
-                fill="#0ea5e9"
-                radius={[4, 4, 0, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <NamedBarChart
-          title="Clicks by employee"
-          data={clicksByEmployee}
-          color="#16375f"
-        />
-        <ChartCard
-          title="Impressions vs clicks by employee"
-          empty={!impressionsByEmployee.length}
-          compact
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={impressionsByEmployee}
-              layout="vertical"
-              margin={{ left: 8, right: 8 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis type="number" tick={{ fontSize: 11 }} />
-              <YAxis
-                type="category"
-                dataKey="name"
-                width={72}
-                tick={{ fontSize: 11 }}
-              />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="impressions" name="Impressions" fill="#94a3b8" />
-              <Bar dataKey="clicks" name="Clicks" fill="#0ea5e9" />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
-
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">Employee performance</h2>
-            <p className="text-xs opacity-60">
-              Media metrics credited from assigned campaigns; hours from work
-              logs.
-            </p>
-          </div>
-          <label className="form-control w-full max-w-[11rem]">
-            <span className="label-text text-xs opacity-70">Sort by</span>
+        <div className="flex flex-wrap items-end gap-2">
+          <CustomizeLayoutButton onClick={() => layout.setPanelOpen(true)} />
+          <label className="form-control w-full min-w-0 max-w-xs">
+            <span className="label-text text-xs opacity-70">Time period</span>
             <select
-              className="select select-bordered select-sm w-full"
-              value={sortKey}
-              onChange={(e) =>
-                setSortKey(
-                  e.target.value as
-                    | "clicks"
-                    | "impressions"
-                    | "conversions"
-                    | "hours"
-                    | "name",
-                )
-              }
+              className="select select-bordered select-sm w-full max-w-full"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value as PeriodKey)}
             >
-              <option value="clicks">Clicks ↓</option>
-              <option value="impressions">Impressions ↓</option>
-              <option value="conversions">Conversions ↓</option>
-              <option value="hours">Hours ↓</option>
-              <option value="name">Name (A–Z)</option>
+              {DASH_PERIODS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </label>
         </div>
+      </div>
 
-        <div className="overflow-x-auto rounded-box border border-base-300">
-          <table className="table table-sm">
-            <thead className="sticky top-0 z-10 bg-base-100">
-              <tr>
-                <th>Employee</th>
-                <th>Role</th>
-                <th className="text-right">Campaigns</th>
-                <th className="text-right">Impressions</th>
-                <th className="text-right">Clicks</th>
-                <th className="text-right">CTR</th>
-                <th className="text-right">Conv.</th>
-                <th className="text-right">Spend</th>
-                <th className="text-right">CPC</th>
-                <th className="text-right">Hours</th>
-                <th className="text-right">Tasks done</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedEmployees.map((r) => (
-                <tr key={r.id} className="hover">
-                  <td>
-                    <div className="font-medium">{r.name}</div>
-                    <div className="text-xs opacity-50">{r.department}</div>
-                  </td>
-                  <td>
-                    <FitBadge className="badge-ghost badge-nowrap">
-                      {r.role.replace(/_/g, " ")}
-                    </FitBadge>
-                  </td>
-                  <td className="text-right">{r.campaigns}</td>
-                  <td className="text-right">
-                    {r.impressions.toLocaleString()}
-                  </td>
-                  <td className="text-right">{r.clicks.toLocaleString()}</td>
-                  <td className="text-right">{pct(r.ctr)}</td>
-                  <td className="text-right">
-                    {r.conversions.toLocaleString()}
-                  </td>
-                  <td className="text-right">{money(r.spend)}</td>
-                  <td className="text-right">
-                    {r.cpc != null ? money(r.cpc) : "—"}
-                  </td>
-                  <td className="text-right">{r.hours.toFixed(1)}</td>
-                  <td className="text-right">{r.tasksDone}</td>
-                </tr>
-              ))}
-              {!sortedEmployees.length ? (
-                <tr>
-                  <td
-                    colSpan={11}
-                    className="py-8 text-center text-sm opacity-60"
-                  >
-                    No employee activity in this period.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+      {layout.visible.length === 0 ? (
+        <div className="rounded-box border border-dashed border-base-300 bg-base-200/40 p-10 text-center">
+          <p className="font-semibold">All sections are hidden</p>
+          <p className="mt-1 text-sm opacity-60">
+            Use Customize layout to show analytics sections again.
+          </p>
+          <CustomizeLayoutButton
+            className="btn btn-primary btn-sm mt-4 gap-2"
+            onClick={() => layout.setPanelOpen(true)}
+          />
         </div>
-      </section>
+      ) : (
+        layout.visible.map((id) => (
+          <div key={id}>{renderAnalyticsSection(id)}</div>
+        ))
+      )}
+
+      {layout.panelOpen ? (
+        <DashboardCustomizePanel
+          prefs={layout.prefs}
+          sections={ANALYTICS_DASHBOARD_SECTIONS}
+          onClose={() => layout.setPanelOpen(false)}
+          onToggle={layout.toggleHidden}
+          onMove={layout.move}
+          onRestore={layout.restoreDefaults}
+        />
+      ) : null}
     </div>
   );
+
+  function renderAnalyticsSection(id: AnalyticsDashboardSectionId) {
+    switch (id) {
+      case "overview":
+        return (
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold">Agency overview</h2>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                label="Impressions"
+                value={agencyAgg.impressions.toLocaleString()}
+                hint={range.label}
+              />
+              <StatCard
+                label="Clicks"
+                value={agencyAgg.clicks.toLocaleString()}
+                hint={range.label}
+              />
+              <StatCard
+                label="CTR"
+                value={pct(agencyAgg.ctr)}
+                hint={`${agencyAgg.clicks.toLocaleString()} / ${agencyAgg.impressions.toLocaleString()}`}
+              />
+              <StatCard
+                label="Conversions"
+                value={agencyAgg.conversions.toLocaleString()}
+              />
+              <StatCard
+                label="Ad spend"
+                value={money(agencyAgg.spend)}
+                hint={range.label}
+              />
+              <StatCard
+                label="CPC"
+                value={agencyCpc != null ? money(agencyCpc) : "—"}
+                hint="Cost per click"
+              />
+              <StatCard
+                label="CPA"
+                value={agencyCpa != null ? money(agencyCpa) : "—"}
+                hint="Cost per acquisition"
+              />
+              <StatCard
+                label="ROAS"
+                value={
+                  agencyRoas != null ? `${agencyRoas.toFixed(2)}x` : "—"
+                }
+                hint={`Revenue ${money(attributedRevenue)}`}
+                tone={
+                  agencyRoas == null
+                    ? "neutral"
+                    : agencyRoas >= 1
+                      ? "good"
+                      : "bad"
+                }
+              />
+            </div>
+          </section>
+        );
+      case "campaign_charts":
+        return (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <NamedBarChart
+              title="Clicks by campaign"
+              data={campaignBars}
+              color="#0ea5e9"
+            />
+            <ChartCard
+              title="Impressions & clicks trend"
+              empty={!monthlyTrend.length}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyTrend}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} width={48} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar
+                    dataKey="impressions"
+                    name="Impressions"
+                    fill="#94a3b8"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="clicks"
+                    name="Clicks"
+                    fill="#0ea5e9"
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </div>
+        );
+      case "employee_charts":
+        return (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <NamedBarChart
+              title="Clicks by employee"
+              data={clicksByEmployee}
+              color="#16375f"
+            />
+            <ChartCard
+              title="Impressions vs clicks by employee"
+              empty={!impressionsByEmployee.length}
+              compact
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={impressionsByEmployee}
+                  layout="vertical"
+                  margin={{ left: 8, right: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={72}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="impressions" name="Impressions" fill="#94a3b8" />
+                  <Bar dataKey="clicks" name="Clicks" fill="#0ea5e9" />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </div>
+        );
+      case "employee_table":
+        return (
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Employee performance</h2>
+                <p className="text-xs opacity-60">
+                  Media metrics credited from assigned campaigns; hours from work
+                  logs.
+                </p>
+              </div>
+              <label className="form-control w-full max-w-[11rem]">
+                <span className="label-text text-xs opacity-70">Sort by</span>
+                <select
+                  className="select select-bordered select-sm w-full"
+                  value={sortKey}
+                  onChange={(e) =>
+                    setSortKey(
+                      e.target.value as
+                        | "clicks"
+                        | "impressions"
+                        | "conversions"
+                        | "hours"
+                        | "name",
+                    )
+                  }
+                >
+                  <option value="clicks">Clicks ↓</option>
+                  <option value="impressions">Impressions ↓</option>
+                  <option value="conversions">Conversions ↓</option>
+                  <option value="hours">Hours ↓</option>
+                  <option value="name">Name (A–Z)</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="overflow-x-auto rounded-box border border-base-300">
+              <table className="table table-sm">
+                <thead className="sticky top-0 z-10 bg-base-100">
+                  <tr>
+                    <th>Employee</th>
+                    <th>Role</th>
+                    <th className="text-right">Campaigns</th>
+                    <th className="text-right">Impressions</th>
+                    <th className="text-right">Clicks</th>
+                    <th className="text-right">CTR</th>
+                    <th className="text-right">Conv.</th>
+                    <th className="text-right">Spend</th>
+                    <th className="text-right">CPC</th>
+                    <th className="text-right">Hours</th>
+                    <th className="text-right">Tasks done</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedEmployees.map((r) => (
+                    <tr key={r.id} className="hover">
+                      <td>
+                        <div className="font-medium">{r.name}</div>
+                        <div className="text-xs opacity-50">{r.department}</div>
+                      </td>
+                      <td>
+                        <FitBadge className="badge-ghost badge-nowrap">
+                          {r.role.replace(/_/g, " ")}
+                        </FitBadge>
+                      </td>
+                      <td className="text-right">{r.campaigns}</td>
+                      <td className="text-right">
+                        {r.impressions.toLocaleString()}
+                      </td>
+                      <td className="text-right">{r.clicks.toLocaleString()}</td>
+                      <td className="text-right">{pct(r.ctr)}</td>
+                      <td className="text-right">
+                        {r.conversions.toLocaleString()}
+                      </td>
+                      <td className="text-right">{money(r.spend)}</td>
+                      <td className="text-right">
+                        {r.cpc != null ? money(r.cpc) : "—"}
+                      </td>
+                      <td className="text-right">{r.hours.toFixed(1)}</td>
+                      <td className="text-right">{r.tasksDone}</td>
+                    </tr>
+                  ))}
+                  {!sortedEmployees.length ? (
+                    <tr>
+                      <td
+                        colSpan={11}
+                        className="py-8 text-center text-sm opacity-60"
+                      >
+                        No employee activity in this period.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      default:
+        return null;
+    }
+  }
 }

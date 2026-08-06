@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { BillingStatusBadge } from "@/components/billing/BillingStatusBadge";
+import { InvoicePdfButton } from "@/components/billing/InvoicePdfButton";
 import type { BillingInvoiceRow } from "@/lib/billing";
 import { money } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
@@ -133,7 +134,7 @@ export function ActiveInvoicesTable({
                   </td>
                   <td className="text-right">
                     <div className="flex flex-col items-end gap-2">
-                      <div className="flex flex-wrap justify-end gap-1">
+                      <div className="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
                         <Link
                           href={`/app/billing/review?invoice=${i.id}`}
                           className="btn btn-ghost btn-xs"
@@ -154,6 +155,7 @@ export function ActiveInvoicesTable({
                             Dispute
                           </button>
                         ) : null}
+                        <InvoicePdfButton invoice={i} />
                       </div>
                       {canManage && confirmDisputeId === i.id ? (
                         <div

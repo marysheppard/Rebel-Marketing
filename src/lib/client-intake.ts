@@ -109,15 +109,19 @@ export type ClientIntakeValues = {
   account_manager_id: string | null;
 };
 
+export {
+  formatPhoneInput,
+  formatPhone,
+  formatEmail,
+  formatAddress,
+  formatCityStateZip,
+  telHref,
+  mailtoHref,
+  phoneDigits,
+} from "@/lib/contact-format";
+
 export function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
-export function formatPhoneInput(value: string) {
-  const digits = value.replace(/\D/g, "").slice(0, 10);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 export function isValidUsPhone(value: string) {

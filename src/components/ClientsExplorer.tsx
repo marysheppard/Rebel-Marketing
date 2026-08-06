@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { EmptyState, StatusBadge } from "@/components/ui";
+import { ListExportButton } from "@/components/exports/ListExportButton";
+import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { money, num } from "@/lib/format";
 import { remainingBalance } from "@/lib/finance";
 import {
@@ -62,9 +63,11 @@ type ClientRow = {
 export function ClientsExplorer({
   source,
   initialPeriod = "ytd",
+  canManage = false,
 }: {
   source: ClientsExplorerSource;
   initialPeriod?: PeriodKey;
+  canManage?: boolean;
 }) {
   const [period, setPeriod] = useState<PeriodKey>(initialPeriod);
   const [customStart, setCustomStart] = useState("");
@@ -190,6 +193,59 @@ export function ClientsExplorer({
 
   return (
     <div className="space-y-4">
+      <PageHeader
+        title="Clients"
+        subtitle="One account per company — contracts and engagements attach here"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <ListExportButton
+              className="btn btn-outline btn-sm gap-1"
+              title="Export clients"
+              description="Downloads the client list for the current period and table filters."
+              filenameBase="clients"
+              matchLabel="clients"
+              headers={[
+                "Client",
+                "Customer ID",
+                "Industry",
+                "Status",
+                "Revenue",
+                "Costs",
+                "Profit",
+                "Outstanding",
+              ]}
+              items={filtered.map((r) => ({
+                Client: r.name,
+                "Customer ID": r.customerId || "—",
+                Industry: r.industry,
+                Status: r.status,
+                Revenue: r.revenue.toFixed(2),
+                Costs: r.costs.toFixed(2),
+                Profit: r.profit.toFixed(2),
+                Outstanding: r.outstanding.toFixed(2),
+              }))}
+              filterConfig={{ showDates: false }}
+            />
+            {canManage ? (
+              <>
+                <Link
+                  href="/app/clients/intake"
+                  className="btn btn-primary btn-sm"
+                >
+                  New Client Intake
+                </Link>
+                <Link
+                  href="/app/contracts/builder"
+                  className="btn btn-outline btn-sm"
+                >
+                  New contract
+                </Link>
+              </>
+            ) : null}
+          </div>
+        }
+      />
+
       <div className="rounded-box border border-base-300 bg-base-100 p-4">
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <div>

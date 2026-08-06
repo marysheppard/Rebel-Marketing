@@ -57,6 +57,7 @@ export async function AgencyPortfolioAnalytics({
         }
       />
       <AnalyticsExplorer
+        userId={userId}
         initialPeriod={parsePeriodParam(sp.period)}
         source={{
           profiles: scopedProfiles.map((p) => ({

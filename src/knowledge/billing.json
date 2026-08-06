@@ -1,0 +1,82 @@
+[
+  {
+    "id": "billing-create-invoice",
+    "question": "How do I create an invoice?",
+    "keywords": ["create invoice", "new invoice", "make an invoice", "how invoice", "generate invoice"],
+    "answer": "Go to **Billing** → fill out **Create invoice** → choose the client and amounts → click **Create invoice**. Then track collection under Accounts Receivable.",
+    "href": "/app/billing",
+    "navLabel": "Go to Billing"
+  },
+  {
+    "id": "billing-how-invoices-work",
+    "question": "How do invoices work?",
+    "keywords": ["how invoices", "invoice", "invoices work", "billing invoices"],
+    "answer": "Invoices are created in **Billing**, then collected in **Accounts Receivable**. Statuses include Draft, Sent, Partially Paid, Paid, Overdue, Disputed, and Canceled.",
+    "href": "/app/billing",
+    "navLabel": "Open Billing"
+  },
+  {
+    "id": "billing-unpaid",
+    "question": "Where can I view unpaid invoices?",
+    "keywords": ["unpaid", "outstanding", "overdue", "unpaid invoices", "outstanding invoices"],
+    "answer": "Open **Accounts Receivable** to see Sent, Partially Paid, and Overdue invoices, aging, and payment recording.",
+    "href": "/app/ar",
+    "navLabel": "Accounts Receivable"
+  },
+  {
+    "id": "billing-record-payment",
+    "question": "How do I record a payment?",
+    "keywords": ["record payment", "log payment", "receive payment", "payment"],
+    "answer": "Go to **Accounts Receivable** → use **Record payment** → select the invoice, amount, method, and date → save.",
+    "href": "/app/ar",
+    "navLabel": "Record a Payment"
+  },
+  {
+    "id": "billing-send-invoice",
+    "question": "How do I send an invoice?",
+    "keywords": ["send invoice", "sent status", "email invoice"],
+    "answer": "Create the invoice in Billing (often as Draft), then update its status to **Sent** when it’s issued to the client. Track whether it gets paid in Accounts Receivable.",
+    "href": "/app/billing",
+    "navLabel": "Open Billing"
+  },
+  {
+    "id": "billing-unbilled-work",
+    "question": "Where is unbilled work?",
+    "keywords": ["unbilled", "unbilled work", "billable not invoiced"],
+    "answer": "Billing surfaces unbilled / revenue context alongside invoices. Log hours first under **Work** (mark billable), then create invoices in **Billing**.",
+    "href": "/app/billing",
+    "navLabel": "Open Billing"
+  },
+  {
+    "id": "billing-payment-terms",
+    "question": "What are payment terms?",
+    "keywords": ["payment terms", "net 30", "due date"],
+    "answer": "Payment terms (like Net 30) live on the contract and drive invoice due dates. Set them when creating the contract, then honor them when creating invoices.",
+    "href": "/app/contracts",
+    "navLabel": "Contracts"
+  },
+  {
+    "id": "billing-ar-meaning",
+    "question": "What is accounts receivable?",
+    "keywords": ["accounts receivable", "ar", "collections", "aging"],
+    "answer": "Accounts Receivable (AR) is money clients owe you. Use the AR page for collections, aging views, and recording payments against invoices.",
+    "href": "/app/ar",
+    "navLabel": "Open AR"
+  },
+  {
+    "id": "billing-partial",
+    "question": "What does partially paid mean?",
+    "keywords": ["partially paid", "partial payment"],
+    "answer": "Partially Paid means some, but not all, of the invoice total has been recorded. Keep recording payments in AR until the invoice reaches Paid.",
+    "href": "/app/ar",
+    "navLabel": "Accounts Receivable"
+  },
+  {
+    "id": "billing-disputed",
+    "question": "What if an invoice is disputed?",
+    "keywords": ["disputed", "dispute invoice"],
+    "answer": "Disputed invoices stay visible in billing/AR workflows so the team can resolve notes with the client before collecting the remaining balance.",
+    "href": "/app/ar",
+    "navLabel": "Open AR"
+  }
+]
