@@ -45,7 +45,7 @@ const ROLE_PATHS: Record<UserRole, string[]> = {
     "/app/ar",
     "/app/reports",
   ],
-  client: ["/app"],
+  client: ["/app", "/app/contracts", "/app/change-requests"],
 };
 
 export function canAccessPath(role: UserRole, href: string): boolean {

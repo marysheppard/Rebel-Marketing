@@ -56,6 +56,7 @@ type CustomerDashboardBodyProps = {
   totalInvoiced: number;
   balance: number;
   pendingCount: number;
+  pendingChangeRequestCount: number;
   awaitingSignature: number;
   campaigns: CustomerCampaignRow[];
   openInvoices: CustomerInvoiceRow[];
@@ -127,6 +128,14 @@ export function CustomerDashboardBody(props: CustomerDashboardBodyProps) {
           value={String(props.pendingCount)}
           tone={props.pendingCount ? "warn" : undefined}
         />
+        <Link href="/app/change-requests" className="block">
+          <StatCard
+            label="Change requests pending"
+            value={String(props.pendingChangeRequestCount)}
+            tone={props.pendingChangeRequestCount ? "warn" : "good"}
+            hint="Open Request a change"
+          />
+        </Link>
         <Link href="/app/contracts/documents" className="block">
           <StatCard
             label="Contracts awaiting signature"

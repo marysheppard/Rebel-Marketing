@@ -8,6 +8,7 @@ import {
 import { EmptyState, PageHeader } from "@/components/ui";
 import { paidAmount, remainingBalance } from "@/lib/finance";
 import { money, num } from "@/lib/format";
+import { isClientChangeType } from "@/lib/change-requests";
 import { getProfile, isClientRole, isMarketingRole } from "@/lib/page-auth";
 import { startOfWeek, toDateStr } from "@/lib/time";
 import type { Campaign, Client, Invoice, Profile } from "@/lib/types";
@@ -670,7 +671,14 @@ async function CustomerDashboard() {
     .filter((i) => i.due_date < todayStr)
     .reduce((s, i) => s + remainingBalance(i), 0);
   const nextDue = openInvoices[0] ?? null;
-  const pending = approvals.filter((a) => a.approval_status === "Pending");
+  const pending = approvals.filter(
+    (a) =>
+      a.approval_status === "Pending" && !isClientChangeType(a.approval_type),
+  );
+  const pendingChangeRequests = approvals.filter(
+    (a) =>
+      a.approval_status === "Pending" && isClientChangeType(a.approval_type),
+  );
   const awaitingSignature = pendingSignatures?.length ?? 0;
 
   const campaignRows = campaigns.map((c) => {
@@ -731,6 +739,7 @@ async function CustomerDashboard() {
       totalInvoiced={totalInvoiced}
       balance={balance}
       pendingCount={pending.length}
+      pendingChangeRequestCount={pendingChangeRequests.length}
       awaitingSignature={awaitingSignature}
       campaigns={campaignRows}
       openInvoices={openInvoiceRows}
