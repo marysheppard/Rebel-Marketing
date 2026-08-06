@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import {
   convertToModelMessages,
   createUIMessageStreamResponse,
@@ -5,8 +6,14 @@ import {
   toUIMessageStream,
   type UIMessage,
 } from "ai";
+import { validateChatRequest } from "@/controllers/chatController";
 import { FAQ_SYSTEM_PROMPT } from "@/lib/faq-knowledge";
+import {
+  CONNECTION_ERROR,
+  generateChatCompletion,
+} from "@/services/openaiService";
 
+export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const MAX_MESSAGES = 20;
@@ -46,7 +53,8 @@ function messageTextLength(message: UIMessage): number {
   }, 0);
 }
 
-export async function POST(req: Request) {
+/** Public homepage FAQ chat (AI Gateway streaming). */
+async function handleFaqChat(req: Request, messages: UIMessage[]) {
   if (!process.env.AI_GATEWAY_API_KEY) {
     return Response.json(
       {
@@ -65,18 +73,6 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { messages?: UIMessage[] };
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-
-  const messages = body.messages;
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return Response.json({ error: "messages required." }, { status: 400 });
-  }
-
   if (messages.length > MAX_MESSAGES) {
     return Response.json(
       { error: `At most ${MAX_MESSAGES} messages allowed.` },
@@ -86,10 +82,7 @@ export async function POST(req: Request) {
 
   for (const message of messages) {
     if (messageTextLength(message) > MAX_CHARS_PER_MESSAGE) {
-      return Response.json(
-        { error: "Message too long." },
-        { status: 400 },
-      );
+      return Response.json({ error: "Message too long." }, { status: 400 });
     }
   }
 
@@ -103,4 +96,66 @@ export async function POST(req: Request) {
   return createUIMessageStreamResponse({
     stream: toUIMessageStream({ stream: result.stream }),
   });
+}
+
+/** In-app Rebel Assistant (OpenAI Chat Completions). */
+async function handleAssistantChat(body: {
+  message?: unknown;
+  context?: unknown;
+  history?: unknown;
+}) {
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json(
+      {
+        error:
+          "AI assistant is not configured. Add OPENAI_API_KEY to .env.local.",
+      },
+      { status: 503 },
+    );
+  }
+
+  const validated = validateChatRequest(body);
+  if (!validated.ok) {
+    return NextResponse.json(
+      { error: validated.error },
+      { status: validated.status },
+    );
+  }
+
+  try {
+    const result = await generateChatCompletion(validated.data);
+    return NextResponse.json({ message: result.content });
+  } catch (err) {
+    if (err instanceof Error && err.message === "MISSING_API_KEY") {
+      return NextResponse.json(
+        {
+          error:
+            "AI assistant is not configured. Add OPENAI_API_KEY to .env.local.",
+        },
+        { status: 503 },
+      );
+    }
+    console.error("[api/chat] assistant error:", err);
+    return NextResponse.json({ error: CONNECTION_ERROR }, { status: 502 });
+  }
+}
+
+/**
+ * POST /api/chat
+ * - Homepage FAQ: body.messages (AI SDK UIMessage[]) → streaming gateway
+ * - In-app assistant: body.message (+ context/history) → OpenAI JSON
+ */
+export async function POST(req: Request) {
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  if (Array.isArray(body.messages)) {
+    return handleFaqChat(req, body.messages as UIMessage[]);
+  }
+
+  return handleAssistantChat(body);
 }
