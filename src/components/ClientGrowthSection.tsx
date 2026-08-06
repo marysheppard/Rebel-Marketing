@@ -39,6 +39,7 @@ export function ClientGrowthSection({
   strategySpendPie: _strategySpendPie,
   strategyConversionsBars,
   strategyRows,
+  periodLabel = "Last 30 days",
 }: {
   clicksDeltaPct: number | null;
   conversionsDeltaPct: number | null;
@@ -47,8 +48,10 @@ export function ClientGrowthSection({
   strategySpendPie?: { name: string; value: number }[];
   strategyConversionsBars: { name: string; conversions: number }[];
   strategyRows: StrategyRow[];
+  periodLabel?: string;
 }) {
   const [strategyFilter, setStrategyFilter] = useState<string | null>(null);
+  const vsHint = `${periodLabel} vs prior period`;
 
   const slices = useMemo(
     () => buildStrategyDonutSlices(strategyRows),
@@ -68,25 +71,25 @@ export function ClientGrowthSection({
   return (
     <section className="mb-8">
       <h3 className="mb-3 text-lg font-bold text-[#0b1f3a]">
-        Growth vs prior 30 days
+        Growth vs prior period
       </h3>
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Clicks Δ"
           value={formatDelta(clicksDeltaPct)}
-          hint="Last 30d vs prior 30d"
+          hint={vsHint}
           tone={deltaTone(clicksDeltaPct)}
         />
         <StatCard
           label="Conversions Δ"
           value={formatDelta(conversionsDeltaPct)}
-          hint="Last 30d vs prior 30d"
+          hint={vsHint}
           tone={deltaTone(conversionsDeltaPct)}
         />
         <StatCard
           label="Spend Δ"
           value={formatDelta(spendDeltaPct)}
-          hint="Last 30d vs prior 30d"
+          hint={vsHint}
           tone={deltaTone(spendDeltaPct)}
         />
         <StatCard
@@ -109,13 +112,12 @@ export function ClientGrowthSection({
       <div className="mb-4 space-y-4">
         <StrategySpendPieChart
           slices={slices}
+          periodLabel={periodLabel}
           selectedKey={strategyFilter}
           onSelectKey={setStrategyFilter}
           onClearSelection={() => setStrategyFilter(null)}
         />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <StrategyConversionsBarChart data={filteredBars} />
-        </div>
+        <StrategyConversionsBarChart data={filteredBars} />
       </div>
 
       <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
@@ -137,7 +139,7 @@ export function ClientGrowthSection({
                 <td colSpan={7} className="text-sm opacity-60">
                   {strategyFilter
                     ? `No rows for “${strategyFilter}”.`
-                    : "No strategy metrics in the last 30 days."}
+                    : `No strategy metrics in ${periodLabel.toLowerCase()}.`}
                 </td>
               </tr>
             ) : (

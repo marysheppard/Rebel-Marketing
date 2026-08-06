@@ -1,3 +1,4 @@
+import { ALL_CLIENTS_VALUE } from "@/components/ClientAnalyticsPicker";
 import {
   AgencyPortfolioAnalytics,
 } from "@/components/dashboards/AgencyPortfolioAnalytics";
@@ -9,6 +10,9 @@ import {
   isClientRole,
   isEmployeeWorkRole,
 } from "@/lib/page-auth";
+import { inPeriod, resolvePeriod } from "@/lib/period";
+import { parsePeriodParam } from "@/lib/period-url";
+import { buildMarketingTrendSeries } from "@/lib/marketing-trend";
 import { redirect } from "next/navigation";
 
 type Search = { searchParams: Promise<{ client?: string; period?: string }> };
@@ -26,6 +30,27 @@ function monthLabel(key: string) {
   const [y, m] = key.split("-");
   const date = new Date(Number(y), Number(m) - 1, 1);
   return date.toLocaleString("en-US", { month: "short", year: "2-digit" });
+}
+
+function toDateStr(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+/** Equal-length window immediately before [start, end]. */
+function priorEqualWindow(
+  start: string | null,
+  end: string | null,
+): { start: string | null; end: string | null } {
+  if (!start || !end) return { start: null, end: null };
+  const s = new Date(`${start}T12:00:00`);
+  const e = new Date(`${end}T12:00:00`);
+  const days =
+    Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const priorEnd = new Date(s);
+  priorEnd.setDate(priorEnd.getDate() - 1);
+  const priorStart = new Date(priorEnd);
+  priorStart.setDate(priorStart.getDate() - (days - 1));
+  return { start: toDateStr(priorStart), end: toDateStr(priorEnd) };
 }
 
 export default async function AnalyticsPage({ searchParams }: Search) {
@@ -49,14 +74,15 @@ export default async function AnalyticsPage({ searchParams }: Search) {
     redirect("/app");
   }
 
+  const periodKey = parsePeriodParam(params.period, "last30");
+  const range = resolvePeriod(periodKey, "", "");
+  const priorRange = priorEqualWindow(range.start, range.end);
+
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
   const d30 = new Date(today);
   d30.setDate(d30.getDate() - 30);
-  const d60 = new Date(today);
-  d60.setDate(d60.getDate() - 60);
   const last30Start = d30.toISOString().slice(0, 10);
-  const prior30Start = d60.toISOString().slice(0, 10);
 
   const quarterMonth = Math.floor(today.getMonth() / 3) * 3;
   const quarterStart = `${today.getFullYear()}-${String(quarterMonth + 1).padStart(2, "0")}-01`;
@@ -216,43 +242,84 @@ export default async function AnalyticsPage({ searchParams }: Search) {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
     monthKeys.push(monthKey(d));
   }
-  const newByMonth = new Map(monthKeys.map((k) => [k, 0]));
-  for (const meta of clientMeta.values()) {
-    if (!meta.created_at) continue;
-    const key = meta.created_at.slice(0, 7);
-    if (newByMonth.has(key)) {
-      newByMonth.set(key, (newByMonth.get(key) ?? 0) + 1);
-    }
-  }
-  const newClientsByMonth = monthKeys.map((k) => ({
-    month: monthLabel(k),
-    count: newByMonth.get(k) ?? 0,
-  }));
+  const portfolioRangeStart = `${monthKeys[0]}-01`;
 
   const { data: portfolioMetricRows } =
     allScopedCampaignIds.length > 0
       ? await supabase
           .from("campaign_metrics")
-          .select("campaign_id, metric_date, conversions")
+          .select(
+            "campaign_id, metric_date, conversions, spend, clicks, impressions",
+          )
           .in("campaign_id", allScopedCampaignIds)
-          .gte("metric_date", last30Start)
+          .gte("metric_date", portfolioRangeStart)
           .lte("metric_date", todayStr)
-      : { data: [] as { campaign_id: string; metric_date: string; conversions: number }[] };
+      : {
+          data: [] as {
+            campaign_id: string;
+            metric_date: string;
+            conversions: number;
+            spend: number;
+            clicks: number;
+            impressions: number;
+          }[],
+        };
 
-  const conversions30d = (portfolioMetricRows ?? []).reduce(
-    (s, m) => s + num(m.conversions),
-    0,
+  const byMonth = new Map(
+    monthKeys.map((k) => [
+      k,
+      { conversions: 0, spend: 0, clicks: 0, impressions: 0 },
+    ]),
   );
+  let conversions30d = 0;
+  for (const m of portfolioMetricRows ?? []) {
+    const d = String(m.metric_date);
+    const key = d.slice(0, 7);
+    const bucket = byMonth.get(key);
+    if (bucket) {
+      bucket.conversions += num(m.conversions);
+      bucket.spend += num(m.spend);
+      bucket.clicks += num(m.clicks);
+      bucket.impressions += num(m.impressions);
+    }
+    if (d >= last30Start && d <= todayStr) {
+      conversions30d += num(m.conversions);
+    }
+  }
 
-  const selectedId =
-    clientParam && scopedClients.some((c) => c.id === clientParam)
-      ? clientParam
-      : scopedClients[0]!.id;
+  const portfolioByMonth = monthKeys.map((k) => {
+    const v = byMonth.get(k)!;
+    return {
+      month: monthLabel(k),
+      conversions: v.conversions,
+      spend: v.spend,
+      clicks: v.clicks,
+    };
+  });
 
-  const clientCampaigns = campaignsByClient.get(selectedId) ?? [];
+  const allClientsMode =
+    !clientParam ||
+    clientParam === ALL_CLIENTS_VALUE ||
+    !scopedClients.some((c) => c.id === clientParam);
+
+  const selectedId = allClientsMode
+    ? ALL_CLIENTS_VALUE
+    : (clientParam as string);
+
+  const clientCampaigns = allClientsMode
+    ? allScopedCampaigns
+    : (campaignsByClient.get(selectedId) ?? []);
+
   const campaignIds = clientCampaigns.map((c) => c.id);
+
+  function campaignDisplayName(camp: ScopedCampaign) {
+    if (!allClientsMode) return camp.name;
+    const clientName = clientMeta.get(camp.client_id)?.name ?? "Client";
+    return `${clientName} — ${camp.name}`;
+  }
+
   const campaignNameById = new Map(
-    clientCampaigns.map((c) => [c.id, c.name] as const),
+    clientCampaigns.map((c) => [c.id, campaignDisplayName(c)] as const),
   );
   const campaignTypeById = new Map(
     clientCampaigns.map((c) => [c.id, c.campaign_type] as const),
@@ -287,7 +354,15 @@ export default async function AnalyticsPage({ searchParams }: Search) {
   };
 
   const byCampaign = new Map<string, CampAgg>();
-  const byDate = new Map<string, { impressions: number; clicks: number }>();
+  const byDate = new Map<
+    string,
+    {
+      impressions: number;
+      clicks: number;
+      conversions: number;
+      spend: number;
+    }
+  >();
 
   type PeriodAgg = {
     impressions: number;
@@ -338,36 +413,49 @@ export default async function AnalyticsPage({ searchParams }: Search) {
     const d = String(m.metric_date);
     const type = campaignTypeById.get(cid) ?? "Other";
 
-    totalImpressions += impressions;
-    totalClicks += clicks;
-    totalConversions += conversions;
-    totalSpend += spend;
+    const inCurrent = inPeriod(d, range.start, range.end);
+    const inPrior =
+      priorRange.start != null &&
+      priorRange.end != null &&
+      inPeriod(d, priorRange.start, priorRange.end);
 
-    const prev = byCampaign.get(cid) ?? {
-      name: campaignNameById.get(cid) ?? "Campaign",
-      impressions: 0,
-      clicks: 0,
-      conversions: 0,
-      spend: 0,
-    };
-    prev.impressions += impressions;
-    prev.clicks += clicks;
-    prev.conversions += conversions;
-    prev.spend += spend;
-    byCampaign.set(cid, prev);
+    if (inCurrent) {
+      totalImpressions += impressions;
+      totalClicks += clicks;
+      totalConversions += conversions;
+      totalSpend += spend;
 
-    const day = byDate.get(d) ?? { impressions: 0, clicks: 0 };
-    day.impressions += impressions;
-    day.clicks += clicks;
-    byDate.set(d, day);
+      const prev = byCampaign.get(cid) ?? {
+        name: campaignNameById.get(cid) ?? "Campaign",
+        impressions: 0,
+        clicks: 0,
+        conversions: 0,
+        spend: 0,
+      };
+      prev.impressions += impressions;
+      prev.clicks += clicks;
+      prev.conversions += conversions;
+      prev.spend += spend;
+      byCampaign.set(cid, prev);
 
-    if (d >= last30Start && d <= todayStr) {
+      const day = byDate.get(d) ?? {
+        impressions: 0,
+        clicks: 0,
+        conversions: 0,
+        spend: 0,
+      };
+      day.impressions += impressions;
+      day.clicks += clicks;
+      day.conversions += conversions;
+      day.spend += spend;
+      byDate.set(d, day);
+
       currentPeriod.impressions += impressions;
       currentPeriod.clicks += clicks;
       currentPeriod.conversions += conversions;
       currentPeriod.spend += spend;
       bumpStrategy(strategyCurrent, type, impressions, clicks, conversions, spend);
-    } else if (d >= prior30Start && d < last30Start) {
+    } else if (inPrior) {
       priorPeriod.impressions += impressions;
       priorPeriod.clicks += clicks;
       priorPeriod.conversions += conversions;
@@ -379,7 +467,7 @@ export default async function AnalyticsPage({ searchParams }: Search) {
   for (const c of clientCampaigns) {
     if (!byCampaign.has(c.id)) {
       byCampaign.set(c.id, {
-        name: c.name,
+        name: campaignDisplayName(c),
         impressions: 0,
         clicks: 0,
         conversions: 0,
@@ -467,16 +555,53 @@ export default async function AnalyticsPage({ searchParams }: Search) {
         r.impressions > 0
           ? Math.round((r.clicks / r.impressions) * 10000) / 100
           : 0,
+      impressions: r.impressions,
+      clicks: r.clicks,
     }))
+    .filter((r) => r.impressions > 0)
     .sort((a, b) => b.ctr - a.ctr);
 
-  const trendSeries = [...byDate.entries()]
+  const clicksByCampaign = [...byCampaign.values()]
+    .map((r) => ({
+      name: r.name,
+      clicks: r.clicks,
+      impressions: r.impressions,
+      ctr:
+        r.impressions > 0
+          ? Math.round((r.clicks / r.impressions) * 10000) / 100
+          : 0,
+    }))
+    .filter((r) => r.clicks > 0)
+    .sort((a, b) => b.clicks - a.clicks);
+
+  const impressionsByCampaign = [...byCampaign.values()]
+    .map((r) => ({
+      name: r.name,
+      impressions: r.impressions,
+      clicks: r.clicks,
+      ctr:
+        r.impressions > 0
+          ? Math.round((r.clicks / r.impressions) * 10000) / 100
+          : 0,
+    }))
+    .filter((r) => r.impressions > 0)
+    .sort((a, b) => b.impressions - a.impressions);
+
+  const dailyTrend = [...byDate.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, v]) => ({
-      date: date.slice(5),
+      date,
       impressions: v.impressions,
       clicks: v.clicks,
+      conversions: v.conversions,
+      spend: v.spend,
     }));
+
+  const trendSeries = buildMarketingTrendSeries(
+    dailyTrend,
+    range.start,
+    range.end,
+  );
 
   const tableRows = [...byCampaign.entries()]
     .map(([id, r]) => ({
@@ -496,8 +621,9 @@ export default async function AnalyticsPage({ searchParams }: Search) {
     .sort((a, b) => b.clicks - a.clicks);
 
   const hasMetrics = (metricRows ?? []).length > 0;
-  const selectedName =
-    scopedClients.find((c) => c.id === selectedId)?.name ?? "Client";
+  const selectedName = allClientsMode
+    ? "All clients"
+    : (scopedClients.find((c) => c.id === selectedId)?.name ?? "Client");
 
   return (
     <MarketingAnalyticsBody
@@ -505,14 +631,17 @@ export default async function AnalyticsPage({ searchParams }: Search) {
       scopedClients={scopedClients}
       selectedId={selectedId}
       selectedName={selectedName}
+      allClientsMode={allClientsMode}
       hasCampaigns={clientCampaigns.length > 0}
       hasMetrics={hasMetrics}
+      periodKey={periodKey}
+      periodLabel={range.label}
       portfolio={{
         activeClients,
         newClientsQuarter,
         activeCampaigns,
         conversions30d,
-        newClientsByMonth,
+        portfolioByMonth,
       }}
       growth={{
         clicksDeltaPct,
@@ -534,6 +663,8 @@ export default async function AnalyticsPage({ searchParams }: Search) {
       }}
       trendSeries={trendSeries}
       ctrByCampaign={ctrByCampaign}
+      clicksByCampaign={clicksByCampaign}
+      impressionsByCampaign={impressionsByCampaign}
       tableRows={tableRows}
     />
   );

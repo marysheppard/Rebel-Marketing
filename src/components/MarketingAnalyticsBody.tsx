@@ -1,8 +1,9 @@
 "use client";
 
 import {
-  CtrByCampaignChart,
-  ImpressionsClicksTrendChart,
+  CampaignCtrRankingChart,
+  CampaignVolumeRankingChart,
+  MarketingMediaTrendChart,
 } from "@/components/Charts";
 import { ClientAnalyticsPicker } from "@/components/ClientAnalyticsPicker";
 import { ClientGrowthSection } from "@/components/ClientGrowthSection";
@@ -19,21 +20,34 @@ import {
   MARKETING_ANALYTICS_STORAGE,
   type MarketingAnalyticsSectionId,
 } from "@/lib/marketing-analytics-layout";
+import { PERIOD_OPTIONS, type PeriodKey } from "@/lib/period";
 import { useDashboardLayout } from "@/lib/use-dashboard-layout";
+import { usePeriodParam } from "@/lib/use-period-param";
+import { Suspense } from "react";
+
+const MARKETING_PERIODS = PERIOD_OPTIONS.filter((o) => o.value !== "custom");
 
 export type MarketingAnalyticsBodyProps = {
   userId: string;
   scopedClients: { id: string; name: string }[];
   selectedId: string;
   selectedName: string;
+  allClientsMode?: boolean;
   hasCampaigns: boolean;
   hasMetrics: boolean;
+  periodKey: PeriodKey;
+  periodLabel: string;
   portfolio: {
     activeClients: number;
     newClientsQuarter: number;
     activeCampaigns: number;
     conversions30d: number;
-    newClientsByMonth: { month: string; count: number }[];
+    portfolioByMonth: {
+      month: string;
+      conversions: number;
+      spend: number;
+      clicks: number;
+    }[];
   };
   growth: {
     clicksDeltaPct: number | null;
@@ -54,11 +68,31 @@ export type MarketingAnalyticsBodyProps = {
     cpa: number;
   };
   trendSeries: {
-    date: string;
+    label: string;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    spend: number;
+    ctr: number;
+  }[];
+  ctrByCampaign: {
+    name: string;
+    ctr: number;
     impressions: number;
     clicks: number;
   }[];
-  ctrByCampaign: { name: string; ctr: number }[];
+  clicksByCampaign: {
+    name: string;
+    clicks: number;
+    impressions: number;
+    ctr: number;
+  }[];
+  impressionsByCampaign: {
+    name: string;
+    impressions: number;
+    clicks: number;
+    ctr: number;
+  }[];
   tableRows: {
     id: string;
     name: string;
@@ -72,12 +106,33 @@ export type MarketingAnalyticsBodyProps = {
   }[];
 };
 
+function MarketingPeriodSelect() {
+  const { period, setPeriod } = usePeriodParam("last30");
+  return (
+    <label className="flex max-w-xs flex-col gap-1">
+      <span className="text-sm font-medium opacity-70">Time period</span>
+      <select
+        className="select select-bordered w-full"
+        value={period}
+        onChange={(e) => setPeriod(e.target.value as PeriodKey)}
+      >
+        {MARKETING_PERIODS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function MarketingAnalyticsBody(props: MarketingAnalyticsBodyProps) {
   const layout = useDashboardLayout({
     userId: props.userId,
     storagePrefix: MARKETING_ANALYTICS_STORAGE,
     sections: MARKETING_ANALYTICS_SECTIONS,
   });
+  const periodHint = props.periodLabel;
 
   function renderSection(id: MarketingAnalyticsSectionId) {
     switch (id) {
@@ -88,7 +143,7 @@ export function MarketingAnalyticsBody(props: MarketingAnalyticsBodyProps) {
             newClientsQuarter={props.portfolio.newClientsQuarter}
             activeCampaigns={props.portfolio.activeCampaigns}
             conversions30d={props.portfolio.conversions30d}
-            newClientsByMonth={props.portfolio.newClientsByMonth}
+            portfolioByMonth={props.portfolio.portfolioByMonth}
           />
         );
       case "client_growth":
@@ -102,54 +157,88 @@ export function MarketingAnalyticsBody(props: MarketingAnalyticsBodyProps) {
             strategySpendPie={props.growth.strategySpendPie}
             strategyConversionsBars={props.growth.strategyConversionsBars}
             strategyRows={props.growth.strategyRows}
+            periodLabel={periodHint}
           />
         );
       case "kpis":
         if (!props.hasCampaigns || !props.hasMetrics) return null;
         return (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-            <StatCard
-              label="Impressions"
-              value={props.totals.impressions.toLocaleString()}
-            />
-            <StatCard
-              label="Clicks"
-              value={props.totals.clicks.toLocaleString()}
-            />
-            <StatCard label="CTR" value={`${props.totals.ctrPct}%`} />
-            <StatCard
-              label="Conversions"
-              value={props.totals.conversions.toLocaleString()}
-            />
-            <StatCard label="Spend" value={money(props.totals.spend)} />
-            <StatCard label="CPC" value={moneyExact(props.totals.cpc)} />
-            <StatCard
-              label="Cost / conv."
-              value={
-                props.totals.conversions > 0
-                  ? moneyExact(props.totals.cpa)
-                  : "—"
-              }
-            />
+          <div>
+            <p className="mb-2 text-xs opacity-60">KPIs for {periodHint}</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+              <StatCard
+                label="Impressions"
+                value={props.totals.impressions.toLocaleString()}
+                hint={periodHint}
+              />
+              <StatCard
+                label="Clicks"
+                value={props.totals.clicks.toLocaleString()}
+                hint={periodHint}
+              />
+              <StatCard
+                label="CTR"
+                value={`${props.totals.ctrPct}%`}
+                hint={periodHint}
+              />
+              <StatCard
+                label="Conversions"
+                value={props.totals.conversions.toLocaleString()}
+                hint={periodHint}
+              />
+              <StatCard
+                label="Spend"
+                value={money(props.totals.spend)}
+                hint={periodHint}
+              />
+              <StatCard
+                label="CPC"
+                value={moneyExact(props.totals.cpc)}
+                hint={periodHint}
+              />
+              <StatCard
+                label="Cost / conv."
+                value={
+                  props.totals.conversions > 0
+                    ? moneyExact(props.totals.cpa)
+                    : "—"
+                }
+                hint={periodHint}
+              />
+            </div>
           </div>
         );
       case "charts":
         if (!props.hasCampaigns || !props.hasMetrics) return null;
         return (
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="lg:col-span-2">
-              <ImpressionsClicksTrendChart data={props.trendSeries} />
-            </div>
-            <div className="lg:col-span-2">
-              <CtrByCampaignChart data={props.ctrByCampaign} />
-            </div>
+          <div className="grid gap-4">
+            <MarketingMediaTrendChart
+              data={props.trendSeries}
+              periodLabel={periodHint}
+            />
+            <CampaignVolumeRankingChart
+              data={props.impressionsByCampaign}
+              metric="impressions"
+              periodLabel={periodHint}
+            />
+            <CampaignVolumeRankingChart
+              data={props.clicksByCampaign}
+              metric="clicks"
+              periodLabel={periodHint}
+            />
+            <CampaignCtrRankingChart
+              data={props.ctrByCampaign}
+              periodLabel={periodHint}
+              averageCtr={props.totals.ctrPct}
+            />
           </div>
         );
       case "campaign_breakdown":
         if (!props.hasCampaigns || !props.hasMetrics) return null;
         return (
           <section>
-            <h3 className="mb-3 text-lg font-bold">Campaign breakdown</h3>
+            <h3 className="mb-1 text-lg font-bold">Campaign breakdown</h3>
+            <p className="mb-3 text-xs opacity-60">{periodHint}</p>
             <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
               <table className="table">
                 <thead>
@@ -220,11 +309,24 @@ export function MarketingAnalyticsBody(props: MarketingAnalyticsBodyProps) {
 
       {showPortfolio ? renderSection("portfolio_growth") : null}
 
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-end gap-4">
         <ClientAnalyticsPicker
           clients={props.scopedClients}
           selectedId={props.selectedId}
+          period={props.periodKey}
         />
+        <Suspense
+          fallback={
+            <label className="flex max-w-xs flex-col gap-1">
+              <span className="text-sm font-medium opacity-70">Time period</span>
+              <select className="select select-bordered w-full" disabled>
+                <option>{props.periodLabel}</option>
+              </select>
+            </label>
+          }
+        >
+          <MarketingPeriodSelect />
+        </Suspense>
       </div>
 
       <h2 className="mb-3 text-lg font-bold text-[#0b1f3a]">
@@ -233,8 +335,16 @@ export function MarketingAnalyticsBody(props: MarketingAnalyticsBodyProps) {
 
       {!props.hasCampaigns ? (
         <EmptyState
-          title="No campaigns for this client"
-          description="Staff this client’s campaigns to see performance here."
+          title={
+            props.allClientsMode
+              ? "No campaigns in scope"
+              : "No campaigns for this client"
+          }
+          description={
+            props.allClientsMode
+              ? "When you’re staffed on campaigns or own client accounts, performance will show here."
+              : "Staff this client’s campaigns to see performance here."
+          }
         />
       ) : !props.hasMetrics ? (
         <EmptyState

@@ -1,13 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import type { PeriodKey } from "@/lib/period";
+
+export const ALL_CLIENTS_VALUE = "all";
 
 export function ClientAnalyticsPicker({
   clients,
   selectedId,
+  period = "last30",
 }: {
   clients: { id: string; name: string }[];
   selectedId: string;
+  period?: PeriodKey;
 }) {
   const router = useRouter();
 
@@ -19,9 +24,14 @@ export function ClientAnalyticsPicker({
         value={selectedId}
         onChange={(e) => {
           const id = e.target.value;
-          router.push(id ? `/app/analytics?client=${id}` : "/app/analytics");
+          const params = new URLSearchParams();
+          params.set("client", id);
+          if (period && period !== "last30") params.set("period", period);
+          const q = params.toString();
+          router.push(`/app/analytics?${q}`);
         }}
       >
+        <option value={ALL_CLIENTS_VALUE}>All clients</option>
         {clients.map((c) => (
           <option key={c.id} value={c.id}>
             {c.name}

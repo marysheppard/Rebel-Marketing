@@ -25,6 +25,7 @@ import {
   Cell,
   Sector,
   ReferenceLine,
+  ComposedChart,
 } from "recharts";
 import { money, pct } from "@/lib/format";
 import type {
@@ -37,6 +38,7 @@ import {
   buildMoneyDonutSlices,
   type DonutBreakdownSlice,
 } from "@/components/DonutBreakdownViz";
+import type { MarketingTrendPoint } from "@/lib/marketing-trend";
 
 export type { DonutBreakdownSlice };
 export { buildCountDonutSlices, buildMoneyDonutSlices };
@@ -84,24 +86,36 @@ export function ChartCard({
   children,
   empty,
   compact,
+  tall,
+  fluid,
+  footer,
 }: {
   title: string;
   children: React.ReactNode;
   empty?: boolean;
   compact?: boolean;
+  tall?: boolean;
+  /** Grow with content instead of a fixed viewport height. */
+  fluid?: boolean;
+  footer?: React.ReactNode;
 }) {
+  const heightClass = compact ? "h-48" : tall ? "h-80" : "h-64";
+  const emptyHeight = compact ? "h-40" : tall ? "h-72" : "h-56";
   return (
     <div className="rounded-box border border-base-300 bg-base-100 p-4 shadow-sm">
       <h3 className="mb-3 font-semibold">{title}</h3>
       {empty ? (
         <div
-          className={`flex items-center justify-center text-sm opacity-60 ${compact ? "h-40" : "h-56"}`}
+          className={`flex items-center justify-center text-sm opacity-60 ${emptyHeight}`}
         >
           Not enough data yet for this chart.
         </div>
+      ) : fluid ? (
+        <div className="w-full">{children}</div>
       ) : (
-        <div className={`w-full ${compact ? "h-48" : "h-64"}`}>{children}</div>
+        <div className={`w-full ${heightClass}`}>{children}</div>
       )}
+      {footer && !empty ? <div className="mt-3">{footer}</div> : null}
     </div>
   );
 }
@@ -364,11 +378,16 @@ export function MarginChart({
 
 export function ClicksByCampaignChart({
   data,
+  periodLabel,
 }: {
   data: { name: string; clicks: number }[];
+  periodLabel?: string;
 }) {
+  const title = periodLabel
+    ? `Clicks by campaign (${periodLabel})`
+    : "Clicks by campaign";
   return (
-    <ChartCard title="Clicks by campaign" empty={!data.length}>
+    <ChartCard title={title} empty={!data.length}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data}>
           <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
@@ -382,21 +401,318 @@ export function ClicksByCampaignChart({
   );
 }
 
+type CampaignVolumeRow = {
+  name: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+};
+
+/** Horizontal clicks or impressions ranking with volume context. */
+export function CampaignVolumeRankingChart({
+  data,
+  metric,
+  periodLabel,
+}: {
+  data: CampaignVolumeRow[];
+  metric: "clicks" | "impressions";
+  periodLabel?: string;
+}) {
+  const rows = data.slice(0, 25);
+  const isClicks = metric === "clicks";
+  const titleBase = isClicks ? "Clicks by campaign" : "Impressions by campaign";
+  const title = periodLabel ? `${titleBase} (${periodLabel})` : titleBase;
+  const dataKey = isClicks ? "clicks" : "impressions";
+  const fill = isClicks ? "#0284c7" : "#94a3b8";
+  const chartHeight = Math.max(280, rows.length * 42 + 32);
+
+  function VolumeTooltip({
+    active,
+    payload,
+  }: {
+    active?: boolean;
+    payload?: { payload?: CampaignVolumeRow }[];
+  }) {
+    if (!active || !payload?.[0]?.payload) return null;
+    const row = payload[0].payload;
+    return (
+      <div className="rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm shadow-lg">
+        <div className="font-semibold">{row.name}</div>
+        <ul className="mt-1 space-y-0.5 text-xs">
+          <li>Impressions: {row.impressions.toLocaleString()}</li>
+          <li>Clicks: {row.clicks.toLocaleString()}</li>
+          <li>CTR: {row.ctr}%</li>
+        </ul>
+      </div>
+    );
+  }
+
+  return (
+    <ChartCard
+      title={title}
+      empty={!rows.length}
+      fluid
+      footer={
+        rows.length < data.length ? (
+          <p className="text-xs opacity-60">
+            Showing top {rows.length} of {data.length} campaigns
+          </p>
+        ) : null
+      }
+    >
+      <div style={{ height: chartHeight, width: "100%" }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={rows}
+            layout="vertical"
+            margin={{ left: 8, right: 48, top: 4, bottom: 4 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+            <XAxis
+              type="number"
+              allowDecimals={false}
+              tick={{ fontSize: 11 }}
+              tickFormatter={(v) =>
+                Number(v) >= 1000
+                  ? `${(Number(v) / 1000).toFixed(Number(v) >= 10000 ? 0 : 1)}k`
+                  : String(v)
+              }
+            />
+            <YAxis
+              type="category"
+              dataKey="name"
+              width={180}
+              tick={{ fontSize: 11 }}
+            />
+            <Tooltip content={<VolumeTooltip />} />
+            <Bar
+              dataKey={dataKey}
+              name={isClicks ? "Clicks" : "Impressions"}
+              fill={fill}
+              radius={[0, 4, 4, 0]}
+              label={{
+                position: "right",
+                fontSize: 11,
+                formatter: (v: number) =>
+                  Number(v) >= 1000
+                    ? `${(Number(v) / 1000).toFixed(1)}k`
+                    : String(v),
+              }}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartCard>
+  );
+}
+
+/** Dual-axis media trend: impression bars + click/conversion lines. */
+export function MarketingMediaTrendChart({
+  data,
+  periodLabel,
+}: {
+  data: MarketingTrendPoint[];
+  periodLabel?: string;
+}) {
+  const title = periodLabel
+    ? `Media performance over time (${periodLabel})`
+    : "Media performance over time";
+
+  const totals = data.reduce(
+    (acc, d) => {
+      acc.impressions += d.impressions;
+      acc.clicks += d.clicks;
+      acc.conversions += d.conversions;
+      acc.spend += d.spend;
+      return acc;
+    },
+    { impressions: 0, clicks: 0, conversions: 0, spend: 0 },
+  );
+  const overallCtr =
+    totals.impressions > 0
+      ? Math.round((totals.clicks / totals.impressions) * 10000) / 100
+      : 0;
+
+  function MediaTrendTooltip({
+    active,
+    payload,
+    label,
+  }: {
+    active?: boolean;
+    payload?: { payload?: MarketingTrendPoint }[];
+    label?: string | number;
+  }) {
+    if (!active || !payload?.[0]?.payload) return null;
+    const row = payload[0].payload;
+    return (
+      <div className="rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm shadow-lg">
+        <div className="mb-1 font-semibold">{label}</div>
+        <ul className="space-y-0.5 text-xs">
+          <li>Impressions: {row.impressions.toLocaleString()}</li>
+          <li>Clicks: {row.clicks.toLocaleString()}</li>
+          <li>Conversions: {row.conversions.toLocaleString()}</li>
+          <li>Spend: {money(row.spend)}</li>
+          <li>CTR: {row.ctr}%</li>
+        </ul>
+      </div>
+    );
+  }
+
+  return (
+    <ChartCard
+      title={title}
+      empty={!data.length}
+      tall
+      footer={
+        <p className="text-xs opacity-70">
+          Period totals: {totals.impressions.toLocaleString()} impr ·{" "}
+          {totals.clicks.toLocaleString()} clicks ·{" "}
+          {totals.conversions.toLocaleString()} conv · {money(totals.spend)}{" "}
+          spend · {overallCtr}% CTR
+          <span className="opacity-50">
+            {" "}
+            (bars = impressions · lines = clicks / conversions)
+          </span>
+        </p>
+      }
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart
+          data={data}
+          margin={{ top: 8, right: 12, left: 0, bottom: 4 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+          <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+          <YAxis
+            yAxisId="imp"
+            tick={{ fontSize: 11 }}
+            width={48}
+            allowDecimals={false}
+            tickFormatter={(v) =>
+              Number(v) >= 1000
+                ? `${(Number(v) / 1000).toFixed(0)}k`
+                : String(v)
+            }
+          />
+          <YAxis
+            yAxisId="eng"
+            orientation="right"
+            tick={{ fontSize: 11 }}
+            width={40}
+            allowDecimals={false}
+          />
+          <Tooltip content={<MediaTrendTooltip />} />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Bar
+            yAxisId="imp"
+            dataKey="impressions"
+            name="Impressions"
+            fill="#94a3b8"
+            fillOpacity={0.55}
+            radius={[3, 3, 0, 0]}
+          />
+          <Line
+            yAxisId="eng"
+            type="monotone"
+            dataKey="clicks"
+            name="Clicks"
+            stroke="#0284c7"
+            strokeWidth={2.5}
+            dot={{ r: 3 }}
+          />
+          <Line
+            yAxisId="eng"
+            type="monotone"
+            dataKey="conversions"
+            name="Conversions"
+            stroke="oklch(68% 0.12 160)"
+            strokeWidth={2.5}
+            dot={{ r: 3 }}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </ChartCard>
+  );
+}
+
 export function ImpressionsClicksTrendChart({
   data,
+  title = "Media performance over time",
+  periodLabel,
 }: {
-  data: { date: string; impressions: number; clicks: number }[];
+  data: {
+    date: string;
+    impressions: number;
+    clicks: number;
+    conversions?: number;
+    spend?: number;
+    ctr?: number;
+  }[];
+  title?: string;
+  periodLabel?: string;
 }) {
+  const showExtended = data.some(
+    (d) => (d.conversions ?? 0) > 0 || (d.spend ?? 0) > 0,
+  );
+  const chartTitle = periodLabel ? `${title} (${periodLabel})` : title;
+
+  function MediaTrendTooltip({
+    active,
+    payload,
+    label,
+  }: {
+    active?: boolean;
+    payload?: {
+      name?: string;
+      value?: number;
+      color?: string;
+      dataKey?: string;
+    }[];
+    label?: string | number;
+  }) {
+    if (!active || !payload?.length) return null;
+    const row = data.find((d) => d.date === label);
+    return (
+      <div className="rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm shadow-lg">
+        <div className="mb-1 font-semibold">{label}</div>
+        <ul className="space-y-0.5 text-xs">
+          <li>Impressions: {(row?.impressions ?? 0).toLocaleString()}</li>
+          <li>Clicks: {(row?.clicks ?? 0).toLocaleString()}</li>
+          {showExtended ? (
+            <>
+              <li>Conversions: {(row?.conversions ?? 0).toLocaleString()}</li>
+              <li>Spend: {money(row?.spend ?? 0)}</li>
+              <li>CTR: {row?.ctr ?? 0}%</li>
+            </>
+          ) : null}
+        </ul>
+      </div>
+    );
+  }
+
   return (
-    <ChartCard title="Impressions vs clicks over time" empty={!data.length}>
+    <ChartCard title={chartTitle} empty={!data.length}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
+        <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-          <XAxis dataKey="date" />
-          <YAxis yAxisId="left" />
-          <YAxis yAxisId="right" orientation="right" />
-          <Tooltip />
-          <Legend />
+          <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+          <YAxis
+            yAxisId="left"
+            tick={{ fontSize: 11 }}
+            width={44}
+            allowDecimals={false}
+          />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            tick={{ fontSize: 11 }}
+            width={48}
+            tickFormatter={(v) =>
+              showExtended ? formatAxisMoney(Number(v)) : String(v)
+            }
+          />
+          <Tooltip content={<MediaTrendTooltip />} />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
           <Line
             yAxisId="left"
             type="monotone"
@@ -404,15 +720,39 @@ export function ImpressionsClicksTrendChart({
             stroke="#94a3b8"
             strokeWidth={2}
             name="Impressions"
+            dot={false}
           />
           <Line
-            yAxisId="right"
+            yAxisId={showExtended ? "left" : "right"}
             type="monotone"
             dataKey="clicks"
             stroke="#0284c7"
             strokeWidth={2}
             name="Clicks"
+            dot={false}
           />
+          {showExtended ? (
+            <>
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="conversions"
+                stroke="oklch(68% 0.12 160)"
+                strokeWidth={2}
+                name="Conversions"
+                dot={false}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="spend"
+                stroke="oklch(70% 0.12 55)"
+                strokeWidth={2}
+                name="Spend"
+                dot={false}
+              />
+            </>
+          ) : null}
         </LineChart>
       </ResponsiveContainer>
     </ChartCard>
@@ -421,11 +761,16 @@ export function ImpressionsClicksTrendChart({
 
 export function CtrByCampaignChart({
   data,
+  periodLabel,
 }: {
   data: { name: string; ctr: number }[];
+  periodLabel?: string;
 }) {
+  const title = periodLabel
+    ? `CTR % by campaign (${periodLabel})`
+    : "CTR % by campaign";
   return (
-    <ChartCard title="CTR % by campaign" empty={!data.length}>
+    <ChartCard title={title} empty={!data.length}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data}>
           <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
@@ -435,6 +780,145 @@ export function CtrByCampaignChart({
           <Bar dataKey="ctr" fill="#14b8a6" name="CTR %" />
         </BarChart>
       </ResponsiveContainer>
+    </ChartCard>
+  );
+}
+
+/** Horizontal CTR ranking with volume context + portfolio average line. */
+export function CampaignCtrRankingChart({
+  data,
+  periodLabel,
+  averageCtr,
+}: {
+  data: {
+    name: string;
+    ctr: number;
+    impressions: number;
+    clicks: number;
+  }[];
+  periodLabel?: string;
+  averageCtr?: number;
+}) {
+  const rows = data.slice(0, 25);
+  const avg =
+    averageCtr ??
+    (() => {
+      const imp = rows.reduce((s, r) => s + r.impressions, 0);
+      const clk = rows.reduce((s, r) => s + r.clicks, 0);
+      return imp > 0 ? Math.round((clk / imp) * 10000) / 100 : 0;
+    })();
+
+  const title = periodLabel
+    ? `CTR by campaign (${periodLabel})`
+    : "CTR by campaign";
+  const chartHeight = Math.max(280, rows.length * 42 + 32);
+
+  function CtrTooltip({
+    active,
+    payload,
+  }: {
+    active?: boolean;
+    payload?: {
+      payload?: {
+        name: string;
+        ctr: number;
+        impressions: number;
+        clicks: number;
+      };
+    }[];
+  }) {
+    if (!active || !payload?.[0]?.payload) return null;
+    const row = payload[0].payload;
+    const vsAvg = row.ctr - avg;
+    return (
+      <div className="rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm shadow-lg">
+        <div className="font-semibold">{row.name}</div>
+        <div className="mt-1 tabular-nums font-medium">{row.ctr}% CTR</div>
+        <ul className="mt-1 space-y-0.5 text-xs opacity-80">
+          <li>Impressions: {row.impressions.toLocaleString()}</li>
+          <li>Clicks: {row.clicks.toLocaleString()}</li>
+          <li>
+            vs avg: {vsAvg >= 0 ? "+" : ""}
+            {vsAvg.toFixed(2)} pp
+          </li>
+        </ul>
+      </div>
+    );
+  }
+
+  return (
+    <ChartCard
+      title={title}
+      empty={!rows.length}
+      fluid
+      footer={
+        <p className="text-xs opacity-70">
+          Portfolio avg CTR {avg}% · bars colored above/below average · only
+          campaigns with impressions in this period
+          {rows.length < data.length
+            ? ` · showing top ${rows.length} of ${data.length}`
+            : ""}
+        </p>
+      }
+    >
+      <div style={{ height: chartHeight, width: "100%" }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={rows}
+            layout="vertical"
+            margin={{ left: 8, right: 48, top: 8, bottom: 4 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+            <XAxis
+              type="number"
+              unit="%"
+              tick={{ fontSize: 11 }}
+              domain={[0, "auto"]}
+            />
+            <YAxis
+              type="category"
+              dataKey="name"
+              width={180}
+              tick={{ fontSize: 11 }}
+            />
+            <Tooltip content={<CtrTooltip />} />
+            {avg > 0 ? (
+              <ReferenceLine
+                x={avg}
+                stroke="oklch(55% 0.02 250)"
+                strokeDasharray="4 4"
+                label={{
+                  value: `Avg ${avg}%`,
+                  position: "top",
+                  fontSize: 10,
+                  fill: "currentColor",
+                }}
+              />
+            ) : null}
+            <Bar
+              dataKey="ctr"
+              name="CTR %"
+              radius={[0, 4, 4, 0]}
+              label={{
+                position: "right",
+                fontSize: 11,
+                formatter: (v: number) => `${Number(v).toFixed(1)}%`,
+              }}
+            >
+              {rows.map((row) => (
+                <Cell
+                  key={row.name}
+                  fill={
+                    row.ctr >= avg
+                      ? "oklch(68% 0.12 160)"
+                      : "oklch(70% 0.12 55)"
+                  }
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </ChartCard>
   );
 }
@@ -1526,22 +2010,87 @@ export function TaskPriorityBarChart({
   );
 }
 
-export function NewClientsBarChart({
+/** 12-month portfolio conversions (bars) + spend (line). */
+export function PortfolioMediaByMonthChart({
   data,
 }: {
-  data: { month: string; count: number }[];
+  data: { month: string; conversions: number; spend: number; clicks: number }[];
 }) {
-  const hasAny = data.some((d) => d.count > 0);
+  const hasAny = data.some(
+    (d) => d.conversions > 0 || d.spend > 0 || d.clicks > 0,
+  );
+
+  function PortfolioMonthTooltip({
+    active,
+    payload,
+    label,
+  }: {
+    active?: boolean;
+    payload?: {
+      payload?: {
+        month: string;
+        conversions: number;
+        spend: number;
+        clicks: number;
+      };
+    }[];
+    label?: string | number;
+  }) {
+    if (!active || !payload?.[0]?.payload) return null;
+    const row = payload[0].payload;
+    return (
+      <div className="rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm shadow-lg">
+        <div className="mb-1 font-semibold">{label}</div>
+        <ul className="space-y-0.5 text-xs">
+          <li>Conversions: {row.conversions.toLocaleString()}</li>
+          <li>Spend: {money(row.spend)}</li>
+          <li>Clicks: {row.clicks.toLocaleString()}</li>
+        </ul>
+      </div>
+    );
+  }
+
   return (
-    <ChartCard title="New clients by month" empty={!hasAny}>
+    <ChartCard title="Portfolio performance by month" empty={!hasAny} tall>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data}>
+        <ComposedChart
+          data={data}
+          margin={{ top: 8, right: 12, left: 0, bottom: 4 }}
+        >
           <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
           <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-          <YAxis allowDecimals={false} />
-          <Tooltip />
-          <Bar dataKey="count" fill="#22c55e" name="New clients" />
-        </BarChart>
+          <YAxis
+            yAxisId="conv"
+            allowDecimals={false}
+            tick={{ fontSize: 11 }}
+            width={40}
+          />
+          <YAxis
+            yAxisId="spend"
+            orientation="right"
+            tick={{ fontSize: 11 }}
+            width={48}
+            tickFormatter={(v) => formatAxisMoney(Number(v))}
+          />
+          <Tooltip content={<PortfolioMonthTooltip />} />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Bar
+            yAxisId="conv"
+            dataKey="conversions"
+            name="Conversions"
+            fill="oklch(68% 0.12 160)"
+            radius={[4, 4, 0, 0]}
+          />
+          <Line
+            yAxisId="spend"
+            type="monotone"
+            dataKey="spend"
+            name="Spend"
+            stroke="oklch(70% 0.12 55)"
+            strokeWidth={2.5}
+            dot={{ r: 3 }}
+          />
+        </ComposedChart>
       </ResponsiveContainer>
     </ChartCard>
   );
@@ -1616,16 +2165,18 @@ export function StrategySpendPieChart({
   selectedKey,
   onSelectKey,
   onClearSelection,
+  periodLabel,
 }: {
   slices: DonutBreakdownSlice[];
   selectedKey?: string | null;
   onSelectKey?: (key: string) => void;
   onClearSelection?: () => void;
+  periodLabel?: string;
 }) {
   return (
     <DonutBreakdownViz
       title="Spend by strategy"
-      subtitle="Last 30 days"
+      subtitle={periodLabel ?? "Last 30 days"}
       emptyMessage="No strategy spend to chart yet."
       slices={slices}
       valueFormat="money"

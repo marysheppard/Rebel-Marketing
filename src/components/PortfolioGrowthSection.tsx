@@ -1,4 +1,4 @@
-import { NewClientsBarChart } from "@/components/Charts";
+import { PortfolioMediaByMonthChart } from "@/components/Charts";
 import { StatCard } from "@/components/ui";
 
 export function PortfolioGrowthSection({
@@ -6,13 +6,18 @@ export function PortfolioGrowthSection({
   newClientsQuarter,
   activeCampaigns,
   conversions30d,
-  newClientsByMonth,
+  portfolioByMonth,
 }: {
   activeClients: number;
   newClientsQuarter: number;
   activeCampaigns: number;
   conversions30d: number;
-  newClientsByMonth: { month: string; count: number }[];
+  portfolioByMonth: {
+    month: string;
+    conversions: number;
+    spend: number;
+    clicks: number;
+  }[];
 }) {
   return (
     <section className="mb-10">
@@ -40,7 +45,7 @@ export function PortfolioGrowthSection({
           hint="Across your scoped work"
         />
       </div>
-      <NewClientsBarChart data={newClientsByMonth} />
+      <PortfolioMediaByMonthChart data={portfolioByMonth} />
     </section>
   );
 }
