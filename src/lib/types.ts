@@ -292,7 +292,6 @@ export type Cost = {
   client_id: string | null;
   campaign_id: string | null;
   contract_id: string | null;
-  client_id?: string | null;
   cost_type: string;
   description: string;
   amount: number;

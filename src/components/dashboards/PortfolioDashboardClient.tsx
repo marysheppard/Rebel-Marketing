@@ -445,7 +445,7 @@ export function PortfolioDashboardClient({
           ],
         } satisfies DonutBreakdownSlice;
       })
-      .filter((s): s is DonutBreakdownSlice => s != null);
+      .filter((s): s is NonNullable<typeof s> => s != null);
   }, [source.campaigns, costsByCamp]);
 
   const trackTotal = onTrackSlices.reduce((s, d) => s + d.value, 0);

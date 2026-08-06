@@ -39,6 +39,7 @@ import {
 } from "@/components/DonutBreakdownViz";
 
 export type { DonutBreakdownSlice };
+export { buildCountDonutSlices, buildMoneyDonutSlices };
 
 function formatAxisMoney(value: number) {
   const n = Number(value);

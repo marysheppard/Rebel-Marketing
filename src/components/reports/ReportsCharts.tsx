@@ -5,6 +5,7 @@ import {
   CampaignBudgetHealthChart,
   ChartCard,
   ClientProfitChart,
+  buildCountDonutSlices,
 } from "@/components/Charts";
 import { money } from "@/lib/format";
 import type { BudgetRow, ProfitRow, UnbilledRow } from "@/components/reports/types";
@@ -89,6 +90,13 @@ export function ReportsCharts({
       hours: Number(r.hours.toFixed(1)),
     }));
 
+  const approvalSlices = buildCountDonutSlices(approvalStatus, {
+    Pending: "oklch(70% 0.12 55)",
+    "Changes Requested": "oklch(72% 0.1 300)",
+    Approved: "oklch(68% 0.12 160)",
+    Rejected: "oklch(62% 0.18 25)",
+  });
+
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <ClientProfitChart
@@ -157,7 +165,7 @@ export function ReportsCharts({
         </ResponsiveContainer>
       </ChartCard>
 
-      <ApprovalStatusPieChart data={approvalStatus} />
+      <ApprovalStatusPieChart slices={approvalSlices} />
 
       <ChartCard title="Unbilled hours by campaign" empty={!unbilledBars.length} compact>
         <ResponsiveContainer width="100%" height="100%">

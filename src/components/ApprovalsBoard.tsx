@@ -302,7 +302,7 @@ export function ApprovalsBoard({
         pending.length === 0 ? (
           <p className="rounded-box border border-base-300 bg-base-100 p-6 text-sm opacity-60">
             {!advanced && statusFilter
-              ? `No pending approvals with status “${statusFilter}”.`
+              ? `No pending approvals with status "${statusFilter}".`
               : "Nothing waiting. You are caught up on approvals."}
           </p>
         ) : (

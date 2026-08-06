@@ -120,7 +120,7 @@ export function buildManagerTaskMixSlices(
         ],
       } satisfies DonutBreakdownSlice;
     })
-    .filter((s): s is DonutBreakdownSlice => s != null);
+    .filter((s): s is NonNullable<typeof s> => s != null);
 }
 
 export function ManagerTasksClient({
