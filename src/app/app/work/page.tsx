@@ -19,11 +19,16 @@ function startOfWeekMonday(d: Date) {
   return copy.toISOString().slice(0, 10);
 }
 
-type WorkCampaign = {
-  campaign_name: string;
-  client_id: string;
-  clients?: { client_name: string } | null;
+type PtoRow = PtoRequest & {
+  profiles?: { full_name?: string } | { full_name?: string }[] | null;
 };
+
+function profileName(
+  profiles: PtoRow["profiles"],
+): string {
+  const obj = Array.isArray(profiles) ? profiles[0] : profiles;
+  return obj?.full_name?.trim() || "—";
+}
 
 export default async function WorkPage() {
   const { supabase, profile, userId } = await getProfile();
@@ -34,6 +39,7 @@ export default async function WorkPage() {
   }
 
   const isEmployee = canLogWork(profile.role) && !isClientRole(profile.role);
+  const canApprovePto = canManageClients(profile.role);
   const today = new Date();
   const weekStart = startOfWeekMonday(today);
   const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
@@ -44,7 +50,8 @@ export default async function WorkPage() {
     { data: myTasks },
     { data: assignments },
     { data: workRows },
-    { data: ptoRows },
+    { data: myPtoRows },
+    { data: teamPtoRows },
   ] = await Promise.all([
     supabase
       .from("work_entries")
@@ -95,6 +102,13 @@ export default async function WorkPage() {
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [] as PtoRequest[] }),
+    canApprovePto
+      ? supabase
+          .from("pto_requests")
+          .select("*, profiles(full_name)")
+          .neq("user_id", userId)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as PtoRow[] }),
   ]);
 
   const assignedIds = new Set((assignments ?? []).map((a) => a.campaign_id));
@@ -151,8 +165,14 @@ export default async function WorkPage() {
 
   const weekTarget = profile.weekly_hour_target;
   const monthTarget = profile.monthly_hour_target;
-  const pto = (ptoRows ?? []) as PtoRequest[];
-  const pendingPto = pto.filter((r) => r.status === "Pending").length;
+  const myPto = (myPtoRows ?? []) as PtoRequest[];
+  const teamPto = ((teamPtoRows ?? []) as PtoRow[]).filter(
+    (r) => String(r.user_id) !== userId,
+  );
+
+  const pendingPto = canApprovePto
+    ? teamPto.filter((r) => r.status === "Pending").length
+    : myPto.filter((r) => r.status === "Pending").length;
 
   const entries = list.map((w) => {
     const camps = w.campaigns as
@@ -201,8 +221,19 @@ export default async function WorkPage() {
     };
   });
 
-  const ptoItems = pto.map((r) => ({
+  const ptoItems = myPto.map((r) => ({
     id: String(r.id),
+    start_date: String(r.start_date),
+    end_date: String(r.end_date),
+    hours: num(r.hours),
+    status: String(r.status),
+    reason: String(r.reason ?? ""),
+  }));
+
+  const teamPtoItems = teamPto.map((r) => ({
+    id: String(r.id),
+    user_id: String(r.user_id),
+    requester_name: profileName(r.profiles),
     start_date: String(r.start_date),
     end_date: String(r.end_date),
     hours: num(r.hours),
@@ -214,9 +245,11 @@ export default async function WorkPage() {
     <TimePtoBoard
       isEmployee={isEmployee}
       canApproveWork={canManageClients(profile.role)}
+      canApprovePto={canApprovePto}
       userId={userId}
       entries={entries}
       pto={ptoItems}
+      teamPto={teamPtoItems}
       campaigns={campaignOptions}
       tasks={taskOptions}
       weekStart={weekStart}
